@@ -25,7 +25,7 @@ Public Class LicenseManager
         Try
             Dim encryptedData = File.ReadAllBytes(licPath)
             Dim decryptedText As String = Decrypt(encryptedData)
-            Dim info = JsonSerializer.Deserialize(Of LicenseInfo)(decryptedText)
+            Dim info = JsonSerializer.Deserialize(decryptedText, LicenseContext.Default.LicenseInfo)
             info.IsLicensed = True
             Return info
         Catch ex As Exception
@@ -41,7 +41,7 @@ Public Class LicenseManager
             .MaxPrinters = printerCount,
             .IsLicensed = True
         }
-        Dim json = JsonSerializer.Serialize(info)
+        Dim json = JsonSerializer.Serialize(info, LicenseContext.Default.LicenseInfo)
         Dim encrypted = Encrypt(json)
         File.WriteAllBytes(outPath, encrypted)
     End Sub
@@ -76,4 +76,10 @@ Public Class LicenseManager
             End Using
         End Using
     End Function
+End Class
+
+<JsonSourceGenerationOptions(WriteIndented:=True)>
+<JsonSerializable(GetType(LicenseInfo))>
+Public Partial Class LicenseContext
+    Inherits JsonSerializerContext
 End Class
