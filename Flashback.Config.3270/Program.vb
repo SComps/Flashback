@@ -15,8 +15,10 @@ Module Program
             Return
         End If
 #End If
-        ' SYSPW Logic
+        ' Arguments Logic
         Dim syspw As String = ""
+        Dim port As Integer = 3270
+
         Dim pwArgIdx = Array.IndexOf(args, "--password")
         If pwArgIdx >= 0 AndAlso args.Length > pwArgIdx + 1 Then
             syspw = args(pwArgIdx + 1)
@@ -24,11 +26,16 @@ Module Program
             syspw = System.IO.File.ReadAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")).Trim()
         End If
 
+        Dim portArgIdx = Array.IndexOf(args, "-p")
+        If portArgIdx < 0 Then portArgIdx = Array.IndexOf(args, "--port")
+        If portArgIdx >= 0 AndAlso args.Length > portArgIdx + 1 Then
+            Integer.TryParse(args(portArgIdx + 1), port)
+        End If
+
         Dim builder = Host.CreateApplicationBuilder(args)
         
-        If Not String.IsNullOrEmpty(syspw) Then
-            builder.Services.AddSingleton(Of String)(syspw)
-        End If
+        builder.Services.AddSingleton(Of String)(syspw)
+        builder.Services.AddSingleton(Of Integer)(port)
 
 #If WINDOWS Then
         builder.Services.AddWindowsService(Sub(options)
