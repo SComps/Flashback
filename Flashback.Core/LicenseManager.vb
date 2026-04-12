@@ -10,13 +10,13 @@ Public Class LicenseInfo
 End Class
 
 Public Class LicenseManager
-    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026Prn") 
+    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026Prn")
     Private Shared ReadOnly IV As Byte() = Encoding.UTF8.GetBytes("PrntEngineL1cIV!")
 
     Public Shared Function GetLicenseInfo() As LicenseInfo
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         Dim licPath As String = Path.Combine(baseDir, "flashback.lic")
-        
+
         If Not File.Exists(licPath) Then
             Return New LicenseInfo()
         End If
@@ -24,7 +24,7 @@ Public Class LicenseManager
         Try
             Dim encryptedData = File.ReadAllBytes(licPath)
             Dim decryptedText As String = Decrypt(encryptedData)
-            
+
             ' Manual Parsing (AOT Compatible)
             Dim info As New LicenseInfo()
             Dim parts = decryptedText.Split("|"c)
@@ -34,7 +34,7 @@ Public Class LicenseManager
                 info.IsLicensed = True
                 Return info
             End If
-            
+
             Throw New Exception("Invalid license format.")
         Catch ex As Exception
             Dim errInfo As New LicenseInfo()

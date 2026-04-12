@@ -78,7 +78,7 @@ Public Class Devs
             Await client.ConnectAsync(remoteHost, remotePort)
             Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
             
-            OutDest = OutDest.TrimEnd("/"c, "\"c)
+            OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
             If Not Directory.Exists(OutDest) Then
                 Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
                 Directory.CreateDirectory(OutDest)
@@ -226,7 +226,7 @@ Public Class Devs
     End Sub
 
     Private Sub ProcessDocument(doc As List(Of String))
-        OutDest = OutDest.TrimEnd("/"c, "\"c)
+        OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
         If Not Directory.Exists(OutDest) Then
             Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
             Directory.CreateDirectory(OutDest)
