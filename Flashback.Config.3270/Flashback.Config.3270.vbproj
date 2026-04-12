@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Flashback.Core\Flashback.Core.vbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Flashback.TN3270Framework\TN3270Framework.vbproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Flashback.Config._3270</RootNamespace>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

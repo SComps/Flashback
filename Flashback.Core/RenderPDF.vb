@@ -52,7 +52,6 @@ Public Class RenderPDF
     Public Property OS As OSType = OSType.OS_MVS38J
     Public Property Orientation As Integer = 0
     Public Property DevName As String = "Printer"
-    Public Property UseImageProc As Boolean = False
     Public Property TargetFileName As String = "out.pdf"
     Public Property Shading As ShadingColor = ShadingColor.Green
     Public Property TypeFaceName As String = "Chainprinter"
@@ -78,12 +77,7 @@ Public Class RenderPDF
             
             doc.Info.Title = title
             
-            Dim bkgrd As XImage = Nothing
-            If UseImageProc Then
-                If File.Exists("greenbar.jpg") Then
-                    bkgrd = XImage.FromFile("greenbar.jpg")
-                End If
-            End If
+            doc.Info.Title = title
 
             Dim profile As IOsProfile = OsProfileFactory.GetProfile(OS)
             If profile IsNot Nothing Then
@@ -124,11 +118,7 @@ Public Class RenderPDF
                                         gfx = XGraphics.FromPdfPage(page)
 
                                         If (Orientation = 0) Or (Orientation = 2) Then
-                                            If UseImageProc AndAlso bkgrd IsNot Nothing Then
-                                                gfx.DrawImage(bkgrd, 0, 0, page.Width.Point, page.Height.Point)
-                                            Else
-                                                DrawGreenBarBackground(gfx, page.Width.Point, page.Height.Point)
-                                            End If
+                                            DrawGreenBarBackground(gfx, page.Width.Point, page.Height.Point)
                                         End If
 
                                         availableWidth = page.Width.Point - leftMargin - rightMargin

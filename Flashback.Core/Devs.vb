@@ -16,7 +16,6 @@ Public Class Devs
     Public Property PDF As Boolean = True
     Public Property Orientation As Integer = 0
     Public Property OutDest As String = "Output"
-    Public Property UseImageProc As Boolean = False
     Public Property Shading As RenderPDF.ShadingColor = RenderPDF.ShadingColor.Green
     Public Property JobNumber As Integer = 0
 
@@ -268,7 +267,6 @@ Public Class Devs
             renderer.OS = OS
             renderer.Orientation = Orientation
             renderer.TargetFileName = pdfName
-            renderer.UseImageProc = UseImageProc
             renderer.Shading = Shading
 
             renderer.CreatePDF(JobName, doc)

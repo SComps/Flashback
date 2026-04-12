@@ -1,3 +1,10 @@
 <Solution>
+  <Folder Name="/Flashback.TN3270Framework/">
+    <Project Path="Flashback.TN3270Framework/TN3270Framework.vbproj" />
+  </Folder>
+  <Project Path="Flashback.Config.3270/Flashback.Config.3270.vbproj" />
+  <Project Path="Flashback.Config.Console/Flashback.Config.Console.vbproj" />
   <Project Path="Flashback.Core/Flashback.Core.vbproj" />
+  <Project Path="Flashback.Engine/Flashback.Engine.vbproj" />
+  <Project Path="Flashback.Tray/Flashback.Tray.vbproj" />
 </Solution>
