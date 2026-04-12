@@ -3,6 +3,7 @@ Imports Flashback.Core
 Imports System.IO
 
 Public Enum ScreenMode
+    Login
     Menu
     Edit
     ConfirmDelete
@@ -12,6 +13,7 @@ Public Class SessionStateManager
     Private _session As TN3270Session
     Private _devList As List(Of Devs)
     Private _configFile As String
+    Private _syspw As String
 
     Private _mode As ScreenMode = ScreenMode.Menu
     Private _startIndex As Integer = 0
@@ -20,14 +22,24 @@ Public Class SessionStateManager
     Private _statusColor As Byte = TN3270Color.White
     Private _hasUnsavedChanges As Boolean = False
 
-    Public Sub New(session As TN3270Session, devList As List(Of Devs), configFile As String)
+    Public Sub New(session As TN3270Session, devList As List(Of Devs), configFile As String, Optional syspw As String = "")
         _session = session
         _devList = devList
         _configFile = configFile
+        _syspw = If(syspw, "")
+        If Not String.IsNullOrEmpty(_syspw) Then
+            _mode = ScreenMode.Login
+        Else
+            _mode = ScreenMode.Menu
+        End If
     End Sub
 
     Public Sub InitSession()
-        ShowMenu()
+        If _mode = ScreenMode.Login Then
+            ShowLogin()
+        Else
+            ShowMenu()
+        End If
     End Sub
 
     Public Sub HandleInput(sender As Object, e As AidKeyEventArgs)
@@ -35,6 +47,8 @@ Public Class SessionStateManager
         _statusColor = TN3270Color.White
 
         Select Case _mode
+            Case ScreenMode.Login
+                ProcessLoginInput(e)
             Case ScreenMode.Menu
                 ProcessMenuInput(e)
             Case ScreenMode.Edit
@@ -42,6 +56,28 @@ Public Class SessionStateManager
             Case ScreenMode.ConfirmDelete
                 ProcessDeleteInput(e)
         End Select
+    End Sub
+
+    Private Sub ProcessLoginInput(e As AidKeyEventArgs)
+        If e.AidKey = &HF3 Then
+            _session.Close()
+            Return
+        End If
+
+        If e.AidKey <> &H7D Then
+            ShowLogin()
+            Return
+        End If
+
+        Dim enteredPw = _session.GetFieldValue("txtPw")
+        If enteredPw = _syspw Then
+            _mode = ScreenMode.Menu
+            ShowMenu()
+        Else
+            _statusMsg = "INVALID PASSWORD. ACCESS DENIED."
+            _statusColor = TN3270Color.Red
+            ShowLogin()
+        End If
     End Sub
 
     Private Sub ProcessMenuInput(e As AidKeyEventArgs)
@@ -152,7 +188,7 @@ Public Class SessionStateManager
     Private Sub ProcessDeleteInput(e As AidKeyEventArgs)
         If e.AidKey = &H7D Then
             Dim cmd = _session.GetFieldValue("txtConfirm")?.ToUpper().Trim()
-            If cmd = "Y" Then
+            if cmd = "Y" Then
                 _devList.RemoveAt(_editingIndex)
                 _statusMsg = "Device deleted."
                 _statusColor = TN3270Color.Yellow
@@ -168,6 +204,28 @@ Public Class SessionStateManager
         Else
             ShowConfirmDelete()
         End If
+    End Sub
+
+    Private Sub ShowLogin()
+        _session.ClearFields()
+        Dim dateStr = DateTime.Now.ToString("MM/dd/yy")
+        Dim timeStr = DateTime.Now.ToString("HH:mm:ss")
+
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK00", TN3270Color.Turquoise)
+        _session.WriteText(1, 30, "FLASHBACK SECURITY", TN3270Color.White)
+        _session.WriteText(1, 65, $"DATE: {dateStr}", TN3270Color.Turquoise)
+        _session.WriteText(2, 65, $"TIME: {timeStr}", TN3270Color.Turquoise)
+
+        _session.WriteText(10, 25, "ENTER SYSTEM PASSWORD TO CONTINUE", TN3270Color.Turquoise)
+        _session.WriteText(12, 25, "SYSPW ===> ", TN3270Color.Yellow)
+        _session.AddField(12, 36, 8, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.None, "txtPw").Hidden = True
+
+        If Not String.IsNullOrEmpty(_statusMsg) Then
+            _session.WriteText(15, 25, _statusMsg, _statusColor)
+        End If
+
+        _session.WriteText(22, 2, "ENTER:LOGIN   PF3:EXIT", TN3270Color.White)
+        _session.ShowScreen()
     End Sub
 
     Private Sub ShowMenu()

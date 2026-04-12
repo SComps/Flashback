@@ -13,9 +13,11 @@ Public Class Config3270Worker
     Private _configFile As String
     Private _port As Integer = 3270
     Private _server As TN3270Listener
+    Private ReadOnly _syspw As String = ""
 
-    Public Sub New(logger As ILogger(Of Config3270Worker))
+    Public Sub New(logger As ILogger(Of Config3270Worker), Optional syspw As String = Nothing)
         _logger = logger
+        _syspw = If(syspw, "")
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         _configFile = Path.Combine(baseDir, "devices.dat")
     End Sub
@@ -43,7 +45,7 @@ Public Class Config3270Worker
         Dim session = e.Session
         ' Re-load devices before starting session to ensure consistency
         LoadDevices()
-        Dim stateManager As New SessionStateManager(session, _devList, _configFile)
+        Dim stateManager As New SessionStateManager(session, _devList, _configFile, _syspw)
         AddHandler session.NegotiationComplete, AddressOf stateManager.InitSession
         AddHandler session.AidKeyReceived, AddressOf stateManager.HandleInput
         AddHandler session.Disconnected, Sub() _logger.LogInformation("[ConfigServer] Session {RemoteEndPoint} disconnected.", e.RemoteEndPoint)

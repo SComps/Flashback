@@ -14,7 +14,20 @@ Module Program
             Return
         End If
 #End If
+        ' SYSPW Logic
+        Dim syspw As String = ""
+        Dim pwArgIdx = Array.IndexOf(args, "--password")
+        If pwArgIdx >= 0 AndAlso args.Length > pwArgIdx + 1 Then
+            syspw = args(pwArgIdx + 1)
+        ElseIf File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")) Then
+            syspw = File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")).Trim()
+        End If
+
         Dim builder = Host.CreateApplicationBuilder(args)
+        
+        If Not String.IsNullOrEmpty(syspw) Then
+            builder.Services.AddSingleton(Of String)(syspw)
+        End If
 
 #If WINDOWS Then
         builder.Services.AddWindowsService(Sub(options)

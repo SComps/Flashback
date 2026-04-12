@@ -264,8 +264,8 @@ Public Class Devs
 
             Dim jobInfo As JobInformation = profile.ExtractJobInformation(doc, DevName)
             Dim JobID = jobInfo.JobID
-            Dim JobName = jobInfo.JobName
-            Dim UserID = jobInfo.User
+            Dim JobName = SecurityUtils.SanitizeFilename(jobInfo.JobName)
+            Dim UserID = SecurityUtils.SanitizeFilename(jobInfo.User)
 
             Dim userDir = Path.Combine(OutDest, UserID)
             If Not Directory.Exists(userDir) Then
