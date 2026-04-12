@@ -3,6 +3,17 @@ Imports Microsoft.Extensions.Hosting
 
 Module Program
     Sub Main(args As String())
+#If LINUX Then
+        If args.Contains("-d") OrElse args.Contains("--daemon") Then
+            Dim psi As New Process.StartInfo("/proc/self/exe")
+            psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
+            psi.UseShellExecute = False
+            psi.CreateNoWindow = True
+            Process.Start(psi)
+            Console.WriteLine("Flashback Engine detached into background.")
+            Return
+        End If
+#End If
         Dim builder = Host.CreateApplicationBuilder(args)
 
 #If WINDOWS Then
