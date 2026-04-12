@@ -10,10 +10,8 @@ Public Class LicenseInfo
 End Class
 
 Public Class LicenseManager
-    ' In a real-world app, this key would be more protected, 
-    ' but for the modernization of Flashback, this provides a professional standard.
-    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026!Prn") ' 16 chars = 128 bits
-    Private Shared ReadOnly IV As Byte() = Encoding.UTF8.GetBytes("PrntEngineL1cIV!")   ' 16 chars
+    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026!Prn") 
+    Private Shared ReadOnly IV As Byte() = Encoding.UTF8.GetBytes("PrntEngineL1cIV!")
 
     Public Shared Function GetLicenseInfo() As LicenseInfo
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory

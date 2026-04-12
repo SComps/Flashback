@@ -22,36 +22,28 @@ Public Class MainForm
     Private _fullCmdPath As String
 
     Public Sub New()
-        ' Initialize paths
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         _fullConfigPath = Path.Combine(baseDir, ConfigFile)
         _fullCmdPath = Path.Combine(baseDir, CommandFile)
-
-        ' Initialize components manually for a clean, lean app
         trayMenu = New ContextMenuStrip()
         
-        ' Engine Service Section
         trayMenu.Items.Add("Engine: Unknown", Nothing, AddressOf DoNothing).Enabled = False
         trayMenu.Items.Add("Start Engine Service", Nothing, AddressOf StartEngine)
         trayMenu.Items.Add("Stop Engine Service", Nothing, AddressOf StopEngine)
         trayMenu.Items.Add("-")
         
-        ' 3270 Config Service Section
         trayMenu.Items.Add("3270 Config: Unknown", Nothing, AddressOf DoNothing).Enabled = False
         trayMenu.Items.Add("Start 3270 Server", Nothing, AddressOf Start3270)
         trayMenu.Items.Add("Stop 3270 Server", Nothing, AddressOf Stop3270)
         trayMenu.Items.Add("-")
 
-        ' Device Management Section
         _deviceMenu = New ToolStripMenuItem("Manage Devices")
         trayMenu.Items.Add(_deviceMenu)
         trayMenu.Items.Add("-")
 
-        ' License Section (Index 10)
         trayMenu.Items.Add("License: FREE NON-COMMERCIAL", Nothing, AddressOf DoNothing).Enabled = False
         trayMenu.Items.Add("-")
         
-        ' Tools Section
         trayMenu.Items.Add("Configure (Console Tool)", Nothing, AddressOf OpenConsoleTool)
         trayMenu.Items.Add("View Log File", Nothing, AddressOf OpenLog)
         trayMenu.Items.Add("-")
@@ -78,17 +70,11 @@ Public Class MainForm
     End Sub
 
     Private Sub CheckStatus(Optional sender As Object = Nothing, Optional e As EventArgs = Nothing)
-        ' Update Service Statuses
         UpdateServiceStatus(EngineServiceName, engineController, 0, 1, 2)
         UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
-        
-        ' Update Device Menu
         UpdateDeviceMenu()
-
-        ' Update License Display
         UpdateLicenseStatus()
         
-        ' Tooltip
         Try
             Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
             Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")

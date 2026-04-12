@@ -25,7 +25,6 @@ Public Class Worker
     Protected Overrides Async Function ExecuteAsync(stoppingToken As CancellationToken) As Task
         _logger.LogInformation("Flashback Engine Service Starting.")
 
-        ' Initial load
         LoadDevices()
 
         _statTimer.Interval = 5000
@@ -34,9 +33,7 @@ Public Class Worker
         _cmdTimer.Interval = 500
         _cmdTimer.Enabled = True
 
-        ' Loop until stopped
         While Not stoppingToken.IsCancellationRequested
-            ' Auto-reconnect logic for ALL devices that are not connected
             For Each d In _devList
                 If Not d.Connected AndAlso Not d.Connecting Then
                     _logger.LogInformation("Attempting to connect {Dev}...", d.DevName)
@@ -61,9 +58,7 @@ Public Class Worker
 
         _logger.LogInformation("Reloading devices from {ConfigFile}...", _configFile)
         
-        ' Disconnect existing
         Cleanup()
-
         If Not File.Exists(_configFile) Then Return
 
         Try
@@ -100,12 +95,8 @@ Public Class Worker
                             d.JobNumber = Val(p(12))
                         End If
 
-                        ' Hook up the logger
                         AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
-                        
                         _devList.Add(d)
-                        
-                        ' Always attempt initial connect
                         d.Connect()
                         loadedCount += 1
                     End If
