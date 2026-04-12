@@ -7,7 +7,7 @@ Module Program
     Sub Main(args As String())
 #If LINUX Then
         If args.Contains("-d") OrElse args.Contains("--daemon") Then
-            Dim psi As New ProcessStartInfo("/proc/self/exe")
+            Dim psi As New ProcessStartInfo(Environment.ProcessPath)
             psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
             psi.UseShellExecute = False
             psi.CreateNoWindow = True
