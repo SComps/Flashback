@@ -20,6 +20,9 @@ Module Program
         End If
 #End If
         Dim builder = Host.CreateApplicationBuilder(args)
+        
+        ' Configure File Logging
+        builder.Logging.AddFile()
 
 #If WINDOWS Then
         builder.Services.AddWindowsService(Sub(options)
