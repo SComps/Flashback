@@ -8,10 +8,24 @@
     <ProjectReference Include="..\Flashback.TN3270Framework\TN3270Framework.vbproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.5" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Config._3270</RootNamespace>
     <TargetFramework>net9.0</TargetFramework>
+    <DefineConstants Condition="'$(OS)' == 'Windows_NT'">WINDOWS</DefineConstants>
+    <DefineConstants Condition="'$(OS)' != 'Windows_NT'">LINUX</DefineConstants>
   </PropertyGroup>
 
 </Project>

@@ -9,22 +9,33 @@ Public Class MainForm
     Private WithEvents trayMenu As ContextMenuStrip
     Private WithEvents statusTimer As Timer
     
-    Private Const ServiceName As String = "FlashbackEngine"
-    Private serviceController As ServiceController
+    Private Const EngineServiceName As String = "FlashbackEngine"
+    Private Const Config3270ServiceName As String = "FlashbackConfig3270"
+    
+    Private engineController As ServiceController
+    Private config3270Controller As ServiceController
 
     Public Sub New()
         ' Initialize components manually for a clean, lean app
         trayMenu = New ContextMenuStrip()
-        trayMenu.Items.Add("Flashback Engine: Unknown", Nothing, AddressOf DoNothing).Enabled = False
+        
+        ' Engine Service Section
+        trayMenu.Items.Add("Engine: Unknown", Nothing, AddressOf DoNothing).Enabled = False
+        trayMenu.Items.Add("Start Engine", Nothing, AddressOf StartEngine)
+        trayMenu.Items.Add("Stop Engine", Nothing, AddressOf StopEngine)
         trayMenu.Items.Add("-")
-        trayMenu.Items.Add("Start Engine", Nothing, AddressOf StartService)
-        trayMenu.Items.Add("Stop Engine", Nothing, AddressOf StopService)
+        
+        ' 3270 Config Service Section
+        trayMenu.Items.Add("3270 Config: Unknown", Nothing, AddressOf DoNothing).Enabled = False
+        trayMenu.Items.Add("Start 3270 Server", Nothing, AddressOf Start3270)
+        trayMenu.Items.Add("Stop 3270 Server", Nothing, AddressOf Stop3270)
         trayMenu.Items.Add("-")
-        trayMenu.Items.Add("Configure (Console)", Nothing, AddressOf OpenConsoleConfig)
-        trayMenu.Items.Add("Configure (3270)", Nothing, AddressOf Open3270Config)
+        
+        ' Tools Section
+        trayMenu.Items.Add("Configure (Console Tool)", Nothing, AddressOf OpenConsoleTool)
         trayMenu.Items.Add("View Log File", Nothing, AddressOf OpenLog)
         trayMenu.Items.Add("-")
-        trayMenu.Items.Add("Exit", Nothing, AddressOf OnExit)
+        trayMenu.Items.Add("Exit Controller", Nothing, AddressOf OnExit)
 
         trayIcon = New NotifyIcon()
         trayIcon.Text = "Flashback Controller"
@@ -47,70 +58,91 @@ Public Class MainForm
     End Sub
 
     Private Sub CheckStatus(Optional sender As Object = Nothing, Optional e As EventArgs = Nothing)
+        ' Update Engine
+        UpdateServiceStatus(EngineServiceName, engineController, 0, 1, 2)
+        
+        ' Update 3270 Config
+        UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
+        
+        ' Tooltip
         Try
-            If serviceController Is Nothing Then serviceController = New ServiceController(ServiceName)
-            serviceController.Refresh()
+            Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
+            Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")
+            trayIcon.Text = $"FB Engine: {engineStatus} | 3270: {configStatus}"
+        Catch
+            trayIcon.Text = "Flashback Controller"
+        End Try
+    End Sub
+
+    Private Sub UpdateServiceStatus(svcName As String, ByRef controller As ServiceController, labelIdx As Integer, startIdx As Integer, stopIdx As Integer)
+        Try
+            If controller Is Nothing Then controller = New ServiceController(svcName)
+            controller.Refresh()
             
-            Dim status = serviceController.Status
-            trayMenu.Items(0).Text = $"Engine: {status.ToString()}"
+            Dim status = controller.Status
+            trayMenu.Items(labelIdx).Text = $"{svcName.Replace("Flashback", "")}: {status.ToString()}"
             
             Select Case status
                 Case ServiceControllerStatus.Running
-                    trayMenu.Items(2).Enabled = False ' Start
-                    trayMenu.Items(3).Enabled = True  ' Stop
-                    trayIcon.Text = "Flashback Engine: Running"
+                    trayMenu.Items(startIdx).Enabled = False
+                    trayMenu.Items(stopIdx).Enabled = True
                 Case ServiceControllerStatus.Stopped
-                    trayMenu.Items(2).Enabled = True  ' Start
-                    trayMenu.Items(3).Enabled = False ' Stop
-                    trayIcon.Text = "Flashback Engine: Stopped"
+                    trayMenu.Items(startIdx).Enabled = True
+                    trayMenu.Items(stopIdx).Enabled = False
                 Case Else
-                    trayMenu.Items(2).Enabled = False
-                    trayMenu.Items(3).Enabled = False
+                    trayMenu.Items(startIdx).Enabled = False
+                    trayMenu.Items(stopIdx).Enabled = False
             End Select
         Catch ex As Exception
-            trayMenu.Items(0).Text = "Engine: Service Not Installed"
-            trayMenu.Items(2).Enabled = False
-            trayMenu.Items(3).Enabled = False
+            trayMenu.Items(labelIdx).Text = $"{svcName.Replace("Flashback", "")}: Not Installed"
+            trayMenu.Items(startIdx).Enabled = False
+            trayMenu.Items(stopIdx).Enabled = False
         End Try
     End Sub
 
-    Private Sub StartService()
+    Private Sub StartEngine()
         Try
-            serviceController?.Start()
+            engineController?.Start()
             CheckStatus()
         Catch ex As Exception
-            MessageBox.Show($"Failed to start service: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Failed to start Engine: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
-    Private Sub StopService()
+    Private Sub StopEngine()
         Try
-            serviceController?.Stop()
+            engineController?.Stop()
             CheckStatus()
         Catch ex As Exception
-            MessageBox.Show($"Failed to stop service: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Failed to stop Engine: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
-    Private Sub OpenConsoleConfig()
+    Private Sub Start3270()
+        Try
+            config3270Controller?.Start()
+            CheckStatus()
+        Catch ex As Exception
+            MessageBox.Show($"Failed to start 3270 Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub Stop3270()
+        Try
+            config3270Controller?.Stop()
+            CheckStatus()
+        Catch ex As Exception
+            MessageBox.Show($"Failed to stop 3270 Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub OpenConsoleTool()
         Try
             Dim path = "Flashback.Config.Console.exe"
             If Not File.Exists(path) Then path = "..\Flashback.Config.Console\bin\Debug\net9.0\Flashback.Config.Console.exe"
-            
             Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
         Catch ex As Exception
             MessageBox.Show("Could not launch Console Configuration utility.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-        End Try
-    End Sub
-
-    Private Sub Open3270Config()
-        Try
-            Dim path = "Flashback.Config.3270.exe"
-            If Not File.Exists(path) Then path = "..\Flashback.Config.3270\bin\Debug\net9.0\Flashback.Config.3270.exe"
-            
-            Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
-        Catch ex As Exception
-            MessageBox.Show("Could not launch 3270 Configuration server.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try
     End Sub
 
