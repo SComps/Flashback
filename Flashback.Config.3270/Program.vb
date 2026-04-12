@@ -19,8 +19,8 @@ Module Program
         Dim pwArgIdx = Array.IndexOf(args, "--password")
         If pwArgIdx >= 0 AndAlso args.Length > pwArgIdx + 1 Then
             syspw = args(pwArgIdx + 1)
-        ElseIf File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")) Then
-            syspw = File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")).Trim()
+        ElseIf System.IO.File.Exists(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")) Then
+            syspw = System.IO.File.ReadAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")).Trim()
         End If
 
         Dim builder = Host.CreateApplicationBuilder(args)
