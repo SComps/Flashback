@@ -7,6 +7,7 @@ Public Class LicenseInfo
     Public Property LicensedTo As String = "FREE NON-COMMERCIAL USE"
     Public Property MaxPrinters As Integer = 2 ' 0 = Unlimited
     Public Property IsLicensed As Boolean = False
+    Public Property [Error] As String = ""
 End Class
 
 Public Class LicenseManager
@@ -27,8 +28,10 @@ Public Class LicenseManager
             Dim info = JsonSerializer.Deserialize(Of LicenseInfo)(decryptedText)
             info.IsLicensed = True
             Return info
-        Catch
-            Return New LicenseInfo()
+        Catch ex As Exception
+            Dim errInfo As New LicenseInfo()
+            errInfo.Error = $"{ex.GetType().Name}: {ex.Message}"
+            Return errInfo
         End Try
     End Function
 
