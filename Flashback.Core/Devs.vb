@@ -17,6 +17,7 @@ Public Class Devs
     Public Property OutDest As String = "Output"
     Public Property Shading As RenderPDF.ShadingColor = RenderPDF.ShadingColor.Green
     Public Property JobNumber As Integer = 0
+    Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Private remoteHost As String
     Private remotePort As Integer
@@ -278,6 +279,7 @@ Public Class Devs
             Dim pdfName As String = Path.Combine(userDir, $"{DevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
 
             Dim renderer As New RenderPDF()
+            renderer.Logger = Logger
             renderer.DevName = DevName
             renderer.OS = OS
             renderer.Orientation = Orientation

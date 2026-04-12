@@ -3,6 +3,7 @@ Imports System.Text.RegularExpressions
 Imports PdfSharp.Drawing
 Imports PdfSharp.Fonts
 Imports PdfSharp.Pdf
+Imports Microsoft.Extensions.Logging
 
 Public Enum OSType
     OS_MVS38J
@@ -56,10 +57,11 @@ Public Class RenderPDF
     Public Property Shading As ShadingColor = ShadingColor.Green
     Public Property TypeFaceName As String = "Chainprinter"
     Public Property CustomFontPath As String = "ibmplexmono.ttf"
+    Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Public Function CreatePDF(title As String, outList As List(Of String)) As String
         Try
-            Console.WriteLine($"{DevName} beginning PDF generation.")
+            Logger?.LogInformation("{Dev}: beginning PDF generation.", DevName)
             Dim firstline As Double = 0
             Dim linesPerPage As Integer = 66
             Dim StartLine = 0
@@ -74,8 +76,6 @@ Public Class RenderPDF
                 Dim resolver = DirectCast(GlobalFontSettings.FontResolver, DynamicFontResolver)
                 resolver.RegisterFont(TypeFaceName, Path.Combine(Directory.GetCurrentDirectory(), CustomFontPath))
             End If
-            
-            doc.Info.Title = title
             
             doc.Info.Title = title
 
@@ -189,17 +189,17 @@ Public Class RenderPDF
                         currentLine += 1
                     End If
                 Catch ex As Exception
-                    Console.WriteLine($"Error processing line: {ex.Message}")
+                    Logger?.LogError("{Dev}: Error processing line: {Error}", DevName, ex.Message)
                 End Try
             Next
 
             Dim outputFile As String = TargetFileName
-            Console.WriteLine($"Wrote {doc.PageCount} pages for {title} to {outputFile}.")
+            Logger?.LogInformation("{Dev}: Wrote {Pages} pages for {Job} to {File}.", DevName, doc.PageCount, title, outputFile)
             doc.Save(outputFile)
             doc.Close()
             Return outputFile
         Catch ex As Exception
-            Console.WriteLine($"Error in CreatePDF: {ex.Message}")
+            Logger?.LogError("{Dev}: Error in CreatePDF: {Error}", DevName, ex.Message)
         End Try
         Return ""
     End Function

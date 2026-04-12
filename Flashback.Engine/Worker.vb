@@ -100,6 +100,7 @@ Public Class Worker
                         End If
 
                         AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
+                        d.Logger = _logger
                         _devList.Add(d)
                         d.Connect()
                         loadedCount += 1
