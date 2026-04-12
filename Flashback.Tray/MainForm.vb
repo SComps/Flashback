@@ -1,6 +1,7 @@
 Imports System.ServiceProcess
 Imports System.Diagnostics
 Imports System.IO
+Imports Flashback.Core
 
 Public Class MainForm
     Inherits Form
@@ -38,6 +39,10 @@ Public Class MainForm
         _deviceMenu = New ToolStripMenuItem("Manage Devices")
         trayMenu.Items.Add(_deviceMenu)
         trayMenu.Items.Add("-")
+
+        ' License Section (Index 10)
+        trayMenu.Items.Add("License: FREE NON-COMMERCIAL", Nothing, AddressOf DoNothing).Enabled = False
+        trayMenu.Items.Add("-")
         
         ' Tools Section
         trayMenu.Items.Add("Configure (Console Tool)", Nothing, AddressOf OpenConsoleTool)
@@ -72,6 +77,9 @@ Public Class MainForm
         
         ' Update Device Menu
         UpdateDeviceMenu()
+
+        ' Update License Display
+        UpdateLicenseStatus()
         
         ' Tooltip
         Try
@@ -80,6 +88,20 @@ Public Class MainForm
             trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus}"
         Catch
             trayIcon.Text = "Flashback Controller"
+        End Try
+    End Sub
+
+    Private Sub UpdateLicenseStatus()
+        Try
+            Dim l = LicenseManager.GetLicenseInfo()
+            If l.IsLicensed Then
+                trayMenu.Items(10).Text = $"License: {l.LicensedTo} ({l.MaxPrinters} Prn)"
+                trayMenu.Items(10).ForeColor = Drawing.Color.Navy
+            Else
+                trayMenu.Items(10).Text = "License: FREE NON-COMMERCIAL"
+                trayMenu.Items(10).ForeColor = Drawing.Color.DarkGray
+            End If
+        Catch
         End Try
     End Sub
 

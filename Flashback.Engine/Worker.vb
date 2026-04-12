@@ -49,6 +49,13 @@ Public Class Worker
     End Function
 
     Private Sub LoadDevices()
+        Dim lic = LicenseManager.GetLicenseInfo()
+        If lic.IsLicensed Then
+            _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, lic.MaxPrinters)
+        Else
+            _logger.LogWarning("LICENSE: No valid license found. Running in FREE NON-COMMERCIAL USE mode (Max 2 printers).")
+        End If
+
         _logger.LogInformation("Reloading devices from {ConfigFile}...", _configFile)
         
         ' Disconnect existing
@@ -57,10 +64,17 @@ Public Class Worker
         If Not File.Exists(_configFile) Then Return
 
         Try
+            Dim loadedCount As Integer = 0
             Using rdr As New StreamReader(_configFile)
                 While Not rdr.EndOfStream
                     Dim line = rdr.ReadLine()
                     If String.IsNullOrWhiteSpace(line) Then Continue While
+                    
+                    If loadedCount >= lic.MaxPrinters Then
+                        _logger.LogWarning("LICENSE LIMIT REACHED: Ignoring device '{Line}' (Limit: {Limit})", line.Split("||")(0), lic.MaxPrinters)
+                        Continue While
+                    End If
+
                     Dim p = line.Split("||", StringSplitOptions.TrimEntries)
                     
                     If p.Length >= 10 Then
@@ -90,6 +104,7 @@ Public Class Worker
                         
                         ' Always attempt initial connect
                         d.Connect()
+                        loadedCount += 1
                     End If
                 End While
             End Using
