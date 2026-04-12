@@ -133,9 +133,6 @@ Public Class SessionStateManager
         d.OS = CType(Val(_session.GetFieldValue("txtOS")), OSType)
         d.DevDest = _session.GetFieldValue("txtDest")?.Trim()
         
-        Dim autoVal = _session.GetFieldValue("txtAuto")?.Trim().ToUpper()
-        d.Auto = (autoVal = "TRUE" OrElse autoVal = "1" OrElse autoVal = "YES")
-
         Dim pdfVal = _session.GetFieldValue("txtPDF")?.Trim().ToUpper()
         d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
         
@@ -193,7 +190,7 @@ Public Class SessionStateManager
             _session.WriteText(5, 7, _statusMsg, _statusColor)
         End If
 
-        _session.WriteText(7, 2, "ID   NAME            DESCRIPTION                    OS  AUTO  PDF  SHADE", TN3270Color.Turquoise)
+        _session.WriteText(7, 2, "ID   NAME            DESCRIPTION                    OS  PDF  SHADE", TN3270Color.Turquoise)
         _session.WriteText(8, 1, StrDup(78, "-"), TN3270Color.Blue)
 
         Dim rowPos = 9
@@ -203,9 +200,8 @@ Public Class SessionStateManager
             _session.WriteText(rowPos, 7, d.DevName.PadRight(14).Substring(0, 14), TN3270Color.White)
             _session.WriteText(rowPos, 23, d.DevDescription.PadRight(29).Substring(0, 29), TN3270Color.White)
             _session.WriteText(rowPos, 54, CInt(d.OS).ToString(), TN3270Color.White)
-            _session.WriteText(rowPos, 58, If(d.Auto, "YES ", "NO  "), TN3270Color.Pink)
-            _session.WriteText(rowPos, 64, If(d.PDF, "YES ", "NO  "), TN3270Color.Pink)
-            _session.WriteText(rowPos, 70, d.Shading.ToString().ToUpper(), TN3270Color.Green)
+            _session.WriteText(rowPos, 58, If(d.PDF, "YES ", "NO  "), TN3270Color.Pink)
+            _session.WriteText(rowPos, 64, d.Shading.ToString().ToUpper(), TN3270Color.Green)
             
             _session.WriteText(rowPos + 1, 7, d.DevDest.PadRight(50).Substring(0, 50), TN3270Color.Green)
             rowPos += 3
@@ -251,23 +247,20 @@ Public Class SessionStateManager
         _session.WriteText(12, labelCol, " DEVICE DESTINATION:", TN3270Color.Turquoise)
         _session.AddField(12, fieldCol, 50, d.DevDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDest").Modified = True
 
-        _session.WriteText(14, labelCol, "       AUTO CONNECT:", TN3270Color.Turquoise)
-        _session.AddField(14, fieldCol, 10, d.Auto.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtAuto").Modified = True
+        _session.WriteText(14, labelCol, "         OUTPUT PDF:", TN3270Color.Turquoise)
+        _session.AddField(14, fieldCol, 10, d.PDF.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtPDF").Modified = True
 
-        _session.WriteText(15, labelCol, "         OUTPUT PDF:", TN3270Color.Turquoise)
-        _session.AddField(15, fieldCol, 10, d.PDF.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtPDF").Modified = True
+        _session.WriteText(14, 42, "ORIENTATION:", TN3270Color.Turquoise)
+        _session.AddField(14, 55, 1, d.Orientation.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOrient").Modified = True
 
-        _session.WriteText(15, 42, "ORIENTATION:", TN3270Color.Turquoise)
-        _session.AddField(15, 55, 1, d.Orientation.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOrient").Modified = True
+        _session.WriteText(16, labelCol, "   OUTPUT DIRECTORY:", TN3270Color.Turquoise)
+        _session.AddField(16, fieldCol, 50, d.OutDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOut").Modified = True
 
-        _session.WriteText(17, labelCol, "   OUTPUT DIRECTORY:", TN3270Color.Turquoise)
-        _session.AddField(17, fieldCol, 50, d.OutDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOut").Modified = True
+        _session.WriteText(17, labelCol, "   SHADING COLOR   :", TN3270Color.Turquoise)
+        _session.AddField(17, fieldCol, 1, CInt(d.Shading).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtShade").Modified = True
 
-        _session.WriteText(18, labelCol, "   SHADING COLOR   :", TN3270Color.Turquoise)
-        _session.AddField(18, fieldCol, 1, CInt(d.Shading).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtShade").Modified = True
-
-        _session.WriteText(19, labelCol, "   NEXT JOB NUMBER :", TN3270Color.Turquoise)
-        _session.AddField(19, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob").Modified = True
+        _session.WriteText(18, labelCol, "   NEXT JOB NUMBER :", TN3270Color.Turquoise)
+        _session.AddField(18, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob").Modified = True
 
         _session.WriteText(22, 2, "ENTER:SAVE   PF3:CANCEL", TN3270Color.White)
         _session.ShowScreen()
@@ -290,7 +283,7 @@ Public Class SessionStateManager
             Using writer As New StreamWriter(_configFile, append:=False)
                 For Each d In _devList
                     writer.WriteLine($"{d.DevName}||{d.DevDescription}||{d.DevType}||{d.ConnType}||{d.DevDest}||" &
-                                     $"{CInt(d.OS)}||{d.Auto}||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
+                                     $"{CInt(d.OS)}||True||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
                                      $"{CInt(d.Shading)}||{d.JobNumber}")
                 Next
             End Using

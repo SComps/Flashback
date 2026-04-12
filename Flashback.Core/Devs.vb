@@ -12,7 +12,6 @@ Public Class Devs
     Public Property ConnType As Integer = 0
     Public Property DevDest As String = "127.0.0.1:9000"
     Public Property OS As OSType = OSType.OS_MVS38J
-    Public Property Auto As Boolean = False
     Public Property PDF As Boolean = True
     Public Property Orientation As Integer = 0
     Public Property OutDest As String = "Output"

@@ -65,7 +65,6 @@ Public Class Config3270Worker
                         d.ConnType = Val(p(3))
                         d.DevDest = p(4)
                         d.OS = CType(Val(p(5)), OSType)
-                        d.Auto = (p(6) = "True")
                         d.PDF = (p(7) = "True")
                         d.Orientation = Val(p(8))
                         d.OutDest = p(9)

@@ -62,6 +62,24 @@ Module Program
                         End If
                     End If
                 End If
+            ElseIf sel.StartsWith("CONNECT") Then
+                Dim parts = sel.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
+                If parts.Length = 2 Then
+                    Dim id = Val(parts(1))
+                    If id > 0 AndAlso id <= devList.Count Then
+                        SendEngineCommand("CONNECT", devList(id - 1).DevName)
+                        SetError($"Connect signal sent for {devList(id - 1).DevName}")
+                    End If
+                End If
+            ElseIf sel.StartsWith("DISCONNECT") Then
+                Dim parts = sel.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
+                If parts.Length = 2 Then
+                    Dim id = Val(parts(1))
+                    If id > 0 AndAlso id <= devList.Count Then
+                        SendEngineCommand("DISCONNECT", devList(id - 1).DevName)
+                        SetError($"Disconnect signal sent for {devList(id - 1).DevName}")
+                    End If
+                End If
             Else
                 Select Case sel
                     Case "SAVE"
@@ -126,12 +144,11 @@ Module Program
         Say("   CONNECTION TYPE:", labelCol, 7, ConsoleColor.Cyan)
         Say("  OPERATING SYSTEM:", labelCol, 8, ConsoleColor.Cyan)
         Say("DEVICE DESTINATION:", labelCol, 9, ConsoleColor.Cyan)
-        Say("      AUTO CONNECT:", labelCol, 10, ConsoleColor.Cyan)
-        Say("        OUTPUT PDF:", labelCol, 11, ConsoleColor.Cyan)
-        Say("       ORIENTATION:", labelCol, 12, ConsoleColor.Cyan)
-        Say("        OUTPUT DIR:", labelCol, 13, ConsoleColor.Cyan)
-        Say("   SHADING COLOR  :", labelCol, 14, ConsoleColor.Cyan)
-        Say("   START JOB NO.  :", labelCol, 15, ConsoleColor.Cyan)
+        Say("        OUTPUT PDF:", labelCol, 10, ConsoleColor.Cyan)
+        Say("       ORIENTATION:", labelCol, 11, ConsoleColor.Cyan)
+        Say("        OUTPUT DIR:", labelCol, 12, ConsoleColor.Cyan)
+        Say("   SHADING COLOR  :", labelCol, 13, ConsoleColor.Cyan)
+        Say("   START JOB NO.  :", labelCol, 14, ConsoleColor.Cyan)
 
         Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
         Say("(0:Sock 1:File 2:Phys)", 45, 7, ConsoleColor.DarkGray)
@@ -145,15 +162,14 @@ Module Program
         d.ConnType = Val(GetString(d.ConnType.ToString(), valCol, 7, 1, ConsoleColor.Yellow))
         d.OS = CType(Val(GetString(Integer.Parse(d.OS).ToString(), valCol, 8, 1, ConsoleColor.Yellow)), OSType)
         d.DevDest = GetString(d.DevDest, valCol, 9, 50, ConsoleColor.Yellow)
-        d.Auto = GetBool(d.Auto, valCol, 10)
-        d.PDF = GetBool(d.PDF, valCol, 11)
-        d.Orientation = Val(GetString(d.Orientation.ToString(), valCol, 12, 1, ConsoleColor.Yellow))
-        d.OutDest = GetString(d.OutDest, valCol, 13, 50, ConsoleColor.Yellow)
+        d.PDF = GetBool(d.PDF, valCol, 10)
+        d.Orientation = Val(GetString(d.Orientation.ToString(), valCol, 11, 1, ConsoleColor.Yellow))
+        d.OutDest = GetString(d.OutDest, valCol, 12, 50, ConsoleColor.Yellow)
         
-        Dim shadeVal As Integer = GetString(CInt(d.Shading).ToString(), valCol, 14, 1, ConsoleColor.Yellow)
+        Dim shadeVal As Integer = GetString(CInt(d.Shading).ToString(), valCol, 13, 1, ConsoleColor.Yellow)
         d.Shading = CType(shadeVal, RenderPDF.ShadingColor)
         
-        d.JobNumber = Val(GetString(d.JobNumber.ToString(), valCol, 15, 6, ConsoleColor.Yellow))
+        d.JobNumber = Val(GetString(d.JobNumber.ToString(), valCol, 14, 6, ConsoleColor.Yellow))
 
         Say("Save changes? (Y/n) ==> ", 0, 17, ConsoleColor.Green)
         If System.Console.ReadLine().ToUpper().StartsWith("Y") Then
@@ -221,7 +237,7 @@ Module Program
         Say(ErrMsg, 1, 5, ConsoleColor.Red)
         ErrMsg = ""
 
-        Say("ID   NAME            DESCRIPTION                    OS  AUTO  PDF  SHADE", 0, 6, ConsoleColor.Cyan)
+        Say("ID   NAME            DESCRIPTION                    OS  PDF   SHADE", 0, 6, ConsoleColor.Cyan)
         Say(New String("-"c, max_Cols), 0, 7, ConsoleColor.Blue)
 
         Dim row As Integer = 8
@@ -232,15 +248,21 @@ Module Program
             Say(d.DevName.PadRight(15), 5, row, ConsoleColor.White)
             Say(d.DevDescription.PadRight(30), 21, row, ConsoleColor.White)
             Say(CInt(d.OS).ToString(), 52, row, ConsoleColor.White)
-            Say(If(d.Auto, "YES", "NO "), 56, row, ConsoleColor.Yellow)
-            Say(If(d.PDF, "YES", "NO "), 62, row, ConsoleColor.Yellow)
-            Say(d.Shading.ToString().ToUpper(), 67, row, ConsoleColor.Green)
+            Say(If(d.PDF, "YES", "NO "), 56, row, ConsoleColor.Yellow)
+            Say(d.Shading.ToString().ToUpper(), 61, row, ConsoleColor.Green)
             
             Say($"   -> {d.DevDest}", 5, row + 1, ConsoleColor.DarkGray)
             row += 2
         Next
 
-        Say("Commands: ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], UP, DOWN", 0, max_Rows - 2, ConsoleColor.Cyan)
+        Say("Commands: ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 0, max_Rows - 2, ConsoleColor.Cyan)
+    End Sub
+
+    Private Sub SendEngineCommand(cmd As String, devName As String)
+        Try
+            File.AppendAllText("commands.dat", $"{cmd}||{devName}{vbCrLf}")
+        Catch
+        End Try
     End Sub
 
     Private Function LoadDevs() As List(Of Devs)
@@ -260,7 +282,6 @@ Module Program
                         d.ConnType = Val(p(3))
                         d.DevDest = p(4)
                         d.OS = CType(Val(p(5)), OSType)
-                        d.Auto = (p(6) = "True")
                         d.PDF = (p(7) = "True")
                         d.Orientation = Val(p(8))
                         d.OutDest = p(9)
@@ -287,7 +308,7 @@ Module Program
             Using w As New StreamWriter(configFile, False)
                 For Each d As Devs In devList
                     w.WriteLine($"{d.DevName}||{d.DevDescription}||{d.DevType}||{d.ConnType}||{d.DevDest}||" &
-                                $"{CInt(d.OS)}||{d.Auto}||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
+                                $"{CInt(d.OS)}||True||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
                                 $"{CInt(d.Shading)}||{d.JobNumber}")
                 Next
             End Using

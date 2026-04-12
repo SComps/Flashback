@@ -11,9 +11,12 @@ Public Class MainForm
     
     Private Const EngineServiceName As String = "FlashbackEngine"
     Private Const Config3270ServiceName As String = "FlashbackConfig3270"
+    Private Const ConfigFile As String = "devices.dat"
+    Private Const CommandFile As String = "commands.dat"
     
     Private engineController As ServiceController
     Private config3270Controller As ServiceController
+    Private _deviceMenu As ToolStripMenuItem
 
     Public Sub New()
         ' Initialize components manually for a clean, lean app
@@ -21,14 +24,19 @@ Public Class MainForm
         
         ' Engine Service Section
         trayMenu.Items.Add("Engine: Unknown", Nothing, AddressOf DoNothing).Enabled = False
-        trayMenu.Items.Add("Start Engine", Nothing, AddressOf StartEngine)
-        trayMenu.Items.Add("Stop Engine", Nothing, AddressOf StopEngine)
+        trayMenu.Items.Add("Start Engine Service", Nothing, AddressOf StartEngine)
+        trayMenu.Items.Add("Stop Engine Service", Nothing, AddressOf StopEngine)
         trayMenu.Items.Add("-")
         
         ' 3270 Config Service Section
         trayMenu.Items.Add("3270 Config: Unknown", Nothing, AddressOf DoNothing).Enabled = False
         trayMenu.Items.Add("Start 3270 Server", Nothing, AddressOf Start3270)
         trayMenu.Items.Add("Stop 3270 Server", Nothing, AddressOf Stop3270)
+        trayMenu.Items.Add("-")
+
+        ' Device Management Section
+        _deviceMenu = New ToolStripMenuItem("Manage Devices")
+        trayMenu.Items.Add(_deviceMenu)
         trayMenu.Items.Add("-")
         
         ' Tools Section
@@ -58,19 +66,58 @@ Public Class MainForm
     End Sub
 
     Private Sub CheckStatus(Optional sender As Object = Nothing, Optional e As EventArgs = Nothing)
-        ' Update Engine
+        ' Update Service Statuses
         UpdateServiceStatus(EngineServiceName, engineController, 0, 1, 2)
-        
-        ' Update 3270 Config
         UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
+        
+        ' Update Device Menu
+        UpdateDeviceMenu()
         
         ' Tooltip
         Try
             Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
             Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")
-            trayIcon.Text = $"FB Engine: {engineStatus} | 3270: {configStatus}"
+            trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus}"
         Catch
             trayIcon.Text = "Flashback Controller"
+        End Try
+    End Sub
+
+    Private Sub UpdateDeviceMenu()
+        _deviceMenu.DropDownItems.Clear()
+        
+        If Not File.Exists(ConfigFile) Then
+            _deviceMenu.DropDownItems.Add("No devices found").Enabled = False
+            Return
+        End If
+
+        Try
+            Dim lines = File.ReadAllLines(ConfigFile)
+            For Each line In lines
+                If String.IsNullOrWhiteSpace(line) Then Continue For
+                Dim parts = line.Split("||")
+                If parts.Length > 0 Then
+                    Dim dName = parts(0)
+                    Dim dItem = New ToolStripMenuItem(dName)
+                    
+                    Dim connectBtn = New ToolStripMenuItem("Connect", Nothing, Sub() SendCommand("CONNECT", dName))
+                    Dim disconnectBtn = New ToolStripMenuItem("Disconnect", Nothing, Sub() SendCommand("DISCONNECT", dName))
+                    
+                    dItem.DropDownItems.Add(connectBtn)
+                    dItem.DropDownItems.Add(disconnectBtn)
+                    _deviceMenu.DropDownItems.Add(dItem)
+                End If
+            Next
+        Catch ex As Exception
+            _deviceMenu.DropDownItems.Add("Error loading devices").Enabled = False
+        End Try
+    End Sub
+
+    Private Sub SendCommand(cmd As String, devName As String)
+        Try
+            File.AppendAllText(CommandFile, $"{cmd}||{devName}{vbCrLf}")
+        Catch ex As Exception
+            MessageBox.Show($"Failed to send command: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
@@ -86,9 +133,11 @@ Public Class MainForm
                 Case ServiceControllerStatus.Running
                     trayMenu.Items(startIdx).Enabled = False
                     trayMenu.Items(stopIdx).Enabled = True
+                    _deviceMenu.Enabled = True
                 Case ServiceControllerStatus.Stopped
                     trayMenu.Items(startIdx).Enabled = True
                     trayMenu.Items(stopIdx).Enabled = False
+                    _deviceMenu.Enabled = False ' Disable device control if engine is stopped
                 Case Else
                     trayMenu.Items(startIdx).Enabled = False
                     trayMenu.Items(stopIdx).Enabled = False

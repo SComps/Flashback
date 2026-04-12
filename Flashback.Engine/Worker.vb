@@ -10,8 +10,10 @@ Public Class Worker
     Private ReadOnly _logger As ILogger(Of Worker)
     Private ReadOnly _devList As New List(Of Devs)
     Private _configFile As String = "devices.dat"
+    Private _cmdFile As String = "commands.dat"
     Private _configDate As DateTime
     Private WithEvents _statTimer As New System.Timers.Timer
+    Private WithEvents _cmdTimer As New System.Timers.Timer
 
     Public Sub New(logger As ILogger(Of Worker))
         _logger = logger
@@ -26,12 +28,15 @@ Public Class Worker
         _statTimer.Interval = 5000
         _statTimer.Enabled = True
 
+        _cmdTimer.Interval = 500
+        _cmdTimer.Enabled = True
+
         ' Loop until stopped
         While Not stoppingToken.IsCancellationRequested
-            ' Auto-reconnect logic for devices marked as Auto but not connected
+            ' Auto-reconnect logic for ALL devices that are not connected
             For Each d In _devList
-                If d.Auto AndAlso Not d.Connected Then
-                    _logger.LogInformation("Auto-connect: Attempting to connect {Dev}...", d.DevName)
+                If Not d.Connected AndAlso Not d.Connecting Then
+                    _logger.LogInformation("Attempting to connect {Dev}...", d.DevName)
                     d.Connect()
                 End If
             Next
@@ -66,7 +71,6 @@ Public Class Worker
                         d.ConnType = Val(p(3))
                         d.DevDest = p(4)
                         d.OS = CType(Val(p(5)), OSType)
-                        d.Auto = (p(6) = "True")
                         d.PDF = (p(7) = "True")
                         d.Orientation = Val(p(8))
                         d.OutDest = p(9)
@@ -84,9 +88,8 @@ Public Class Worker
                         
                         _devList.Add(d)
                         
-                        If d.Auto Then
-                            d.Connect()
-                        End If
+                        ' Always attempt initial connect
+                        d.Connect()
                     End If
                 End While
             End Using
@@ -111,6 +114,38 @@ Public Class Worker
                 LoadDevices()
             End If
         Catch ex As Exception
+        End Try
+    End Sub
+
+    Private Sub CmdTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _cmdTimer.Elapsed
+        If Not File.Exists(_cmdFile) Then Return
+        
+        Try
+            Dim lines = File.ReadAllLines(_cmdFile)
+            File.Delete(_cmdFile)
+            
+            For Each line In lines
+                If String.IsNullOrWhiteSpace(line) Then Continue For
+                Dim parts = line.Split("||")
+                If parts.Length < 2 Then Continue For
+                
+                Dim cmd = parts(0).ToUpper()
+                Dim devName = parts(1)
+                
+                Dim target = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                If target IsNot Nothing Then
+                    Select Case cmd
+                        Case "CONNECT"
+                            _logger.LogInformation("Signal: Manual connect requested for {Dev}", devName)
+                            target.Connect()
+                        Case "DISCONNECT"
+                            _logger.LogInformation("Signal: Manual disconnect requested for {Dev}", devName)
+                            target.Disconnect()
+                    End Select
+                End If
+            Next
+        Catch ex As Exception
+            _logger.LogError("Error processing command file: {Error}", ex.Message)
         End Try
     End Sub
 End Class
