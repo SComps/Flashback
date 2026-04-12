@@ -121,10 +121,12 @@ Public Class Worker
 
     Private Sub StatTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _statTimer.Elapsed
         Try
-            Dim currentCfgDate = File.GetLastWriteTime(_configFile)
-            If currentCfgDate > _configDate Then
-                _logger.LogInformation("Configuration file change detected.")
-                LoadDevices()
+            If File.Exists(_configFile) Then
+                Dim currentCfgDate = File.GetLastWriteTime(_configFile)
+                If currentCfgDate > _configDate Then
+                    _logger.LogInformation("Configuration file change detected.")
+                    LoadDevices()
+                End If
             End If
         Catch ex As Exception
         End Try
