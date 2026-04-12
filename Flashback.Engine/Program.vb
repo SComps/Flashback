@@ -2,6 +2,7 @@ Imports System.Diagnostics
 Imports System.Linq
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
+Imports Flashback.Core
 
 Module Program
     Sub Main(args As String())
