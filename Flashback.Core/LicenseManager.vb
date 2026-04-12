@@ -10,7 +10,7 @@ Public Class LicenseInfo
 End Class
 
 Public Class LicenseManager
-    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026!Prn") 
+    Private Shared ReadOnly Key As Byte() = Encoding.UTF8.GetBytes("Fl@shB@ck2026Prn") 
     Private Shared ReadOnly IV As Byte() = Encoding.UTF8.GetBytes("PrntEngineL1cIV!")
 
     Public Shared Function GetLicenseInfo() As LicenseInfo
