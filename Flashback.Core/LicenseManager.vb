@@ -16,7 +16,9 @@ Public Class LicenseManager
     Private Shared ReadOnly IV As Byte() = Encoding.UTF8.GetBytes("PrntEngineL1cIV!")   ' 16 chars
 
     Public Shared Function GetLicenseInfo() As LicenseInfo
-        Dim licPath As String = "flashback.lic"
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        Dim licPath As String = Path.Combine(baseDir, "flashback.lic")
+        
         If Not File.Exists(licPath) Then
             Return New LicenseInfo()
         End If

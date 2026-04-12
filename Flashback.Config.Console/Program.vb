@@ -260,12 +260,16 @@ Module Program
 
     Private Sub SendEngineCommand(cmd As String, devName As String)
         Try
-            File.AppendAllText("commands.dat", $"{cmd}||{devName}{vbCrLf}")
+            Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+            Dim cmdPath As String = Path.Combine(baseDir, "commands.dat")
+            File.AppendAllText(cmdPath, $"{cmd}||{devName}{vbCrLf}")
         Catch
         End Try
     End Sub
 
     Private Function LoadDevs() As List(Of Devs)
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        configFile = Path.Combine(baseDir, "devices.dat")
         Dim list As New List(Of Devs)()
         If Not File.Exists(configFile) Then Return list
         Try

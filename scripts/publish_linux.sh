@@ -1,5 +1,6 @@
 #!/bin/bash
 # Flashback Suite - Linux Publish Script (Native AOT)
+# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 set -e
 
 PUBLISH_DIR="../publish/linux"

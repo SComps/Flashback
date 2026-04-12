@@ -18,8 +18,15 @@ Public Class MainForm
     Private engineController As ServiceController
     Private config3270Controller As ServiceController
     Private _deviceMenu As ToolStripMenuItem
+    Private _fullConfigPath As String
+    Private _fullCmdPath As String
 
     Public Sub New()
+        ' Initialize paths
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        _fullConfigPath = Path.Combine(baseDir, ConfigFile)
+        _fullCmdPath = Path.Combine(baseDir, CommandFile)
+
         ' Initialize components manually for a clean, lean app
         trayMenu = New ContextMenuStrip()
         
@@ -108,13 +115,13 @@ Public Class MainForm
     Private Sub UpdateDeviceMenu()
         _deviceMenu.DropDownItems.Clear()
         
-        If Not File.Exists(ConfigFile) Then
+        If Not File.Exists(_fullConfigPath) Then
             _deviceMenu.DropDownItems.Add("No devices found").Enabled = False
             Return
         End If
 
         Try
-            Dim lines = File.ReadAllLines(ConfigFile)
+            Dim lines = File.ReadAllLines(_fullConfigPath)
             For Each line In lines
                 If String.IsNullOrWhiteSpace(line) Then Continue For
                 Dim parts = line.Split("||")
@@ -137,7 +144,7 @@ Public Class MainForm
 
     Private Sub SendCommand(cmd As String, devName As String)
         Try
-            File.AppendAllText(CommandFile, $"{cmd}||{devName}{vbCrLf}")
+            File.AppendAllText(_fullCmdPath, $"{cmd}||{devName}{vbCrLf}")
         Catch ex As Exception
             MessageBox.Show($"Failed to send command: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
@@ -219,9 +226,10 @@ Public Class MainForm
 
     Private Sub OpenLog()
         Try
-            Dim path = "printers.log"
+            Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+            Dim path = System.IO.Path.Combine(baseDir, "printers.log")
             If File.Exists(path) Then
-                Process.Start(New ProcessStartInfo("notepad.exe", path))
+                Process.Start(New ProcessStartInfo("notepad.exe", $"""{path}""") With {.UseShellExecute = True})
             Else
                 MessageBox.Show("Log file not found.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If

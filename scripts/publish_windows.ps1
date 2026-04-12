@@ -1,4 +1,5 @@
 # Flashback Suite - Windows Publish Script (AOT / Single File)
+# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 $ErrorActionPreference = "Stop"
 
 $PublishDir = "..\publish\windows"

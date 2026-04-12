@@ -9,14 +9,17 @@ Public Class Worker
 
     Private ReadOnly _logger As ILogger(Of Worker)
     Private ReadOnly _devList As New List(Of Devs)
-    Private _configFile As String = "devices.dat"
-    Private _cmdFile As String = "commands.dat"
+    Private _configFile As String
+    Private _cmdFile As String
     Private _configDate As DateTime
     Private WithEvents _statTimer As New System.Timers.Timer
     Private WithEvents _cmdTimer As New System.Timers.Timer
 
     Public Sub New(logger As ILogger(Of Worker))
         _logger = logger
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        _configFile = Path.Combine(baseDir, "devices.dat")
+        _cmdFile = Path.Combine(baseDir, "commands.dat")
     End Sub
 
     Protected Overrides Async Function ExecuteAsync(stoppingToken As CancellationToken) As Task

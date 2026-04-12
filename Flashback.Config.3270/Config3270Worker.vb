@@ -10,12 +10,14 @@ Public Class Config3270Worker
 
     Private ReadOnly _logger As ILogger(Of Config3270Worker)
     Private ReadOnly _devList As New List(Of Devs)
-    Private _configFile As String = "devices.dat"
+    Private _configFile As String
     Private _port As Integer = 3270
     Private _server As TN3270Listener
 
     Public Sub New(logger As ILogger(Of Config3270Worker))
         _logger = logger
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        _configFile = Path.Combine(baseDir, "devices.dat")
     End Sub
 
     Protected Overrides Async Function ExecuteAsync(stoppingToken As CancellationToken) As Task
