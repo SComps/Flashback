@@ -1,5 +1,6 @@
 Imports System.IO
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.DependencyInjection
 
 Public Class FileLogger
     Implements ILogger
@@ -50,6 +51,6 @@ End Class
 Public Module FileLoggerExtensions
     <System.Runtime.CompilerServices.Extension>
     Public Sub AddFile(loggingBuilder As ILoggingBuilder)
-        loggingBuilder.AddProvider(New FileLoggerProvider())
+        loggingBuilder.Services.AddSingleton(Of ILoggerProvider)(New FileLoggerProvider())
     End Sub
 End Module
