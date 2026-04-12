@@ -5,6 +5,7 @@ Imports System.Threading
 
 Public Class Devs
     Public Event LogMessage(message As String, color As ConsoleColor)
+    Public Event JobNumberChanged(sender As Devs)
 
     Public Property DevName As String = "Printer"
     Public Property DevDescription As String = ""
@@ -153,6 +154,7 @@ Public Class Devs
 
     Private Sub ProcessDocumentData(documentData As String)
         JobNumber += 1
+        RaiseEvent JobNumberChanged(Me)
         Dim lines As New List(Of String)()
         Dim currentLine As New StringBuilder()
         Dim ignoreChars As Integer = 0
@@ -292,4 +294,7 @@ Public Class Devs
             Receiving = False
         End If
     End Sub
+    Public Function ToConfigLine() As String
+        Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}"
+    End Function
 End Class

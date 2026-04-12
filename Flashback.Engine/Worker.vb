@@ -48,65 +48,78 @@ Public Class Worker
         Cleanup()
     End Function
 
+    Private Sub SaveDevices()
+        Try
+            SyncLock _devList
+                File.WriteAllLines(_configFile, _devList.Select(Function(d) d.ToConfigLine()))
+                _configDate = File.GetLastWriteTime(_configFile)
+            End SyncLock
+        Catch ex As Exception
+            _logger.LogError("Error saving configuration: {Error}", ex.Message)
+        End Try
+    End Sub
+
     Private Sub LoadDevices()
         Dim lic = LicenseManager.GetLicenseInfo()
         If lic.IsLicensed Then
             Dim limitStr As String = If(lic.MaxPrinters = 0, "Unlimited", lic.MaxPrinters.ToString())
             _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, limitStr)
         Else
-            If Not String.IsNullOrEmpty(lic.Error) Then
-                _logger.LogError("LICENSE ERROR: {Error}", lic.Error)
-            End If
-            _logger.LogWarning("LICENSE: No valid license found. Running in FREE NON-COMMERCIAL USE mode (Max 2 printers).")
+            _logger.LogWarning("LICENSE: No valid license found. Running in FREE mode (Max 2 printers).")
         End If
 
-        _logger.LogInformation("Reloading devices from {ConfigFile}...", _configFile)
-        
-        Cleanup()
         If Not File.Exists(_configFile) Then Return
 
         Try
+            Dim activeDevices As New List(Of Devs)
             Dim loadedCount As Integer = 0
-            Using rdr As New StreamReader(_configFile)
-                While Not rdr.EndOfStream
-                    Dim line = rdr.ReadLine()
-                    If String.IsNullOrWhiteSpace(line) Then Continue While
+            Dim lines = File.ReadAllLines(_configFile)
+            
+            For Each line In lines
+                If String.IsNullOrWhiteSpace(line) Then Continue For
+                Dim p = line.Split("||", StringSplitOptions.TrimEntries)
+                If p.Length < 10 Then Continue For
+                
+                If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
+
+                Dim devName = p(0)
+                Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                
+                If existing IsNot Nothing AndAlso existing.DevDest = p(4) AndAlso existing.OS = CType(Val(p(5)), OSType) Then
+                    ' Configuration matches, just update JobNumber and keep current connection
+                    existing.JobNumber = Val(If(p.Length >= 12, p(11), p(p.Length - 1)))
+                    activeDevices.Add(existing)
+                    _devList.Remove(existing)
+                Else
+                    ' New or significantly changed device
+                    Dim d As New Devs()
+                    d.DevName = p(0)
+                    d.DevDescription = p(1)
+                    d.DevType = Val(p(2))
+                    d.ConnType = Val(p(3))
+                    d.DevDest = p(4)
+                    d.OS = CType(Val(p(5)), OSType)
+                    d.PDF = (p(7) = "True")
+                    d.Orientation = Val(p(8))
+                    d.OutDest = p(9)
                     
-                    If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then
-                        _logger.LogWarning("LICENSE LIMIT REACHED: Ignoring device '{Line}' (Limit: {Limit})", line.Split("||")(0), lic.MaxPrinters)
-                        Continue While
+                    If p.Length >= 12 Then
+                        d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
+                        d.JobNumber = Val(p(11))
                     End If
 
-                    Dim p = line.Split("||", StringSplitOptions.TrimEntries)
-                    
-                    If p.Length >= 10 Then
-                        Dim d As New Devs()
-                        d.DevName = p(0)
-                        d.DevDescription = p(1)
-                        d.DevType = Val(p(2))
-                        d.ConnType = Val(p(3))
-                        d.DevDest = p(4)
-                        d.OS = CType(Val(p(5)), OSType)
-                        d.PDF = (p(7) = "True")
-                        d.Orientation = Val(p(8))
-                        d.OutDest = p(9)
+                    AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
+                    AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
+                    d.Logger = _logger
+                    d.Connect()
+                    activeDevices.Add(d)
+                End If
+                loadedCount += 1
+            Next
 
-                        If p.Length = 12 Then
-                            d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
-                            d.JobNumber = Val(p(11))
-                        ElseIf p.Length >= 13 Then
-                            d.Shading = CType(Val(p(11)), RenderPDF.ShadingColor)
-                            d.JobNumber = Val(p(12))
-                        End If
-
-                        AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
-                        d.Logger = _logger
-                        _devList.Add(d)
-                        d.Connect()
-                        loadedCount += 1
-                    End If
-                End While
-            End Using
+            ' Anything left in _devList is no longer in the config or was replaced
+            Cleanup()
+            _devList.AddRange(activeDevices)
             _configDate = File.GetLastWriteTime(_configFile)
         Catch ex As Exception
             _logger.LogError("Error loading configuration: {Error}", ex.Message)
