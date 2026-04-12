@@ -13,8 +13,10 @@ case $ARCH in
 esac
 
 PUBLISH_DIR="../publish/linux"
-rm -rf "$PUBLISH_DIR"
 mkdir -p "$PUBLISH_DIR"
+
+echo "Cleaning up old binaries (preserving config and licenses)..."
+find "$PUBLISH_DIR" -maxdepth 1 -type f ! -name "*.dat" ! -name "*.lic" -delete
 
 echo "Publishing Flashback Suite for $ARCH ($RID)..."
 
