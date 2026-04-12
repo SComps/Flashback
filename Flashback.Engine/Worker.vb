@@ -28,7 +28,15 @@ Public Class Worker
 
         ' Loop until stopped
         While Not stoppingToken.IsCancellationRequested
-            Await Task.Delay(1000, stoppingToken)
+            ' Auto-reconnect logic for devices marked as Auto but not connected
+            For Each d In _devList
+                If d.Auto AndAlso Not d.Connected Then
+                    _logger.LogInformation("Auto-connect: Attempting to connect {Dev}...", d.DevName)
+                    d.Connect()
+                End If
+            Next
+
+            Await Task.Delay(5000, stoppingToken)
         End While
 
         _logger.LogInformation("Flashback Engine Service Stopping.")

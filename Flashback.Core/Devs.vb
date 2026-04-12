@@ -26,6 +26,7 @@ Public Class Devs
     Private _cancellationTokenSource As CancellationTokenSource
     Private currentDocument As New List(Of String)()
     Private IsConnected As Boolean = False
+    Private IsConnecting As Boolean = False
     Private Receiving As Boolean = False
 
     Public ReadOnly Property Connected As Boolean
@@ -34,24 +35,39 @@ Public Class Devs
         End Get
     End Property
 
+    Public ReadOnly Property Connecting As Boolean
+        Get
+            Return IsConnecting
+        End Get
+    End Property
+
     Private Sub Log(msg As String, Optional col As ConsoleColor = ConsoleColor.White)
         RaiseEvent LogMessage(msg, col)
     End Sub
 
     Private Sub SplitDestination(dest As String)
-        Dim splitDev As String() = dest.Split(":"c)
-        If splitDev.Length = 1 Then
-            Throw New Exception($"Error: malformed destination {dest}")
-        End If
-        remoteHost = splitDev(0).Trim()
-        remotePort = Val(splitDev(1))
-        If String.IsNullOrWhiteSpace(remoteHost) Then Throw New Exception("Destination does not contain a valid hostname")
-        If remotePort = 0 Then Throw New Exception("Destination does not contain a valid port.")
+        Try
+            Dim splitDev As String() = dest.Split(":"c)
+            If splitDev.Length = 1 Then
+                Return
+            End If
+            remoteHost = splitDev(0).Trim()
+            remotePort = Val(splitDev(1))
+        Catch
+        End Try
     End Sub
 
     Public Async Sub Connect()
-        SplitDestination(DevDest)
-        Await StartAsync()
+        If IsConnected OrElse IsConnecting Then Exit Sub
+        IsConnecting = True
+        Try
+            SplitDestination(DevDest)
+            If Not String.IsNullOrEmpty(remoteHost) AndAlso remotePort > 0 Then
+                Await StartAsync()
+            End If
+        Finally
+            IsConnecting = False
+        End Try
     End Sub
 
     Public Async Function StartAsync() As Task
