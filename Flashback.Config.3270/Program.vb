@@ -34,8 +34,11 @@ Module Program
 
         Dim builder = Host.CreateApplicationBuilder(args)
         
-        builder.Services.AddSingleton(Of String)(syspw)
-        builder.Services.AddSingleton(Of Integer)(port)
+        Dim settings As New Config3270Settings With {
+            .Port = port,
+            .Password = syspw
+        }
+        builder.Services.AddSingleton(settings)
 
 #If WINDOWS Then
         builder.Services.AddWindowsService(Sub(options)
@@ -51,3 +54,8 @@ Module Program
         configHost.Run()
     End Sub
 End Module
+
+Public Class Config3270Settings
+    Public Property Port As Integer
+    Public Property Password As String
+End Class

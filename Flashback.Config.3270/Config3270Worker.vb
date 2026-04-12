@@ -15,10 +15,10 @@ Public Class Config3270Worker
     Private _server As TN3270Listener
     Private ReadOnly _syspw As String = ""
 
-    Public Sub New(logger As ILogger(Of Config3270Worker), syspw As String, port As Integer)
+    Public Sub New(logger As ILogger(Of Config3270Worker), settings As Config3270Settings)
         _logger = logger
-        _syspw = If(syspw, "")
-        _port = port
+        _syspw = If(settings.Password, "")
+        _port = settings.Port
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         _configFile = Path.Combine(baseDir, "devices.dat")
     End Sub
