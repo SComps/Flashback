@@ -1,3 +1,4 @@
+Imports System.Diagnostics
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 
@@ -5,7 +6,7 @@ Module Program
     Sub Main(args As String())
 #If LINUX Then
         If args.Contains("-d") OrElse args.Contains("--daemon") Then
-            Dim psi As New Process.StartInfo("/proc/self/exe")
+            Dim psi As New ProcessStartInfo("/proc/self/exe")
             psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
             psi.UseShellExecute = False
             psi.CreateNoWindow = True
