@@ -5,7 +5,7 @@ Imports System.Text.Json
 
 Public Class LicenseInfo
     Public Property LicensedTo As String = "FREE NON-COMMERCIAL USE"
-    Public Property MaxPrinters As Integer = 2
+    Public Property MaxPrinters As Integer = 2 ' 0 = Unlimited
     Public Property IsLicensed As Boolean = False
 End Class
 

@@ -51,7 +51,8 @@ Public Class Worker
     Private Sub LoadDevices()
         Dim lic = LicenseManager.GetLicenseInfo()
         If lic.IsLicensed Then
-            _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, lic.MaxPrinters)
+            Dim limitStr As String = If(lic.MaxPrinters = 0, "Unlimited", lic.MaxPrinters.ToString())
+            _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, limitStr)
         Else
             _logger.LogWarning("LICENSE: No valid license found. Running in FREE NON-COMMERCIAL USE mode (Max 2 printers).")
         End If
@@ -68,7 +69,7 @@ Public Class Worker
                     Dim line = rdr.ReadLine()
                     If String.IsNullOrWhiteSpace(line) Then Continue While
                     
-                    If loadedCount >= lic.MaxPrinters Then
+                    If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then
                         _logger.LogWarning("LICENSE LIMIT REACHED: Ignoring device '{Line}' (Limit: {Limit})", line.Split("||")(0), lic.MaxPrinters)
                         Continue While
                     End If

@@ -24,7 +24,7 @@ Public Class MainForm
         numCount = New NumericUpDown With {
             .Location = New Drawing.Point(20, 120), 
             .Width = 100, 
-            .Minimum = 1, 
+            .Minimum = 0, 
             .Maximum = 9999, 
             .Value = 10
         }
@@ -61,7 +61,8 @@ Public Class MainForm
                     LicenseManager.GenerateLicense(txtName.Text, CInt(numCount.Value), sfd.FileName)
                     lblStatus.Text = "SUCCESS: License generated."
                     lblStatus.ForeColor = Drawing.Color.Green
-                    MessageBox.Show($"License key for '{txtName.Text}' ({numCount.Value} printers) has been generated successfully.", "License Generated", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    Dim countStr As String = If(numCount.Value = 0, "Unlimited", numCount.Value.ToString())
+                    MessageBox.Show($"License key for '{txtName.Text}' ({countStr} printers) has been generated successfully.", "License Generated", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 Catch ex As Exception
                     MessageBox.Show($"Generation failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 End Try
