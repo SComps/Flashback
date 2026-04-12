@@ -1,24 +1,33 @@
 #!/bin/bash
-# Flashback Suite - Linux Publish Script (Native AOT)
-# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
+# Flashback Suite - Linux Publish Script (Native AOT / Multi-Arch)
+# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script.
 set -e
+
+# Detect Architecture
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64)  RID="linux-x64" ;;
+    aarch64) RID="linux-arm64" ;;
+    armv7l)  RID="linux-arm" ;;
+    *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
+esac
 
 PUBLISH_DIR="../publish/linux"
 rm -rf "$PUBLISH_DIR"
 mkdir -p "$PUBLISH_DIR"
 
-echo "Publishing Flashback Suite for Linux (x64)..."
+echo "Publishing Flashback Suite for $ARCH ($RID)..."
 
-# Engine (Console App - AOT Compatible)
-echo "-> Publishing Flashback.Engine (Native AOT)..."
-dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r linux-x64 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+# Engine
+echo "-> Publishing Flashback.Engine..."
+dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
-# Console Config (Console App - AOT Compatible)
-echo "-> Publishing Flashback.Config.Console (Native AOT)..."
-dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r linux-x64 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+# Console Config
+echo "-> Publishing Flashback.Config.Console..."
+dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
-# 3270 Config (Console App - AOT Compatible)
-echo "-> Publishing Flashback.Config.3270 (Native AOT)..."
-dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r linux-x64 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+# 3270 Config
+echo "-> Publishing Flashback.Config.3270..."
+dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
