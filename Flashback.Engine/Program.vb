@@ -1,4 +1,5 @@
 Imports System.Diagnostics
+Imports System.Linq
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 
@@ -10,6 +11,9 @@ Module Program
             psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
             psi.UseShellExecute = False
             psi.CreateNoWindow = True
+            ' Redirect output to disconnect from terminal
+            psi.RedirectStandardOutput = True
+            psi.RedirectStandardError = True
             Process.Start(psi)
             Console.WriteLine("Flashback Engine detached into background.")
             Return
