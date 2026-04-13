@@ -111,26 +111,9 @@ Public Class Devs
 
         Try
             While Not cancellationToken.IsCancellationRequested
-                Dim hasData As Boolean = clientStream.DataAvailable
-                If OperatingSystem.IsWindows() AndAlso Not hasData Then
-                    Try
-                        ' Poll with 0 timeout is non-blocking — returns True if data is readable.
-                        ' Importantly, also returns True if the socket was closed by the remote,
-                        ' in which case the subsequent ReadAsync will return 0 bytes (clean disconnect).
-                        hasData = client.Client.Poll(0, SelectMode.SelectRead)
-                    Catch
-                    End Try
-                End If
-
-                If Not hasData Then
+                If Not clientStream.DataAvailable Then
                     Await Task.Delay(100, cancellationToken)
-                    If IsConnected Then
-                        Try
-                            clientStream.WriteByte(0) ' Keepalive
-                        Catch ex As Exception
-                            Exit While
-                        End Try
-                    End If
+                    clientStream.WriteByte(0)
                     If (DateTime.Now - lastReceivedTime) > inactivityTimeout AndAlso dataBuilder.Length > 0 Then
                         ProcessDocumentData(dataBuilder.ToString())
                         dataBuilder.Clear()
@@ -146,11 +129,10 @@ Public Class Devs
                         End If
                     End If
                     Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
-                    If recd = 0 Then
-                        Exit While ' Remote host closed the connection cleanly
+                    If recd > 0 Then
+                        dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
+                        lastReceivedTime = DateTime.Now
                     End If
-                    dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
-                    lastReceivedTime = DateTime.Now
                 End If
             End While
         Catch ex As OperationCanceledException
