@@ -3,8 +3,31 @@
 $ErrorActionPreference = "Stop"
 
 $PublishDir = "..\publish\windows"
-if (Test-Path $PublishDir) { Remove-Item -Recurse -Force $PublishDir }
-New-Item -ItemType Directory -Force $PublishDir | Out-Null
+
+# Stop running processes/services that might lock the publish directory
+Write-Host "Closing running Flashback components..." -ForegroundColor Yellow
+$Services = @("FlashbackEngine", "FlashbackConfig3270")
+foreach ($svc in $Services) {
+    if (Get-Service $svc -ErrorAction SilentlyContinue) {
+        Stop-Service $svc -Force -ErrorAction SilentlyContinue
+    }
+}
+Stop-Process -Name "Flashback.Tray" -Force -ErrorAction SilentlyContinue
+
+if (Test-Path $PublishDir) { 
+    Write-Host "Cleaning publish directory (preserving config and licenses)..." -ForegroundColor Gray
+    # Give a moment for file handles to release
+    Start-Sleep -Seconds 2
+    try {
+        Get-ChildItem -Path $PublishDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -notin @('.dat', '.lic') } | Remove-Item -Force -ErrorAction Stop
+    } catch {
+        Write-Host "Critical: Publishing directory files are locked by another process (likely a terminal, Explorer, or IDE)." -ForegroundColor Red
+        Write-Host "Please close any running apps using $PublishDir and try again." -ForegroundColor White
+        exit
+    }
+} else {
+    New-Item -ItemType Directory -Force $PublishDir | Out-Null
+}
 
 Write-Host "Publishing Flashback Suite for Windows..." -ForegroundColor Cyan
 

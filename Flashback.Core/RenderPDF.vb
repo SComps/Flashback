@@ -32,7 +32,7 @@ Public Class DynamicFontResolver
             If File.Exists(path) Then Return File.ReadAllBytes(path)
         End If
         
-        Dim currentDirFallback = System.IO.Path.Combine(Directory.GetCurrentDirectory(), faceName & ".ttf")
+        Dim currentDirFallback = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, faceName & ".ttf")
         If File.Exists(currentDirFallback) Then Return File.ReadAllBytes(currentDirFallback)
 
         Throw New FileNotFoundException($"Could not find font for face '{faceName}'.")
@@ -74,7 +74,7 @@ Public Class RenderPDF
 
             If TypeOf GlobalFontSettings.FontResolver Is DynamicFontResolver Then
                 Dim resolver = DirectCast(GlobalFontSettings.FontResolver, DynamicFontResolver)
-                resolver.RegisterFont(TypeFaceName, Path.Combine(Directory.GetCurrentDirectory(), CustomFontPath))
+                resolver.RegisterFont(TypeFaceName, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CustomFontPath))
             End If
             
             doc.Info.Title = title

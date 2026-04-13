@@ -5,20 +5,20 @@ Imports Microsoft.Extensions.Hosting
 
 Module Program
     Sub Main(args As String())
-#If LINUX Then
-        If args.Contains("-d") OrElse args.Contains("--daemon") Then
-            Dim psi As New ProcessStartInfo(Environment.ProcessPath)
-            psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
-            psi.UseShellExecute = False
-            psi.CreateNoWindow = True
-            ' Redirect output to disconnect from terminal
-            psi.RedirectStandardOutput = True
-            psi.RedirectStandardError = True
-            Process.Start(psi)
-            Console.WriteLine("Flashback 3270 Server detached into background.")
-            Return
+        If OperatingSystem.IsLinux() Then
+            If args.Contains("-d") OrElse args.Contains("--daemon") Then
+                Dim psi As New ProcessStartInfo(Environment.ProcessPath)
+                psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
+                psi.UseShellExecute = False
+                psi.CreateNoWindow = True
+                ' Redirect output to disconnect from terminal
+                psi.RedirectStandardOutput = True
+                psi.RedirectStandardError = True
+                Process.Start(psi)
+                Console.WriteLine("Flashback 3270 Server detached into background.")
+                Return
+            End If
         End If
-#End If
         ' Arguments Logic
         Dim syspw As String = ""
         Dim port As Integer = 3270
@@ -44,13 +44,13 @@ Module Program
         }
         builder.Services.AddSingleton(settings)
 
-#If WINDOWS Then
-        builder.Services.AddWindowsService(Sub(options)
-                                               options.ServiceName = "FlashbackConfig3270"
-                                           End Sub)
-#ElseIf LINUX Then
-        builder.Services.AddSystemd()
-#End If
+        If OperatingSystem.IsWindows() Then
+            builder.Services.AddWindowsService(Sub(options)
+                                                   options.ServiceName = "FlashbackConfig3270"
+                                               End Sub)
+        ElseIf OperatingSystem.IsLinux() Then
+            builder.Services.AddSystemd()
+        End If
 
         builder.Services.AddHostedService(Of Config3270Worker)()
 

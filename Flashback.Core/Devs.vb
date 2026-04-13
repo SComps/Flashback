@@ -109,23 +109,25 @@ Public Class Devs
         Dim lastReceivedTime As DateTime = DateTime.Now
         Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(5)
 
+        Dim readTask As Task(Of Integer) = Nothing
+
         Try
             While Not cancellationToken.IsCancellationRequested
-                If Not clientStream.DataAvailable Then
-                    Await Task.Delay(100, cancellationToken)
-                    If IsConnected Then
-                        Try
-                            clientStream.WriteByte(0) ' Keepalive
-                        Catch ex As Exception
-                            Exit While
-                        End Try
+                If readTask Is Nothing Then
+                    readTask = clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
+                End If
+
+                Dim timeoutTask = Task.Delay(100, cancellationToken)
+                Dim completedTask = Await Task.WhenAny(readTask, timeoutTask)
+
+                If completedTask Is readTask Then
+                    Dim recd As Integer = Await readTask
+                    readTask = Nothing
+
+                    If recd = 0 Then
+                        Exit While
                     End If
-                    If (DateTime.Now - lastReceivedTime) > inactivityTimeout AndAlso dataBuilder.Length > 0 Then
-                        ProcessDocumentData(dataBuilder.ToString())
-                        dataBuilder.Clear()
-                        lastReceivedTime = DateTime.Now
-                    End If
-                Else
+
                     If Not Receiving Then
                         Receiving = True
                         If OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
@@ -134,9 +136,23 @@ Public Class Devs
                             Log($"[{DevName}] receiving data from low speed device. Sit back and relax.", ConsoleColor.Yellow)
                         End If
                     End If
-                    Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
-                    If recd > 0 Then
-                        dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
+
+                    dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
+                    lastReceivedTime = DateTime.Now
+                Else
+                    Await timeoutTask
+
+                    If IsConnected Then
+                        Try
+                            clientStream.WriteByte(0) ' Keepalive
+                        Catch ex As Exception
+                            Exit While
+                        End Try
+                    End If
+
+                    If (DateTime.Now - lastReceivedTime) > inactivityTimeout AndAlso dataBuilder.Length > 0 Then
+                        ProcessDocumentData(dataBuilder.ToString())
+                        dataBuilder.Clear()
                         lastReceivedTime = DateTime.Now
                     End If
                 End If

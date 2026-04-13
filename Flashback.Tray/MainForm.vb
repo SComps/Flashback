@@ -20,6 +20,11 @@ Public Class MainForm
     Private _deviceMenu As ToolStripMenuItem
     Private _fullConfigPath As String
     Private _fullCmdPath As String
+    Private _trayIconHandle As IntPtr = IntPtr.Zero
+
+    <System.Runtime.InteropServices.DllImport("user32.dll", CharSet:=System.Runtime.InteropServices.CharSet.Auto)>
+    Private Shared Function DestroyIcon(ByVal hIcon As IntPtr) As Boolean
+    End Function
 
     Public Sub New()
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
@@ -51,7 +56,31 @@ Public Class MainForm
 
         trayIcon = New NotifyIcon()
         trayIcon.Text = "Flashback Controller"
-        trayIcon.Icon = SystemIcons.Application
+        
+        Dim iconPath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "printer.png")
+        If File.Exists(iconPath) Then
+            Try
+                Using originalBmp As New Bitmap(iconPath)
+                    ' Resize to precisely 32x32 using 32bpp ARGB to guarantee alpha channel preservation
+                    Using bmp As New Bitmap(32, 32, Imaging.PixelFormat.Format32bppArgb)
+                        Using g As Graphics = Graphics.FromImage(bmp)
+                            g.SmoothingMode = Drawing2D.SmoothingMode.HighQuality
+                            g.InterpolationMode = Drawing2D.InterpolationMode.HighQualityBicubic
+                            g.DrawImage(originalBmp, New Rectangle(0, 0, 32, 32))
+                        End Using
+                        
+                        ' Save the handle to a class level variable so it stays alive, keeping the icon visible!
+                        _trayIconHandle = bmp.GetHicon()
+                        trayIcon.Icon = Icon.FromHandle(_trayIconHandle)
+                    End Using
+                End Using
+            Catch
+                trayIcon.Icon = SystemIcons.Application
+            End Try
+        Else
+            trayIcon.Icon = SystemIcons.Application
+        End If
+
         trayIcon.ContextMenuStrip = trayMenu
         trayIcon.Visible = True
 
@@ -225,6 +254,10 @@ Public Class MainForm
 
     Private Sub OnExit()
         trayIcon.Visible = False
+        If _trayIconHandle <> IntPtr.Zero Then
+            DestroyIcon(_trayIconHandle)
+            _trayIconHandle = IntPtr.Zero
+        End If
         Application.Exit()
     End Sub
 
