@@ -12,7 +12,23 @@ case $ARCH in
     *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
 esac
 
-PUBLISH_DIR="../publish/linux"
+# Define default path (outside the git tree) and prompt user
+DEFAULT_PUBLISH_DIR="$HOME/flashback-publish"
+
+echo ""
+echo -e "\033[1;37mWhere should the publish output be located?\033[0m"
+echo -e "\033[0;37mDefault: ${DEFAULT_PUBLISH_DIR/#$HOME/\~}\033[0m"
+read -p "Path [Enter for default]: " INPUT_PATH
+
+if [ -z "$INPUT_PATH" ]; then
+    PUBLISH_DIR="$DEFAULT_PUBLISH_DIR"
+else
+    # Expand ~ if present and normalize
+    PUBLISH_DIR="${INPUT_PATH/#\~/$HOME}"
+    if [[ "$PUBLISH_DIR" != /* ]]; then
+        PUBLISH_DIR="$(pwd)/$PUBLISH_DIR"
+    fi
+fi
 mkdir -p "$PUBLISH_DIR"
 
 echo "Cleaning up old binaries (preserving config and licenses)..."

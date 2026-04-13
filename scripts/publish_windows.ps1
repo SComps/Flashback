@@ -2,7 +2,17 @@
 # NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 $ErrorActionPreference = "Stop"
 
-$PublishDir = "..\publish\windows"
+# Define default path (outside the git tree) and prompt user
+$DefaultPublishDir = Join-Path $HOME "Flashback-Publish"
+Write-Host "`nWhere should the publish output be located?" -ForegroundColor White
+Write-Host "Default: $($DefaultPublishDir -replace [regex]::Escape($HOME), '~')" -ForegroundColor Gray
+$InputPath = Read-Host "Path [Enter for default]"
+
+if ([string]::IsNullOrWhiteSpace($InputPath)) {
+    $PublishDir = $DefaultPublishDir
+} else {
+    $PublishDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InputPath)
+}
 
 # Stop running processes/services that might lock the publish directory
 Write-Host "Closing running Flashback components..." -ForegroundColor Yellow

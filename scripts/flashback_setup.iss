@@ -3,7 +3,13 @@
 #define MyAppPublisher "SComps"
 #define MyAppURL "https://github.com/SComps/Flashback"
 #define MyAppExeName "Flashback.Engine.exe"
-#define SourceDir "E:\Flashback\publish\windows"
+
+#ifndef SourceDir
+  #define SourceDir "..\publish\windows"
+#endif
+#ifndef OutputDir
+  #define OutputDir "..\dist"
+#endif
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -16,9 +22,9 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\Flashback
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=E:\Flashback\dist
+OutputDir={#OutputDir}
 OutputBaseFilename=Flashback_Setup
-SetupIconFile=E:\Flashback\Flashback.Tray\Assets\printer.ico
+SetupIconFile=..\Flashback.Tray\Assets\printer.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -44,8 +50,8 @@ Source: "{#SourceDir}\Flashback.Tray.exe";           DestDir: "{app}"; Flags: ig
 ; Font assets
 Source: "{#SourceDir}\*.ttf";                        DestDir: "{app}"; Flags: ignoreversion
 ; Tray icon assets
-Source: "E:\Flashback\Flashback.Tray\Assets\printer.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
-Source: "E:\Flashback\Flashback.Tray\Assets\printer.png"; DestDir: "{app}\Assets"; Flags: ignoreversion
+Source: "..\Flashback.Tray\Assets\printer.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
+Source: "..\Flashback.Tray\Assets\printer.png"; DestDir: "{app}\Assets"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Flashback Controller";     Filename: "{app}\Flashback.Tray.exe";           WorkingDir: "{app}"
