@@ -74,12 +74,9 @@ Public Class Config3270Worker
                         d.Orientation = Val(p(8))
                         d.OutDest = p(9)
                         
-                        If p.Length = 12 Then
+                        If p.Length >= 12 Then
                             d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
                             d.JobNumber = Val(p(11))
-                        ElseIf p.Length >= 13 Then
-                            d.Shading = CType(Val(p(11)), RenderPDF.ShadingColor)
-                            d.JobNumber = Val(p(12))
                         End If
                         _devList.Add(d)
                     End If
