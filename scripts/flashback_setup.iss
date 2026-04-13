@@ -46,8 +46,6 @@ Source: "{#SourceDir}\*.ttf";                        DestDir: "{app}"; Flags: ig
 ; Tray icon assets
 Source: "E:\Flashback\Flashback.Tray\Assets\printer.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
 Source: "E:\Flashback\Flashback.Tray\Assets\printer.png"; DestDir: "{app}\Assets"; Flags: ignoreversion
-; Config file - only copy if not already present (preserve on upgrade)
-Source: "{#SourceDir}\devices.dat";                  DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{group}\Flashback Controller";     Filename: "{app}\Flashback.Tray.exe";           WorkingDir: "{app}"
