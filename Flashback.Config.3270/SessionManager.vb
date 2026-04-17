@@ -7,6 +7,7 @@ Public Enum ScreenMode
     Menu
     Edit
     ConfirmDelete
+    Help
 End Enum
 
 Public Class SessionStateManager
@@ -21,6 +22,7 @@ Public Class SessionStateManager
     Private _statusMsg As String = ""
     Private _statusColor As Byte = TN3270Color.White
     Private _hasUnsavedChanges As Boolean = False
+    Private _previousMode As ScreenMode = ScreenMode.Menu
 
     Public Sub New(session As TN3270Session, devList As List(Of Devs), configFile As String, Optional syspw As String = "")
         _session = session
@@ -43,6 +45,17 @@ Public Class SessionStateManager
     End Sub
 
     Public Sub HandleInput(sender As Object, e As AidKeyEventArgs)
+        ' Intercept PF1 for global help
+        If e.AidKey = &H61 Then ' PF1
+            If _mode <> ScreenMode.Help Then
+                If _mode = ScreenMode.Edit Then ScrapeEditFields()
+                _previousMode = _mode
+                _mode = ScreenMode.Help
+                ShowHelp()
+                Return
+            End If
+        End If
+
         _statusMsg = ""
         _statusColor = TN3270Color.White
 
@@ -55,6 +68,8 @@ Public Class SessionStateManager
                 ProcessEditInput(e)
             Case ScreenMode.ConfirmDelete
                 ProcessDeleteInput(e)
+            Case ScreenMode.Help
+                ProcessHelpInput(e)
         End Select
     End Sub
 
@@ -185,6 +200,26 @@ Public Class SessionStateManager
         ShowMenu()
     End Sub
 
+    Private Sub ScrapeEditFields()
+        If _editingIndex < 0 OrElse _editingIndex >= _devList.Count Then Return
+        Dim d = _devList(_editingIndex)
+        d.DevName = _session.GetFieldValue("txtName")?.Trim()
+        d.DevDescription = _session.GetFieldValue("txtDesc")?.Trim()
+        d.DevType = Val(_session.GetFieldValue("txtType"))
+        d.ConnType = Val(_session.GetFieldValue("txtConn"))
+        d.OS = CType(Val(_session.GetFieldValue("txtOS")), OSType)
+        d.DevDest = _session.GetFieldValue("txtDest")?.Trim()
+        
+        Dim pdfVal = _session.GetFieldValue("txtPDF")?.Trim().ToUpper()
+        d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
+        
+        d.Orientation = Val(_session.GetFieldValue("txtOrient"))
+        d.OutDest = _session.GetFieldValue("txtOut")?.Trim()
+        
+        d.Shading = CType(Val(_session.GetFieldValue("txtShade")), RenderPDF.ShadingColor)
+        d.JobNumber = Val(_session.GetFieldValue("txtJob"))
+    End Sub
+
     Private Sub ProcessDeleteInput(e As AidKeyEventArgs)
         If e.AidKey = &H7D Then
             Dim cmd = _session.GetFieldValue("txtConfirm")?.ToUpper().Trim()
@@ -224,7 +259,7 @@ Public Class SessionStateManager
             _session.WriteText(15, 25, _statusMsg, _statusColor)
         End If
 
-        _session.WriteText(22, 2, "ENTER:LOGIN   PF3:EXIT", TN3270Color.White)
+        _session.WriteText(22, 2, "ENTER:LOGIN   PF1:HELP   PF3:EXIT", TN3270Color.White)
         _session.ShowScreen()
     End Sub
 
@@ -266,7 +301,7 @@ Public Class SessionStateManager
         Next
 
         _session.WriteText(21, 1, StrDup(78, "-"), TN3270Color.Blue)
-        _session.WriteText(22, 2, "ENTER:PROCESS   PF3:EXIT   PF7:UP   PF8:DOWN", TN3270Color.White)
+        _session.WriteText(22, 2, "ENTER:PROCESS   PF1:HELP   PF3:EXIT   PF7:UP   PF8:DOWN", TN3270Color.White)
         _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)GEN", TN3270Color.Turquoise)
         _session.WriteText(24, 2, "CONN:(0)SOCK (1)FILE (2)PHYS (3)RAW", TN3270Color.Turquoise)
         _session.ShowScreen()
@@ -321,7 +356,7 @@ Public Class SessionStateManager
         _session.WriteText(18, labelCol, "   NEXT JOB NUMBER :", TN3270Color.Turquoise)
         _session.AddField(18, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob").Modified = True
 
-        _session.WriteText(22, 2, "ENTER:SAVE   PF3:CANCEL", TN3270Color.White)
+        _session.WriteText(22, 2, "ENTER:SAVE   PF1:HELP   PF3:CANCEL", TN3270Color.White)
         _session.ShowScreen()
     End Sub
 
@@ -335,6 +370,42 @@ Public Class SessionStateManager
         _session.AddField(14, 44, 1, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtConfirm")
         _session.WriteText(16, 20, "PRESS ENTER TO PROCEED OR PF3 TO CANCEL", TN3270Color.Turquoise)
         _session.ShowScreen()
+    End Sub
+
+    Private Sub ShowHelp()
+        _session.ClearFields()
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK99", TN3270Color.Turquoise)
+        _session.WriteText(1, 30, "FLASHBACK HELP SYSTEM", TN3270Color.White)
+        _session.WriteText(3, 2, "FIELD DESCRIPTIONS:", TN3270Color.Yellow)
+        
+        _session.WriteText(5, 2, "DEVICE TYPE     : 0=Generic, 1=Printer, 2=Plotter", TN3270Color.Turquoise)
+        _session.WriteText(6, 2, "CONN TYPE       : 0=Socket (Connect to Host), 1=File, 2=Physical, 3=Raw", TN3270Color.Turquoise)
+        _session.WriteText(7, 2, "OPERATING SYSTEM: The profile used to parse job headers (0-9).", TN3270Color.Turquoise)
+        _session.WriteText(8, 2, "DESTINATION     : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", TN3270Color.Turquoise)
+        
+        _session.WriteText(10, 2, "OUTPUT PDF      : Set to TRUE to generate PDF files in the Output path.", TN3270Color.Turquoise)
+        _session.WriteText(11, 2, "ORIENTATION     : 0=Portrait, 1=Landscape.", TN3270Color.Turquoise)
+        _session.WriteText(12, 2, "SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", TN3270Color.Turquoise)
+        
+        _session.WriteText(15, 2, "COMMANDS (MENU SCREEN):", TN3270Color.Yellow)
+        _session.WriteText(17, 2, "ADD             : Create a new device configuration.", TN3270Color.Turquoise)
+        _session.WriteText(18, 2, "SAVE            : Explicitly save all changes to disk.", TN3270Color.Turquoise)
+        _session.WriteText(19, 2, "DELETE [ID]     : Remove a device by its list ID number.", TN3270Color.Turquoise)
+        _session.WriteText(20, 2, "[ID]             : Enter an ID number to edit that device.", TN3270Color.Turquoise)
+
+        _session.WriteText(23, 2, "PRESS ENTER OR PF3 TO RETURN TO PREVIOUS SCREEN", TN3270Color.White)
+        _session.ShowScreen()
+    End Sub
+
+    Private Sub ProcessHelpInput(e As AidKeyEventArgs)
+        ' Any key returns from help
+        _mode = _previousMode
+        Select Case _mode
+            Case ScreenMode.Login : ShowLogin()
+            Case ScreenMode.Menu : ShowMenu()
+            Case ScreenMode.Edit : ShowEdit()
+            Case ScreenMode.ConfirmDelete : ShowConfirmDelete()
+        End Select
     End Sub
 
     Private Sub SaveDevices()

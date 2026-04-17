@@ -42,7 +42,7 @@ Module Program
 
             If sel.StartsWith("DELETE") Then
                 Dim parts As String() = sel.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
-                If parts.Length <> 2 Then
+                if parts.Length <> 2 Then
                     SetError("Invalid command structure.")
                 Else
                     Dim id As Integer = Val(parts(1))
@@ -128,69 +128,121 @@ Module Program
     Private Sub EditItem(itemIdx As Integer)
         Dim idx As Integer = itemIdx - 1
         Dim d As Devs = devList(idx)
-        System.Console.Clear()
-        
-        Dim bannerLine As String = New String("="c, max_Cols)
-        Say(bannerLine, 0, 0, ConsoleColor.White)
-        Say(CenterString("E D I T   D E V I C E", max_Cols), 0, 1, ConsoleColor.White)
-        Say(bannerLine, 0, 2, ConsoleColor.White)
-        
-        Dim labelCol = 5
+
+        ' Internal helper for edit screen redraw
+        Dim RedrawEdit As Action = Sub()
+                                       EditItemHeader()
+                                       DrawEditLabels()
+                                   End Sub
+
+        RedrawEdit.Invoke()
+
         Dim valCol = 26
-        
-        Say("       DEVICE NAME:", labelCol, 4, ConsoleColor.Cyan)
-        Say("DEVICE DESCRIPTION:", labelCol, 5, ConsoleColor.Cyan)
-        Say("       DEVICE TYPE:", labelCol, 6, ConsoleColor.Cyan)
-        Say("   CONNECTION TYPE:", labelCol, 7, ConsoleColor.Cyan)
-        Say("  OPERATING SYSTEM:", labelCol, 8, ConsoleColor.Cyan)
-        Say("DEVICE DESTINATION:", labelCol, 9, ConsoleColor.Cyan)
-        Say("        OUTPUT PDF:", labelCol, 10, ConsoleColor.Cyan)
-        Say("       ORIENTATION:", labelCol, 11, ConsoleColor.Cyan)
-        Say("        OUTPUT DIR:", labelCol, 12, ConsoleColor.Cyan)
-        Say("   SHADING COLOR  :", labelCol, 13, ConsoleColor.Cyan)
-        Say("   START JOB NO.  :", labelCol, 14, ConsoleColor.Cyan)
 
-        Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
-        Say("(0:Sock 1:File 2:Phys 3:Raw)", 45, 7, ConsoleColor.DarkGray)
-        Say("(0-8, 0:MVS 8:ZOS)", 45, 8, ConsoleColor.DarkGray)
-        Say("(0:Land 1:Port)", 45, 12, ConsoleColor.DarkGray)
-        Say("(0:Green 1:Blue 2:None)", 45, 14, ConsoleColor.DarkGray)
-
-        d.DevName = GetString(d.DevName, valCol, 4, 20, ConsoleColor.Yellow)
-        d.DevDescription = GetString(d.DevDescription, valCol, 5, 40, ConsoleColor.Yellow)
-        d.DevType = Val(GetString(d.DevType.ToString(), valCol, 6, 1, ConsoleColor.Yellow))
-        d.ConnType = Val(GetString(d.ConnType.ToString(), valCol, 7, 1, ConsoleColor.Yellow))
-        d.OS = CType(Val(GetString(Integer.Parse(d.OS).ToString(), valCol, 8, 1, ConsoleColor.Yellow)), OSType)
-        d.DevDest = GetString(d.DevDest, valCol, 9, 50, ConsoleColor.Yellow)
-        d.PDF = GetBool(d.PDF, valCol, 10)
-        d.Orientation = Val(GetString(d.Orientation.ToString(), valCol, 11, 1, ConsoleColor.Yellow))
-        d.OutDest = GetString(d.OutDest, valCol, 12, 50, ConsoleColor.Yellow)
+        d.DevName = GetStringWithHelp(d.DevName, valCol, 4, 20, ConsoleColor.Yellow, RedrawEdit)
+        d.DevDescription = GetStringWithHelp(d.DevDescription, valCol, 5, 40, ConsoleColor.Yellow, RedrawEdit)
+        d.DevType = Val(GetStringWithHelp(d.DevType.ToString(), valCol, 6, 1, ConsoleColor.Yellow, RedrawEdit))
+        d.ConnType = Val(GetStringWithHelp(d.ConnType.ToString(), valCol, 7, 1, ConsoleColor.Yellow, RedrawEdit))
+        d.OS = CType(Val(GetStringWithHelp(CInt(d.OS).ToString(), valCol, 8, 2, ConsoleColor.Yellow, RedrawEdit)), OSType)
+        d.DevDest = GetStringWithHelp(d.DevDest, valCol, 9, 50, ConsoleColor.Yellow, RedrawEdit)
+        d.PDF = GetBoolWithHelp(d.PDF, valCol, 10, RedrawEdit)
+        d.Orientation = Val(GetStringWithHelp(d.Orientation.ToString(), valCol, 11, 1, ConsoleColor.Yellow, RedrawEdit))
+        d.OutDest = GetStringWithHelp(d.OutDest, valCol, 12, 50, ConsoleColor.Yellow, RedrawEdit)
         
-        Dim shadeVal As Integer = GetString(CInt(d.Shading).ToString(), valCol, 13, 1, ConsoleColor.Yellow)
+        Dim shadeVal As Integer = Val(GetStringWithHelp(CInt(d.Shading).ToString(), valCol, 13, 1, ConsoleColor.Yellow, RedrawEdit))
         d.Shading = CType(shadeVal, RenderPDF.ShadingColor)
         
-        d.JobNumber = Val(GetString(d.JobNumber.ToString(), valCol, 14, 6, ConsoleColor.Yellow))
+        d.JobNumber = Val(GetStringWithHelp(d.JobNumber.ToString(), valCol, 14, 6, ConsoleColor.Yellow, RedrawEdit))
 
         Say("Save changes? (Y/n) ==> ", 0, 17, ConsoleColor.Green)
-        If System.Console.ReadLine().ToUpper().StartsWith("Y") Then
+        Dim saveInput As String = ""
+        If Not GetInputWithHelp(saveInput, 25, 17, 1, ConsoleColor.White, AddressOf DisplayMenu) Then
+            ' If they hit F1 here, we just loop back and ask again
+            EditItem(itemIdx)
+            Return
+        End If
+
+        If saveInput.ToUpper().StartsWith("Y") Then
             devList(idx) = d
         End If
     End Sub
 
-    Private Function GetBool(current As Boolean, col As Integer, row As Integer) As Boolean
-        Dim s As String = GetString(If(current, "YES", "NO"), col, row, 3, ConsoleColor.Yellow).ToUpper()
-        Return (s = "YES" OrElse s = "Y" OrElse s = "TRUE" OrElse s = "1")
-    End Function
+    Private Sub DisplayHelp()
+        ConsoleResetColor()
+        System.Console.Clear()
+        Dim bannerLine As String = New String("="c, max_Cols)
+        Say(bannerLine, 0, 0, ConsoleColor.White)
+        Say(CenterString("C O N S O L E   H E L P", max_Cols), 0, 1, ConsoleColor.White)
+        Say(bannerLine, 0, 2, ConsoleColor.White)
 
-    Private Function GetString(initialValue As String, col As Integer, row As Integer, maxLen As Integer, color As ConsoleColor) As String
+        Say("FIELD DESCRIPTIONS:", 2, 4, ConsoleColor.Yellow)
+        Say("DEVICE TYPE     : 0=Generic, 1=Printer, 2=Plotter", 2, 6, ConsoleColor.Cyan)
+        Say("CONN TYPE       : 0=Socket (Connect to Host), 1=File, 2=Physical, 3=Raw", 2, 7, ConsoleColor.Cyan)
+        Say("OPERATING SYSTEM: The profile used to parse job headers (0-9).", 2, 8, ConsoleColor.Cyan)
+        Say("DESTINATION     : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", 2, 9, ConsoleColor.Cyan)
+        Say("OUTPUT PDF      : Set to YES to generate PDF files.", 2, 10, ConsoleColor.Cyan)
+        Say("ORIENTATION     : 0=Portrait, 1=Landscape.", 2, 11, ConsoleColor.Cyan)
+        Say("SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", 2, 12, ConsoleColor.Cyan)
+
+        Say("COMMANDS:", 2, 15, ConsoleColor.Yellow)
+        Say("ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 2, 17, ConsoleColor.Cyan)
+
+        Say("Press any key to return...", 2, 20, ConsoleColor.White)
+        System.Console.ReadKey(True)
+    End Sub
+
+    Private Function GetInputWithHelp(ByRef result As String, col As Integer, row As Integer, maxLength As Integer, color As ConsoleColor, redrawAction As Action) As Boolean
+        ' Returns True if Enter was pressed
+        ' Returns False if F1 was pressed
+        Dim sb As New StringBuilder(result)
         System.Console.SetCursorPosition(col, row)
         System.Console.ForegroundColor = color
-        System.Console.Write(initialValue.PadRight(maxLen))
-        System.Console.SetCursorPosition(col, row)
-        
-        Dim result As String = System.Console.ReadLine()
-        If String.IsNullOrWhiteSpace(result) Then Return initialValue
-        Return If(result.Length > maxLen, result.Substring(0, maxLen), result)
+        System.Console.Write(sb.ToString().PadRight(maxLength))
+        System.Console.SetCursorPosition(col + sb.Length, row)
+
+        Do
+            Dim key = System.Console.ReadKey(True)
+            If key.Key = ConsoleKey.F1 Then
+                DisplayHelp()
+                If redrawAction IsNot Nothing Then redrawAction()
+                Return False
+            End If
+
+            If key.Key = ConsoleKey.Enter Then
+                result = sb.ToString()
+                Return True
+            End If
+
+            If key.Key = ConsoleKey.Backspace Then
+                If sb.Length > 0 Then
+                    sb.Length -= 1
+                    System.Console.SetCursorPosition(col + sb.Length, row)
+                    System.Console.Write(" ")
+                    System.Console.SetCursorPosition(col + sb.Length, row)
+                End If
+            ElseIf Not Char.IsControl(key.KeyChar) AndAlso sb.Length < maxLength Then
+                sb.Append(key.KeyChar)
+                System.Console.Write(key.KeyChar)
+            End If
+        Loop
+    End Function
+
+    Private Function GetStringWithHelp(initialValue As String, col As Integer, row As Integer, maxLen As Integer, color As ConsoleColor, redrawAction As Action) As String
+        Dim result As String = initialValue
+        Do While Not GetInputWithHelp(result, col, row, maxLen, color, redrawAction)
+            ' Loop continues if F1 was pressed (GetInputWithHelp returns False)
+            ' redrawAction is called inside GetInputWithHelp
+        Loop
+        Return result
+    End Function
+
+    Private Function GetBoolWithHelp(current As Boolean, col As Integer, row As Integer, redrawAction As Action) As Boolean
+        Dim s As String = If(current, "YES", "NO")
+        Do While Not GetInputWithHelp(s, col, row, 3, ConsoleColor.Yellow, redrawAction)
+            s = If(current, "YES", "NO")
+        Loop
+        s = s.ToUpper()
+        Return (s = "YES" OrElse s = "Y" OrElse s = "TRUE" OrElse s = "1")
     End Function
 
     Private Sub Say(txt As String, col As Integer, row As Integer, color As ConsoleColor)
@@ -222,8 +274,11 @@ Module Program
 
     Private Function GetCmd() As String
         Say("COMMAND ==> ", 1, 4, ConsoleColor.White)
-        System.Console.SetCursorPosition(13, 4)
-        Return System.Console.ReadLine()
+        Dim cmd As String = ""
+        Do While Not GetInputWithHelp(cmd, 13, 4, 40, ConsoleColor.White, AddressOf DisplayMenu)
+            ' Loop if help was shown
+        Loop
+        Return cmd
     End Function
 
     Private Sub DisplayMenu()
@@ -240,22 +295,23 @@ Module Program
         Say("ID   NAME            DESCRIPTION                    OS  PDF   SHADE", 0, 6, ConsoleColor.Cyan)
         Say(New String("-"c, max_Cols), 0, 7, ConsoleColor.Blue)
 
-        Dim row As Integer = 8
+        Dim rowCount As Integer = 8
         For i As Integer = StartShow To StopShow
             If i < 0 OrElse i >= devList.Count Then Continue For
             Dim d As Devs = devList(i)
-            Say((i + 1).ToString("00"), 0, row, ConsoleColor.Yellow)
-            Say(d.DevName.PadRight(15), 5, row, ConsoleColor.White)
-            Say(d.DevDescription.PadRight(30), 21, row, ConsoleColor.White)
-            Say(CInt(d.OS).ToString(), 52, row, ConsoleColor.White)
-            Say(If(d.PDF, "YES", "NO "), 56, row, ConsoleColor.Yellow)
-            Say(d.Shading.ToString().ToUpper(), 61, row, ConsoleColor.Green)
+            Say((i + 1).ToString("00"), 0, rowCount, ConsoleColor.Yellow)
+            Say(d.DevName.PadRight(15), 5, rowCount, ConsoleColor.White)
+            Say(d.DevDescription.PadRight(30), 21, rowCount, ConsoleColor.White)
+            Say(CInt(d.OS).ToString(), 52, rowCount, ConsoleColor.White)
+            Say(If(d.PDF, "YES", "NO "), 56, rowCount, ConsoleColor.Yellow)
+            Say(d.Shading.ToString().ToUpper(), 61, rowCount, ConsoleColor.Green)
             
-            Say($"   -> {d.DevDest}", 5, row + 1, ConsoleColor.DarkGray)
-            row += 2
+            Say($"   -> {d.DevDest}", 5, rowCount + 1, ConsoleColor.DarkGray)
+            rowCount += 2
         Next
 
         Say("Commands: ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 0, max_Rows - 2, ConsoleColor.Cyan)
+        Say("F1: Help", max_Cols - 10, 1, ConsoleColor.Yellow)
     End Sub
 
     Private Sub SendEngineCommand(cmd As String, devName As String)
@@ -269,11 +325,11 @@ Module Program
 
     Private Function LoadDevs() As List(Of Devs)
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
-        configFile = Path.Combine(baseDir, "devices.dat")
+        Dim configPath As String = Path.Combine(baseDir, "devices.dat")
         Dim list As New List(Of Devs)()
-        If Not File.Exists(configFile) Then Return list
+        If Not File.Exists(configPath) Then Return list
         Try
-            Using r As New StreamReader(configFile)
+            Using r As New StreamReader(configPath)
                 While Not r.EndOfStream
                     Dim line As String = r.ReadLine()
                     If String.IsNullOrWhiteSpace(line) Then Continue While
@@ -316,5 +372,35 @@ Module Program
         Catch ex As Exception
             SetError("Error saving config: " & ex.Message)
         End Try
+    End Sub
+
+    Private Sub EditItemHeader()
+        System.Console.Clear()
+        Dim bannerLine As String = New String("="c, max_Cols)
+        Say(bannerLine, 0, 0, ConsoleColor.White)
+        Say(CenterString("E D I T   D E V I C E", max_Cols), 0, 1, ConsoleColor.White)
+        Say(bannerLine, 0, 2, ConsoleColor.White)
+        Say("F1: Help", max_Cols - 10, 1, ConsoleColor.Yellow)
+    End Sub
+
+    Private Sub DrawEditLabels()
+        Dim labelColSum = 5
+        Say("       DEVICE NAME:", labelColSum, 4, ConsoleColor.Cyan)
+        Say("DEVICE DESCRIPTION:", labelColSum, 5, ConsoleColor.Cyan)
+        Say("       DEVICE TYPE:", labelColSum, 6, ConsoleColor.Cyan)
+        Say("   CONNECTION TYPE:", labelColSum, 7, ConsoleColor.Cyan)
+        Say("  OPERATING SYSTEM:", labelColSum, 8, ConsoleColor.Cyan)
+        Say("DEVICE DESTINATION:", labelColSum, 9, ConsoleColor.Cyan)
+        Say("        OUTPUT PDF:", labelColSum, 10, ConsoleColor.Cyan)
+        Say("       ORIENTATION:", labelColSum, 11, ConsoleColor.Cyan)
+        Say("        OUTPUT DIR:", labelColSum, 12, ConsoleColor.Cyan)
+        Say("   SHADING COLOR  :", labelColSum, 13, ConsoleColor.Cyan)
+        Say("   START JOB NO.  :", labelColSum, 14, ConsoleColor.Cyan)
+
+        Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
+        Say("(0:Sock 1:File 2:Phys 3:Raw)", 45, 7, ConsoleColor.DarkGray)
+        Say("(0-9, 0:MVS 9:GENERIC)", 45, 8, ConsoleColor.DarkGray)
+        Say("(0:Land 1:Port)", 45, 12, ConsoleColor.DarkGray)
+        Say("(0:Green 1:Blue 2:None)", 45, 14, ConsoleColor.DarkGray)
     End Sub
 End Module
