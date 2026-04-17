@@ -1,0 +1,14 @@
+<Window x:Class="SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Flashback" Height="450" Width="800"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="False" Topmost="True"
+        MouseDown="Window_MouseDown">
+    <Grid>
+        <Border CornerRadius="15" ClipToBounds="True">
+            <Image Source="Assets/splash.png" Stretch="Uniform"/>
+        </Border>
+        <TextBlock Text="Click to skip..." Foreground="White" Opacity="0.5" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="20"/>
+    </Grid>
+</Window>

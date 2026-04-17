@@ -13,7 +13,28 @@ Module Program
     Private StopShow As Integer = 0
 
     Sub Main(args As String())
-        If args.Length > 0 Then configFile = args(0)
+        If args.Length > 0 Then
+            Dim firstArg = args(0).ToLower()
+            If firstArg = "-h" OrElse firstArg = "--help" Then
+                ShowHelpCLI()
+                Environment.Exit(0)
+            End If
+
+            If args.Length > 1 Then
+                System.Console.WriteLine("Too many arguments.")
+                ShowHelpCLI()
+                Environment.Exit(1)
+            End If
+
+            If firstArg.StartsWith("-") Then
+                System.Console.WriteLine($"Unknown option: {args(0)}")
+                ShowHelpCLI()
+                Environment.Exit(1)
+            End If
+
+            configFile = args(0)
+        End If
+
         AddHandler System.Console.CancelKeyPress, AddressOf Console_CancelKeyPress
         
         max_Rows = System.Console.WindowHeight
@@ -165,6 +186,15 @@ Module Program
         If saveInput.ToUpper().StartsWith("Y") Then
             devList(idx) = d
         End If
+    End Sub
+
+    Private Sub ShowHelpCLI()
+        System.Console.WriteLine("Flashback Console Configuration Tool")
+        System.Console.WriteLine("Usage: Flashback.Config.Console [config_file]")
+        System.Console.WriteLine()
+        System.Console.WriteLine("Options:")
+        System.Console.WriteLine("  -h, --help            Show this help message")
+        System.Console.WriteLine()
     End Sub
 
     Private Sub DisplayHelp()

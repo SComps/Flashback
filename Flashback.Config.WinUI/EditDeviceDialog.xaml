@@ -1,0 +1,64 @@
+<ContentDialog
+    x:Class="Flashback.Config.WinUI.EditDeviceDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Flashback.Config.WinUI"
+    Title="Configure Device"
+    PrimaryButtonText="Save Configuration"
+    SecondaryButtonText="Discard Changes"
+    DefaultButton="Primary">
+
+    <Grid Width="500" Margin="0,12,0,0">
+        <Pivot x:Name="RootPivot">
+            <PivotItem Header="Identity">
+                <StackPanel Spacing="12" Margin="0,12,0,0">
+                    <TextBox x:Name="txtName" Header="NAME" PlaceholderText="Device Name"/>
+                    <TextBox x:Name="txtDesc" Header="DESCRIPTION" PlaceholderText="Brief description"/>
+                    <ComboBox x:Name="cmbOS" Header="OS PROFILE" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="OS/MVS 3.8J"/>
+                        <ComboBoxItem Content="VMS (Vax)"/>
+                        <ComboBoxItem Content="MPE (HP3000)"/>
+                        <ComboBoxItem Content="RSTS/E (PDP-11)"/>
+                        <ComboBoxItem Content="OS/VM 370"/>
+                        <ComboBoxItem Content="NOS (CDC Cyber)"/>
+                        <ComboBoxItem Content="OS/VM/SP"/>
+                        <ComboBoxItem Content="Tandy Xenix"/>
+                        <ComboBoxItem Content="OS/zOS"/>
+                        <ComboBoxItem Content="Generic Profile"/>
+                    </ComboBox>
+                </StackPanel>
+            </PivotItem>
+
+            <PivotItem Header="Network">
+                <StackPanel Spacing="12" Margin="0,12,0,0">
+                    <ComboBox x:Name="cmbType" Header="DEVICE TYPE" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Printer (RFC1179/LPD)"/>
+                        <ComboBoxItem Content="3270 Terminal (TN3270)"/>
+                    </ComboBox>
+                    <ComboBox x:Name="cmbConn" Header="CONNECTION METHOD" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Client (Outbound)"/>
+                        <ComboBoxItem Content="Listener (Inbound Port 9100)"/>
+                        <ComboBoxItem Content="Batch Processing"/>
+                    </ComboBox>
+                    <TextBox x:Name="txtDest" Header="DESTINATION (IP:PORT)" PlaceholderText="127.0.0.1:9100"/>
+                </StackPanel>
+            </PivotItem>
+
+            <PivotItem Header="Output &amp; PDF">
+                <StackPanel Spacing="12" Margin="0,12,0,0">
+                    <CheckBox x:Name="chkPDF" Content="Generate PDF Documents"/>
+                    <ComboBox x:Name="cmbOrient" Header="PAGE ORIENTATION" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Landscape (132 Columns)"/>
+                        <ComboBoxItem Content="Portrait (80 Columns)"/>
+                    </ComboBox>
+                    <TextBox x:Name="txtOut" Header="OUTPUT DIRECTORY" PlaceholderText="C:\Flashback\Output"/>
+                    <ComboBox x:Name="cmbShade" Header="SHADING THEME" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="IBM Green Paper"/>
+                        <ComboBoxItem Content="Modern Blue Paper"/>
+                        <ComboBoxItem Content="Standard White"/>
+                    </ComboBox>
+                </StackPanel>
+            </PivotItem>
+        </Pivot>
+    </Grid>
+</ContentDialog>

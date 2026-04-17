@@ -5,6 +5,28 @@ Imports System.IO
 
 Module Program
     Sub Main(args As String())
+        ' Check for help anywhere in args
+        For Each arg In args
+            If arg.ToLower() = "-h" OrElse arg.ToLower() = "--help" Then
+                ShowHelp()
+                Environment.Exit(0)
+            End If
+        Next
+
+        If args.Length > 2 Then
+            System.Console.WriteLine("Too many arguments.")
+            ShowHelp()
+            Environment.Exit(1)
+        End If
+
+        For Each arg In args
+            If arg.StartsWith("-") Then
+                System.Console.WriteLine($"Unknown option: {arg}")
+                ShowHelp()
+                Environment.Exit(1)
+            End If
+        Next
+
         Dim host As String = "127.0.0.1"
         Dim port As Integer = 9100
 
@@ -67,5 +89,14 @@ Module Program
         Console.ResetColor()
         Console.WriteLine("Press any key to exit...")
         Console.ReadKey()
+    End Sub
+
+    Private Sub ShowHelp()
+        Console.WriteLine("Flashback Port 9100 Test Tool")
+        Console.WriteLine("Usage: Flashback.TestTool [host] [port]")
+        Console.WriteLine()
+        Console.WriteLine("Options:")
+        Console.WriteLine("  -h, --help            Show this help message")
+        Console.WriteLine()
     End Sub
 End Module

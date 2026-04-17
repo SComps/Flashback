@@ -1,0 +1,82 @@
+<Window x:Class="EditDeviceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configure Device" Height="500" Width="600"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Configure Device" FontSize="24" FontWeight="Bold" Margin="0,0,0,20" Foreground="#0078D4"/>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="Identity">
+                <StackPanel Margin="10">
+                    <TextBlock Text="NAME" FontWeight="Bold" Margin="0,10,0,5"/>
+                    <TextBox x:Name="txtName" Padding="8"/>
+                    <TextBlock Text="DESCRIPTION" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <TextBox x:Name="txtDesc" Padding="8"/>
+                    <TextBlock Text="OS PROFILE" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <ComboBox x:Name="cmbOS" Padding="8">
+                        <ComboBoxItem Content="OS/MVS 3.8J"/>
+                        <ComboBoxItem Content="VMS (Vax)"/>
+                        <ComboBoxItem Content="MPE (HP3000)"/>
+                        <ComboBoxItem Content="RSTS/E (PDP-11)"/>
+                        <ComboBoxItem Content="OS/VM 370"/>
+                        <ComboBoxItem Content="NOS (CDC Cyber)"/>
+                        <ComboBoxItem Content="OS/VM/SP"/>
+                        <ComboBoxItem Content="Tandy Xenix"/>
+                        <ComboBoxItem Content="OS/zOS"/>
+                        <ComboBoxItem Content="Generic Profile"/>
+                    </ComboBox>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Network">
+                <StackPanel Margin="10">
+                    <TextBlock Text="DEVICE TYPE" FontWeight="Bold" Margin="0,10,0,5"/>
+                    <ComboBox x:Name="cmbType" Padding="8">
+                        <ComboBoxItem Content="Printer (RFC1179/LPD)"/>
+                        <ComboBoxItem Content="3270 Terminal (TN3270)"/>
+                    </ComboBox>
+                    <TextBlock Text="CONNECTION METHOD" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <ComboBox x:Name="cmbConn" Padding="8">
+                        <ComboBoxItem Content="Client (Outbound)"/>
+                        <ComboBoxItem Content="Listener (Inbound Port 9100)"/>
+                        <ComboBoxItem Content="Batch Processing"/>
+                    </ComboBox>
+                    <TextBlock Text="DESTINATION (IP:PORT)" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <TextBox x:Name="txtDest" Padding="8"/>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Output &amp; PDF">
+                <StackPanel Margin="10">
+                    <CheckBox x:Name="chkPDF" Content="Generate PDF Documents" Margin="0,10,0,15"/>
+                    <TextBlock Text="PAGE ORIENTATION" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="cmbOrient" Padding="8">
+                        <ComboBoxItem Content="Landscape (132 Columns)"/>
+                        <ComboBoxItem Content="Portrait (80 Columns)"/>
+                    </ComboBox>
+                    <TextBlock Text="OUTPUT DIRECTORY" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <TextBox x:Name="txtOut" Padding="8"/>
+                    <TextBlock Text="SHADING THEME" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <ComboBox x:Name="cmbShade" Padding="8">
+                        <ComboBoxItem Content="IBM Green Paper"/>
+                        <ComboBoxItem Content="Modern Blue Paper"/>
+                        <ComboBoxItem Content="Standard White"/>
+                    </ComboBox>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Discard Changes" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0" Background="Transparent" BorderThickness="0"/>
+            <Button Content="Save Configuration" Click="Save_Click" Padding="30,12" Background="#0078D4" Foreground="White" BorderThickness="0"/>
+        </StackPanel>
+    </Grid>
+</Window>

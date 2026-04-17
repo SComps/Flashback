@@ -84,8 +84,9 @@ Public Class SessionStateManager
             Return
         End If
 
-        Dim enteredPw = _session.GetFieldValue("txtPw")
-        If enteredPw = _syspw Then
+        Dim enteredPw = _session.GetFieldValue("txtPw")?.Replace(Chr(0), "").Trim()
+        
+        If enteredPw = _syspw.Trim() Then
             _mode = ScreenMode.Menu
             ShowMenu()
         Else
@@ -252,7 +253,7 @@ Public Class SessionStateManager
         _session.WriteText(2, 65, $"TIME: {timeStr}", TN3270Color.Turquoise)
 
         _session.WriteText(10, 25, "ENTER SYSTEM PASSWORD TO CONTINUE", TN3270Color.Turquoise)
-        _session.WriteText(12, 25, "SYSPW ===> ", TN3270Color.Yellow)
+        _session.WriteText(12, 25, "SYSPW ===>", TN3270Color.Yellow)
         _session.AddField(12, 36, 8, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.None, "txtPw").Intensity = TN3270Intensity.Hidden
 
         If Not String.IsNullOrEmpty(_statusMsg) Then

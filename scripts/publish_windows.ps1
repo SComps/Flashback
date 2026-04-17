@@ -3,9 +3,10 @@
 $ErrorActionPreference = "Stop"
 
 # Define default path (outside the git tree) and prompt user
-$DefaultPublishDir = Join-Path $HOME "Flashback-Publish"
+$RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
+$DefaultPublishDir = Join-Path (Split-Path $RepoRoot -Parent) "Flashback-Publish"
 Write-Host "`nWhere should the publish output be located?" -ForegroundColor White
-Write-Host "Default: $($DefaultPublishDir -replace [regex]::Escape($HOME), '~')" -ForegroundColor Gray
+Write-Host "Default: $DefaultPublishDir" -ForegroundColor Gray
 $InputPath = Read-Host "Path [Enter for default]"
 
 if ([string]::IsNullOrWhiteSpace($InputPath)) {
@@ -24,20 +25,14 @@ foreach ($svc in $Services) {
 }
 Stop-Process -Name "Flashback.Tray" -Force -ErrorAction SilentlyContinue
 
+# Selective cleanup: Preserve .dat and .lic files, but purge all binaries/debug symbols
 if (Test-Path $PublishDir) { 
     Write-Host "Cleaning publish directory (preserving config and licenses)..." -ForegroundColor Gray
-    # Give a moment for file handles to release
-    Start-Sleep -Seconds 2
-    try {
-        Get-ChildItem -Path $PublishDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -notin @('.dat', '.lic') } | Remove-Item -Force -ErrorAction Stop
-    } catch {
-        Write-Host "Critical: Publishing directory files are locked by another process (likely a terminal, Explorer, or IDE)." -ForegroundColor Red
-        Write-Host "Please close any running apps using $PublishDir and try again." -ForegroundColor White
-        exit
-    }
-} else {
-    New-Item -ItemType Directory -Force $PublishDir | Out-Null
+    # Ensure any previous session handles are released
+    Start-Sleep -Seconds 1
+    Get-ChildItem -Path $PublishDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -notin @('.dat', '.lic') } | Remove-Item -Force -ErrorAction SilentlyContinue
 }
+New-Item -ItemType Directory -Force $PublishDir | Out-Null
 
 Write-Host "Publishing Flashback Suite for Windows..." -ForegroundColor Cyan
 

@@ -1,0 +1,109 @@
+<Window
+    x:Class="Flashback.Config.WinUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Flashback.Config.WinUI"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Flashback Configuration Control Center">
+
+    <Grid Background="Transparent">
+        <NavigationView x:Name="NavView" PaneDisplayMode="Left" SelectedItem="{x:Bind btnNavPrinters}" SelectionChanged="NavView_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="btnNavPrinters" Content="Printers &amp; Devices" Icon="Print" Tag="printers"/>
+                <NavigationViewItem x:Name="btnNavSettings" Content="Server Settings" Icon="Setting" Tag="settings"/>
+                <NavigationViewItem x:Name="btnNavSecurity" Content="Security" Icon="Permissions" Tag="security"/>
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem x:Name="btnNavHelp" Content="Help &amp; Docs" Icon="Help" Tag="help"/>
+            </NavigationView.FooterMenuItems>
+
+            <Grid x:Name="RootPanel" Margin="24">
+                <Grid x:Name="viewPrinters" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,24">
+                        <StackPanel>
+                            <TextBlock Text="Manage Devices" Style="{ThemeResource TitleTextBlockStyle}"/>
+                            <TextBlock Text="Operations Dashboard" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <Button Click="AddDevice_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{ThemeResource AccentButtonStyle}" Content="Add New Device"/>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl x:Name="DeviceList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" CornerRadius="8" Margin="0,0,0,12" Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="40" Height="40" CornerRadius="20" Background="{ThemeResource SystemAccentColorLight3}">
+                                                <FontIcon Glyph="&#xE74E;" FontSize="20" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="16,0">
+                                                <TextBlock Text="{Binding Name}" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                                                <TextBlock Text="{Binding Type}" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Click="Edit_Click" Content="&#xE70F;" FontFamily="{ThemeResource SymbolThemeFontFamily}" Background="Transparent" BorderThickness="0" Margin="0,0,8,0"/>
+                                                <Button Click="Delete_Click" Content="&#xE74D;" FontFamily="{ThemeResource SymbolThemeFontFamily}" Background="Transparent" BorderThickness="0" Foreground="Red"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid x:Name="viewSettings" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="Server Settings" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <Border BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="24" Margin="0,24,0,0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="UI Theme" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <ComboBox x:Name="cmbUITheme" SelectionChanged="cmbUITheme_SelectionChanged" Margin="0,8,0,0" Width="200">
+                                    <ComboBoxItem Content="Auto"/>
+                                    <ComboBoxItem Content="Midnight"/>
+                                    <ComboBoxItem Content="Snow"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="viewSecurity" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="Security" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <Border BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="24" Margin="0,24,0,0" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="System Password" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                <PasswordBox x:Name="pbSysPw" Margin="0,8,0,16" Width="300"/>
+                                <Button Content="Update" Style="{ThemeResource AccentButtonStyle}" Padding="24,8"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </NavigationView>
+
+        <Grid x:Name="overlayLock" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Visibility="Visible">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="320" Spacing="20">
+                <TextBlock Text="SECURITY LOCK" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center"/>
+                <PasswordBox x:Name="pbLogin" Header="Enter Password" PasswordRevealMode="Hidden" KeyDown="pbLogin_KeyDown"/>
+                <Button Content="Unlock" Click="Login_Click" Style="{ThemeResource AccentButtonStyle}" HorizontalAlignment="Stretch" Padding="0,12"/>
+                <TextBlock x:Name="lblLoginError" Text="Denied." Foreground="Red" HorizontalAlignment="Center" Visibility="Collapsed"/>
+            </StackPanel>
+        </Grid>
+        <Grid x:Name="splashOverlay" Background="Transparent" Visibility="Visible" PointerPressed="splashOverlay_PointerPressed" CornerRadius="15" Canvas.ZIndex="1000">
+            <Image Source="Assets/splash.png" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Text="Click anywhere to skip..." Foreground="White" Opacity="0.8" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="20"/>
+        </Grid>
+    </Grid>
+</Window>
