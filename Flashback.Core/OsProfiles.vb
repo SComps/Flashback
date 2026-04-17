@@ -35,6 +35,7 @@ Public Class OsProfileFactory
         RegisterProfile(New Nos278Profile())
         RegisterProfile(New VmspProfile())
         RegisterProfile(New TandyXenixProfile())
+        RegisterProfile(New GenericProfile())
     End Sub
 
     Private Shared Sub RegisterProfile(profile As IOsProfile)
@@ -340,6 +341,27 @@ Public Class TandyXenixProfile
             .JobName = "XENIX",
             .JobID = Now.Ticks.ToString(),
             .User = "XENIX"
+        }
+        info.ApplyFallbacks(devName)
+        Return info
+    End Function
+End Class
+
+Public Class GenericProfile
+    Implements IOsProfile
+
+    Public ReadOnly Property OS As OSType = OSType.OS_GENERIC Implements IOsProfile.OS
+    Public ReadOnly Property FirstLine As Double = 10 Implements IOsProfile.FirstLine
+    Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
+    Public ReadOnly Property StartLine As Integer = 0 Implements IOsProfile.StartLine
+    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+
+    Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
+        ' Generic jobs don't usually have parsable headers in the stream
+        Dim info As New JobInformation() With {
+            .JobName = "GENERIC",
+            .JobID = Now.ToString("HHmmss"),
+            .User = devName
         }
         info.ApplyFallbacks(devName)
         Return info

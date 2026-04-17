@@ -267,7 +267,8 @@ Public Class SessionStateManager
 
         _session.WriteText(21, 1, StrDup(78, "-"), TN3270Color.Blue)
         _session.WriteText(22, 2, "ENTER:PROCESS   PF3:EXIT   PF7:UP   PF8:DOWN", TN3270Color.White)
-        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VM/SP (7)TNDY (8)ZOS", TN3270Color.Turquoise)
+        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)GEN", TN3270Color.Turquoise)
+        _session.WriteText(24, 2, "CONN:(0)SOCK (1)FILE (2)PHYS (3)RAW", TN3270Color.Turquoise)
         _session.ShowScreen()
     End Sub
 
@@ -300,7 +301,7 @@ Public Class SessionStateManager
         _session.AddField(9, fieldCol, 1, d.ConnType.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtConn").Modified = True
 
         _session.WriteText(10, labelCol, "   OPERATING SYSTEM:", TN3270Color.Turquoise)
-        _session.AddField(10, fieldCol, 1, CInt(d.OS).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOS").Modified = True
+        _session.AddField(10, fieldCol, 2, CInt(d.OS).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOS").Modified = True
 
         _session.WriteText(12, labelCol, " DEVICE DESTINATION:", TN3270Color.Turquoise)
         _session.AddField(12, fieldCol, 50, d.DevDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDest").Modified = True

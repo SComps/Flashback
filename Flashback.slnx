@@ -7,5 +7,6 @@
   <Project Path="Flashback.Core/Flashback.Core.vbproj" />
   <Project Path="Flashback.Engine/Flashback.Engine.vbproj" />
   <Project Path="Flashback.LicenseGenerator/Flashback.LicenseGenerator.vbproj" />
+  <Project Path="Flashback.TestTool/Flashback.TestTool.vbproj" />
   <Project Path="Flashback.Tray/Flashback.Tray.vbproj" />
 </Solution>

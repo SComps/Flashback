@@ -22,7 +22,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Config._3270</RootNamespace>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
 </Project>

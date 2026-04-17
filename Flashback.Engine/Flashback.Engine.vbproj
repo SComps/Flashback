@@ -25,7 +25,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Engine</RootNamespace>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
 </Project>

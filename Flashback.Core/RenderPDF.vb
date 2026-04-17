@@ -15,6 +15,7 @@ Public Enum OSType
     OS_VMSP
     OS_TANDYXENIX
     OS_ZOS
+    OS_GENERIC
 End Enum
 
 Public Class DynamicFontResolver

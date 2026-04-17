@@ -23,6 +23,7 @@ Public Class Devs
     Private remoteHost As String
     Private remotePort As Integer
     Private client As TcpClient
+    Private listener As TcpListener
     Private clientStream As NetworkStream
     Private _cancellationTokenSource As CancellationTokenSource
     Private currentDocument As New List(Of String)()
@@ -50,6 +51,8 @@ Public Class Devs
         Try
             Dim splitDev As String() = dest.Split(":"c)
             If splitDev.Length = 1 Then
+                remoteHost = "127.0.0.1"
+                remotePort = Val(splitDev(0))
                 Return
             End If
             remoteHost = splitDev(0).Trim()
@@ -63,7 +66,7 @@ Public Class Devs
         IsConnecting = True
         Try
             SplitDestination(DevDest)
-            If Not String.IsNullOrEmpty(remoteHost) AndAlso remotePort > 0 Then
+            If remotePort > 0 Then
                 Await StartAsync()
             End If
         Finally
@@ -72,16 +75,29 @@ Public Class Devs
     End Sub
 
     Public Async Function StartAsync() As Task
-        client = New TcpClient()
         _cancellationTokenSource = New CancellationTokenSource()
 
         Try
-            Log($"[{DevName}] Attempting to connect...", ConsoleColor.Yellow)
-            Await client.ConnectAsync(remoteHost, remotePort)
-            Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
+            If ConnType = 3 Then
+                Log($"[{DevName}] Starting Port 9100 Listener on port {remotePort}...", ConsoleColor.Yellow)
+                listener = New TcpListener(System.Net.IPAddress.Any, remotePort)
+                listener.Start()
+                
+                ' Wait for an incoming connection
+                Using registration = _cancellationTokenSource.Token.Register(Sub() listener.Stop())
+                    client = Await listener.AcceptTcpClientAsync()
+                End Using
+                
+                Log($"[{DevName}] Accepted connection from {client.Client.RemoteEndPoint}", ConsoleColor.Green)
+            Else
+                client = New TcpClient()
+                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort}...", ConsoleColor.Yellow)
+                Await client.ConnectAsync(remoteHost, remotePort)
+                Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
+            End If
             
             OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-            If Not Directory.Exists(OutDest) Then
+            if Not Directory.Exists(OutDest) Then
                 Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
                 Directory.CreateDirectory(OutDest)
             End If
@@ -90,16 +106,27 @@ Public Class Devs
             IsConnected = True
             Await ReceiveDataAsync(_cancellationTokenSource.Token)
         Catch ex As Exception
-            Log($"[{DevName}] unable to connect to remote host.", ConsoleColor.Red)
+            If ConnType = 3 AndAlso Not _cancellationTokenSource.IsCancellationRequested Then
+                Log($"[{DevName}] Listener error: {ex.Message}", ConsoleColor.Red)
+            ElseIf ConnType <> 3 Then
+                Log($"[{DevName}] unable to connect to remote host.", ConsoleColor.Red)
+            End If
             IsConnected = False
         Finally
             Try
                 Disconnect()
             Catch disconnectEx As Exception
                 Log($"[{DevName}] Error during disconnection: {disconnectEx.Message}", ConsoleColor.Red)
-                IsConnected = False
             End Try
             IsConnected = False
+            
+            ' If it's a listener, we want the worker loop to trigger a restart of StartAsync
+            ' by setting IsConnected = False and letting the Worker check loop find it.
+            If ConnType = 3 Then
+                 Log($"[{DevName}] Listener session ended.", ConsoleColor.Gray)
+                 listener?.Stop()
+                 listener = Nothing
+            End If
         End Try
     End Function
 
@@ -113,7 +140,19 @@ Public Class Devs
             While Not cancellationToken.IsCancellationRequested
                 If Not clientStream.DataAvailable Then
                     Await Task.Delay(100, cancellationToken)
-                    clientStream.WriteByte(0)
+                    
+                    ' Keep-alive / check for disconnected
+                    Try
+                        clientStream.WriteByte(0)
+                    Catch
+                        ' Connection closed by peer - this is often how Port 9100 jobs end
+                        If dataBuilder.Length > 0 Then
+                            ProcessDocumentData(dataBuilder.ToString())
+                            dataBuilder.Clear()
+                        End If
+                        Exit While
+                    End Try
+
                     If (DateTime.Now - lastReceivedTime) > inactivityTimeout AndAlso dataBuilder.Length > 0 Then
                         ProcessDocumentData(dataBuilder.ToString())
                         dataBuilder.Clear()
@@ -122,26 +161,34 @@ Public Class Devs
                 Else
                     If Not Receiving Then
                         Receiving = True
-                        If OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
+                        If ConnType = 3 Then
+                            Log($"[{DevName}] receiving raw data from stream.", ConsoleColor.Yellow)
+                        ElseIf OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
                             Log($"[{DevName}] receiving data from remote host.", ConsoleColor.Yellow)
                         Else
                             Log($"[{DevName}] receiving data from low speed device. Sit back and relax.", ConsoleColor.Yellow)
                         End If
                     End If
                     Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
-                    If recd > 0 Then
-                        dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
-                        lastReceivedTime = DateTime.Now
+                    If recd = 0 Then
+                        ' EOF reached
+                        If dataBuilder.Length > 0 Then
+                            ProcessDocumentData(dataBuilder.ToString())
+                            dataBuilder.Clear()
+                        End If
+                        Exit While
                     End If
+                    dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
+                    lastReceivedTime = DateTime.Now
                 End If
             End While
         Catch ex As OperationCanceledException
             Log("Receiving canceled.")
         Catch ex As Exception
             If ex.HResult = -2146232800 Then
-                Log($"[{DevDest}] Disconnected from remote host.", ConsoleColor.Red)
+                Log($"[{DevName}] Session connection closed.", ConsoleColor.Red)
             Else
-                Log($"Error receiving data: [{ex.HResult}] {ex.ToString()}", ConsoleColor.Red)
+                Log($"Error receiving data: [{ex.HResult}] {ex.Message}", ConsoleColor.Red)
             End If
         End Try
     End Function
@@ -200,11 +247,12 @@ Public Class Devs
             lines.RemoveAt(lines.Count - 1)
         End If
 
-        If lines.Count > 9 Then
+        ' If it's a Raw connection, we process even small documents and don't care about line count minima
+        If ConnType = 3 OrElse lines.Count > 9 Then
             currentDocument.AddRange(lines)
             Dim docCopy As New List(Of String)(currentDocument)
             Task.Run(Sub() ProcessDocument(docCopy))
-            Log($"[{DevName}] Waiting for new document.")
+            Log($"[{DevName}] Waiting for next block/session.")
             currentDocument.Clear()
             Receiving = False
         Else
@@ -217,6 +265,7 @@ Public Class Devs
             _cancellationTokenSource?.Cancel()
             clientStream?.Close()
             client?.Close()
+            listener?.Stop()
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
         End Try
@@ -235,60 +284,72 @@ Public Class Devs
         End If
 
         Receiving = False
-        Log($"[{DevName}] received {doc.Count} lines from remote host.", ConsoleColor.Cyan)
+        Log($"[{DevName}] received {doc.Count} lines.", ConsoleColor.Cyan)
 
-        If doc.Count > 10 Then
-            If OS <> OSType.OS_RSTS AndAlso OS > OSType.OS_MVS38J AndAlso OS <> OSType.OS_ZOS AndAlso OS <> OSType.OS_TANDYXENIX Then
-                Log($"[{DevName}] Examining document information.")
-                Dim idx As Integer = 0
-                While idx < doc.Count
-                    doc(idx) = doc(idx).Trim()
-                    If doc(idx) = vbFormFeed Then
-                        doc(idx) = " " & vbLf
-                        Exit While
-                    End If
-                    If doc(idx).Trim() = "" Then doc(idx) = " "
-                    If doc(idx).Trim() <> "" Then Exit While
-                    idx += 1
-                End While
-            End If
+        ' Logic for Raw / Listener mode
+        Dim JobID As String
+        Dim JobName As String
+        Dim UserID As String
 
-            Dim profile = OsProfileFactory.GetProfile(OS)
-            If profile Is Nothing Then
-                Log($"[{DevName}] ERROR: Could not resolve OS Profile for {OS}", ConsoleColor.Red)
+        If ConnType = 3 Then
+            ' Bypass OS Profile extraction
+            JobID = DateTime.Now.ToString("HHmmss")
+            JobName = "RAW_JOB"
+            UserID = "GUEST"
+            Log($"[{DevName}] RAW MODE: Bypassing OS profile extraction.", ConsoleColor.Gray)
+        Else
+            If doc.Count > 10 Then
+                If OS <> OSType.OS_RSTS AndAlso OS > OSType.OS_MVS38J AndAlso OS <> OSType.OS_ZOS AndAlso OS <> OSType.OS_TANDYXENIX Then
+                    Log($"[{DevName}] Examining document information.")
+                    Dim idx As Integer = 0
+                    While idx < doc.Count
+                        doc(idx) = doc(idx).Trim()
+                        If doc(idx) = vbFormFeed Then
+                            doc(idx) = " " & vbLf
+                            Exit While
+                        End If
+                        If doc(idx).Trim() = "" Then doc(idx) = " "
+                        If doc(idx).Trim() <> "" Then Exit While
+                        idx += 1
+                    End While
+                End If
+
+                Dim profile = OsProfileFactory.GetProfile(OS)
+                If profile Is Nothing Then
+                    Log($"[{DevName}] ERROR: Could not resolve OS Profile for {OS}", ConsoleColor.Red)
+                    Return
+                End If
+
+                Dim jobInfo As JobInformation = profile.ExtractJobInformation(doc, DevName)
+                JobID = jobInfo.JobID
+                JobName = SecurityUtils.SanitizeFilename(jobInfo.JobName)
+                UserID = SecurityUtils.SanitizeFilename(jobInfo.User)
+            Else
+                Log(String.Format("[{1}] Ignoring document with {0} lines as line garbage or banners.", doc.Count, DevName))
                 Return
             End If
-
-            Dim jobInfo As JobInformation = profile.ExtractJobInformation(doc, DevName)
-            Dim JobID = jobInfo.JobID
-            Dim JobName = SecurityUtils.SanitizeFilename(jobInfo.JobName)
-            Dim UserID = SecurityUtils.SanitizeFilename(jobInfo.User)
-
-            Dim userDir = Path.Combine(OutDest, UserID)
-            If Not Directory.Exists(userDir) Then
-                Log($"[{DevName}] creating user directory {userDir}", ConsoleColor.Yellow)
-                Directory.CreateDirectory(userDir)
-            Else
-                Log($"[{DevName}] directory {userDir} already exists.", ConsoleColor.Yellow)
-            End If
-
-            Dim pdfName As String = Path.Combine(userDir, $"{DevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
-
-            Dim renderer As New RenderPDF()
-            renderer.Logger = Logger
-            renderer.DevName = DevName
-            renderer.OS = OS
-            renderer.Orientation = Orientation
-            renderer.TargetFileName = pdfName
-            renderer.Shading = Shading
-
-            renderer.CreatePDF(JobName, doc)
-        Else
-            Log(String.Format("[{1}] Ignoring document with {0} lines as line garbage or banners.", doc.Count, DevName))
-            Receiving = False
         End If
+
+        Dim userDir = Path.Combine(OutDest, UserID)
+        If Not Directory.Exists(userDir) Then
+            Log($"[{DevName}] creating user directory {userDir}", ConsoleColor.Yellow)
+            Directory.CreateDirectory(userDir)
+        End If
+
+        Dim pdfName As String = Path.Combine(userDir, $"{DevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
+
+        Dim renderer As New RenderPDF()
+        renderer.Logger = Logger
+        renderer.DevName = DevName
+        renderer.OS = If(ConnType = 3, OSType.OS_GENERIC, OS) ' Use Generic profile for raw/listener jobs
+        renderer.Orientation = Orientation
+        renderer.TargetFileName = pdfName
+        renderer.Shading = Shading
+
+        renderer.CreatePDF(JobName, doc)
     End Sub
     Public Function ToConfigLine() As String
         Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}"
     End Function
 End Class
+

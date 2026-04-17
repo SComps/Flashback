@@ -151,7 +151,7 @@ Module Program
         Say("   START JOB NO.  :", labelCol, 14, ConsoleColor.Cyan)
 
         Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
-        Say("(0:Sock 1:File 2:Phys)", 45, 7, ConsoleColor.DarkGray)
+        Say("(0:Sock 1:File 2:Phys 3:Raw)", 45, 7, ConsoleColor.DarkGray)
         Say("(0-8, 0:MVS 8:ZOS)", 45, 8, ConsoleColor.DarkGray)
         Say("(0:Land 1:Port)", 45, 12, ConsoleColor.DarkGray)
         Say("(0:Green 1:Blue 2:None)", 45, 14, ConsoleColor.DarkGray)
