@@ -2,6 +2,9 @@ Imports System.IO
 Imports System.Net.Sockets
 Imports System.Text
 Imports System.Threading
+#If WINDOWS Then
+Imports Makaretu.Dns
+#End If
 
 Public Class Devs
     Public Event LogMessage(message As String, color As ConsoleColor)
@@ -25,6 +28,9 @@ Public Class Devs
     Private client As TcpClient
     Private listener As TcpListener
     Private clientStream As NetworkStream
+#If WINDOWS Then
+    Private serviceDiscovery As ServiceDiscovery
+#End If
     Private _cancellationTokenSource As CancellationTokenSource
     Private currentDocument As New List(Of String)()
     Private IsConnected As Boolean = False
@@ -83,6 +89,18 @@ Public Class Devs
                 listener = New TcpListener(System.Net.IPAddress.Any, remotePort)
                 listener.Start()
                 
+#If WINDOWS Then
+                ' Advertise the service on the network as "Flashback Printer"
+                Try
+                    serviceDiscovery = New ServiceDiscovery()
+                    Dim profile = New ServiceProfile("Flashback Printer", "_pdl-datastream._tcp", CUShort(remotePort))
+                    serviceDiscovery.Advertise(profile)
+                    Log($"[{DevName}] Network discovery active: 'Flashback Printer' (_pdl-datastream._tcp)", ConsoleColor.Gray)
+                Catch ex As Exception
+                    Log($"[{DevName}] Warning: Could not start network discovery: {ex.Message}", ConsoleColor.DarkGray)
+                End Try
+#End If
+
                 ' Wait for an incoming connection
                 Using registration = _cancellationTokenSource.Token.Register(Sub() listener.Stop())
                     client = Await listener.AcceptTcpClientAsync()
@@ -266,6 +284,13 @@ Public Class Devs
             clientStream?.Close()
             client?.Close()
             listener?.Stop()
+#If WINDOWS Then
+            If serviceDiscovery IsNot Nothing Then
+                serviceDiscovery.Unadvertise()
+                serviceDiscovery.Dispose()
+                serviceDiscovery = Nothing
+            End If
+#End If
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
         End Try

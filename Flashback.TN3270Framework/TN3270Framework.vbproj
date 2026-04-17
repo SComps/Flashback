@@ -6,8 +6,5 @@
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
-  </ItemGroup>
 
 </Project>
