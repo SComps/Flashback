@@ -38,14 +38,14 @@ echo "Publishing Flashback Suite for $ARCH ($RID)..."
 
 # Engine
 echo "-> Publishing Flashback.Engine..."
-dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # Console Config
 echo "-> Publishing Flashback.Config.Console..."
-dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 3270 Config
 echo "-> Publishing Flashback.Config.3270..."
-dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
