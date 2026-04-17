@@ -25,6 +25,6 @@ New-Item -ItemType Directory -Force $PublishDir | Out-Null
 Write-Host "Publishing Flashback.Config.WinUI..." -ForegroundColor Cyan
 
 # Publish WinUI application
-dotnet publish ..\Flashback.Config.WinUI\Flashback.Config.WinUI.csproj -c Release -r win-x64 -f net10.0-windows10.0.19041.0 --self-contained true /p:PublishDir=$PublishDir /p:WindowsAppSDKSelfContained=true
+dotnet publish ..\Flashback.Config.WinUI\Flashback.Config.WinUI.csproj -c Release -r win-x64 -f net10.0-windows10.0.19041.0 --self-contained true /p:PublishDir=$PublishDir /p:WindowsAppSDKSelfContained=true /p:SatelliteResourceLanguages=en
 
 Write-Host "`nPublish complete! Files located in: $PublishDir" -ForegroundColor Green
