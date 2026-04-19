@@ -15,15 +15,15 @@
                     <TextBox x:Name="txtName" Header="NAME" PlaceholderText="Device Name"/>
                     <TextBox x:Name="txtDesc" Header="DESCRIPTION" PlaceholderText="Brief description"/>
                     <ComboBox x:Name="cmbOS" Header="OS PROFILE" HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="OS/MVS 3.8J"/>
-                        <ComboBoxItem Content="VMS (Vax)"/>
+                        <ComboBoxItem Content="MVS 3.8J"/>
+                        <ComboBoxItem Content="VMS (Vax/Alpha)"/>
                         <ComboBoxItem Content="MPE (HP3000)"/>
                         <ComboBoxItem Content="RSTS/E (PDP-11)"/>
-                        <ComboBoxItem Content="OS/VM 370"/>
+                        <ComboBoxItem Content="VM 370"/>
                         <ComboBoxItem Content="NOS (CDC Cyber)"/>
-                        <ComboBoxItem Content="OS/VM/SP"/>
+                        <ComboBoxItem Content="VM/SP"/>
                         <ComboBoxItem Content="Tandy Xenix"/>
-                        <ComboBoxItem Content="OS/zOS"/>
+                        <ComboBoxItem Content="zOS"/>
                         <ComboBoxItem Content="Generic Profile"/>
                     </ComboBox>
                 </StackPanel>

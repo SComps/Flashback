@@ -67,7 +67,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 ; Configuration tools - always installed
 Name: "{group}\Flashback Config Console"; Filename: "{app}\Flashback.Config.Console.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Console Configuration"
 Name: "{group}\Flashback Config WPF"; Filename: "{app}\Flashback.Config.WPF.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WPF Configuration"
-Name: "{group}\Flashback Config WinUI"; Filename: "{app}\Flashback.Config.WinUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WinUI Configuration"
+;Name: "{group}\Flashback Config WinUI"; Filename: "{app}\Flashback.Config.WinUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WinUI Configuration"
 Name: "{group}\Flashback Engine"; Filename: "{app}\Flashback.Engine.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Print Engine"
 Name: "{group}\Flashback Config 3270"; Filename: "{app}\Flashback.Config.3270.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback 3270 Terminal Configuration"
 Name: "{group}\Uninstall Flashback LPT"; Filename: "{uninstallexe}"; Comment: "Uninstall Flashback LPT"
@@ -91,7 +91,7 @@ Filename: "sc.exe"; Parameters: "start {#Config3270ServiceName}"; Flags: runhidd
 Filename: "{app}\Flashback.Tray.exe"; Flags: nowait postinstall skipifsilent shellexec; Tasks: installservices\installtray; Description: "Launch Flashback Tray Monitor"
 
 ; Optionally launch configuration after install
-Filename: "{app}\Flashback.Config.WinUI.exe"; Flags: nowait postinstall skipifsilent unchecked shellexec; Description: "Launch Flashback Configuration (WinUI)"
+;Filename: "{app}\Flashback.Config.WinUI.exe"; Flags: nowait postinstall skipifsilent unchecked shellexec; Description: "Launch Flashback Configuration (WinUI)"
 
 ; Create silent elevated startup task for the tray app instead of standard shortcut
 Filename: "schtasks.exe"; Parameters: "/Create /F /TN ""FlashbackTray"" /TR ""\""{app}\Flashback.Tray.exe\"""" /SC ONLOGON /RL HIGHEST"; Flags: runhidden waituntilterminated; Tasks: installservices\installtray; StatusMsg: "Configuring silent elevated Tray start..."

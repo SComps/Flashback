@@ -4,7 +4,9 @@
   </Folder>
   <Project Path="Flashback.Config.3270/Flashback.Config.3270.vbproj" />
   <Project Path="Flashback.Config.Console/Flashback.Config.Console.vbproj" />
-  <Project Path="Flashback.Config.WinUI/Flashback.Config.WinUI.csproj" />
+  <Project Path="Flashback.Config.WinUI/Flashback.Config.WinUI.csproj">
+    <Platform Solution="Debug|*" Project="x64" />
+  </Project>
   <Project Path="Flashback.Config.WPF/Flashback.Config.WPF.vbproj" />
   <Project Path="Flashback.Core/Flashback.Core.vbproj" />
   <Project Path="Flashback.Engine/Flashback.Engine.vbproj" />

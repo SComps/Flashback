@@ -70,13 +70,14 @@ Public Class Mvs38jProfile
                 Try
                     Dim parts As String() = line.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
                     If parts.Length > 0 AndAlso parts(0).StartsWith("****") Then
-                        If parts.Length > 2 AndAlso parts(1) = "END" AndAlso (parts(2) = "JOB" OrElse parts(2) = "TSU") Then
-                            If parts.Length > 3 Then info.JobID = parts(3)
+                        If parts.Length > 2 Then
+                            If parts.Length > 3 Then info.JobID = $"{parts(2)} {parts(3)}"
                             If parts.Length > 4 Then info.JobName = parts(4)
                             If parts.Length > 7 Then info.User = parts(parts.Length - 7)
                         End If
                     End If
                 Catch ex As Exception
+                    Console.WriteLine($"ERROR: [ExtractJobInformation]" & vbCrLf & $"{ex.Message}")
                 End Try
             End If
         Next
@@ -103,16 +104,10 @@ Public Class ZosProfile
                 Try
                     Dim parts As String() = line.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
                     If parts.Length > 0 AndAlso parts(0).StartsWith("*") Then
-                        'This got really screwed up, trying to fix it
-                        'If parts.Length > 2 AndAlso parts(1) = "JOBID:" Then info.JobID = parts(2)
-                        'If parts.Length > 3 AndAlso parts(1) = "JOB" AndAlso parts(2) = "NAME:" Then info.JobName = parts(3)
-                        'If parts.Length > 3 AndAlso parts(1) = "USER" AndAlso parts(2) = "ID:" Then info.User = parts(3)
-                        If parts(1) = "START" Then
-                            info.JobID = parts(3)
-                            info.JobName = parts(4)
-                            info.User = parts(4)
-                        End If
 
+                        If parts.Length > 2 AndAlso parts(1) = "JOBID:" Then info.JobID = parts(2)
+                        If parts.Length > 3 AndAlso parts(1) = "JOB" AndAlso parts(2) = "NAME:" Then info.JobName = parts(3)
+                        If parts.Length > 3 AndAlso parts(1) = "USER" AndAlso parts(2) = "ID:" Then info.User = parts(3)
 
                     End If
                 Catch ex As Exception
