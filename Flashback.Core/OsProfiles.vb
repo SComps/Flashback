@@ -1,4 +1,6 @@
 Imports System.Collections.Generic
+Imports System.Threading
+Imports System.Transactions
 
 Public Class JobInformation
     Public Property JobName As String = "UnknownJob"
@@ -101,9 +103,17 @@ Public Class ZosProfile
                 Try
                     Dim parts As String() = line.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
                     If parts.Length > 0 AndAlso parts(0).StartsWith("*") Then
-                        If parts.Length > 2 AndAlso parts(1) = "JOBID:" Then info.JobID = parts(2)
-                        If parts.Length > 3 AndAlso parts(1) = "JOB" AndAlso parts(2) = "NAME:" Then info.JobName = parts(3)
-                        If parts.Length > 3 AndAlso parts(1) = "USER" AndAlso parts(2) = "ID:" Then info.User = parts(3)
+                        'This got really screwed up, trying to fix it
+                        'If parts.Length > 2 AndAlso parts(1) = "JOBID:" Then info.JobID = parts(2)
+                        'If parts.Length > 3 AndAlso parts(1) = "JOB" AndAlso parts(2) = "NAME:" Then info.JobName = parts(3)
+                        'If parts.Length > 3 AndAlso parts(1) = "USER" AndAlso parts(2) = "ID:" Then info.User = parts(3)
+                        If parts(1) = "START" Then
+                            info.JobID = parts(3)
+                            info.JobName = parts(4)
+                            info.User = parts(4)
+                        End If
+
+
                     End If
                 Catch ex As Exception
                 End Try

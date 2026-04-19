@@ -101,32 +101,57 @@ Public Class Devs
                 End Try
 #End If
 
-                ' Wait for an incoming connection
+                ' Wait for incoming connections continuously
+                IsConnected = True
                 Using registration = _cancellationTokenSource.Token.Register(Sub() listener.Stop())
-                    client = Await listener.AcceptTcpClientAsync()
+                    While Not _cancellationTokenSource.IsCancellationRequested
+                        Try
+                            client = Await listener.AcceptTcpClientAsync()
+                            Log($"[{DevName}] Accepted connection from {client.Client.RemoteEndPoint}", ConsoleColor.Green)
+                            
+                            OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
+                            If Not Directory.Exists(OutDest) Then
+                                Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
+                                Directory.CreateDirectory(OutDest)
+                            End If
+                            
+                            clientStream = client.GetStream()
+                            Await ReceiveDataAsync(_cancellationTokenSource.Token)
+                            
+                            Try
+                                clientStream?.Close()
+                                client?.Close()
+                            Catch
+                            End Try
+                            Log($"[{DevName}] Session ended. Listening for next job.", ConsoleColor.Gray)
+                        Catch ex As ObjectDisposedException
+                            Exit While ' Listener was stopped
+                        Catch ex As Exception
+                            If Not _cancellationTokenSource.IsCancellationRequested Then
+                                Log($"[{DevName}] Listener error: {ex.Message}", ConsoleColor.Red)
+                            End If
+                        End Try
+                    End While
                 End Using
-                
-                Log($"[{DevName}] Accepted connection from {client.Client.RemoteEndPoint}", ConsoleColor.Green)
             Else
                 client = New TcpClient()
                 Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort}...", ConsoleColor.Yellow)
                 Await client.ConnectAsync(remoteHost, remotePort)
                 Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
+                
+                OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
+                If Not Directory.Exists(OutDest) Then
+                    Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
+                    Directory.CreateDirectory(OutDest)
+                End If
+                
+                clientStream = client.GetStream()
+                IsConnected = True
+                Await ReceiveDataAsync(_cancellationTokenSource.Token)
             End If
             
-            OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-            if Not Directory.Exists(OutDest) Then
-                Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
-                Directory.CreateDirectory(OutDest)
-            End If
-            
-            clientStream = client.GetStream()
-            IsConnected = True
-            Await ReceiveDataAsync(_cancellationTokenSource.Token)
         Catch ex As Exception
-            If ConnType = 3 AndAlso Not _cancellationTokenSource.IsCancellationRequested Then
-                Log($"[{DevName}] Listener error: {ex.Message}", ConsoleColor.Red)
-            ElseIf ConnType <> 3 Then
+            If ConnType <> 3 Then
                 Log($"[{DevName}] unable to connect to remote host.", ConsoleColor.Red)
             End If
             IsConnected = False
@@ -138,10 +163,8 @@ Public Class Devs
             End Try
             IsConnected = False
             
-            ' If it's a listener, we want the worker loop to trigger a restart of StartAsync
-            ' by setting IsConnected = False and letting the Worker check loop find it.
             If ConnType = 3 Then
-                 Log($"[{DevName}] Listener session ended.", ConsoleColor.Gray)
+                 Log($"[{DevName}] Port 9100 Listener stopped.", ConsoleColor.Gray)
                  listener?.Stop()
                  listener = Nothing
             End If
@@ -161,7 +184,18 @@ Public Class Devs
                     
                     ' Keep-alive / check for disconnected
                     Try
-                        clientStream.WriteByte(0)
+                        If ConnType <> 3 Then 
+                            clientStream.WriteByte(0)
+                        Else
+                            ' Silent connection check for JetDirect
+                            If client.Client.Poll(0, SelectMode.SelectRead) AndAlso client.Available = 0 Then
+                                If dataBuilder.Length > 0 Then
+                                    ProcessDocumentData(dataBuilder.ToString())
+                                    dataBuilder.Clear()
+                                End If
+                                Exit While
+                            End If
+                        End If
                     Catch
                         ' Connection closed by peer - this is often how Port 9100 jobs end
                         If dataBuilder.Length > 0 Then

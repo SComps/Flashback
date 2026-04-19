@@ -150,15 +150,27 @@ Module Program
         Dim idx As Integer = itemIdx - 1
         Dim d As Devs = devList(idx)
 
+        Dim valCol = 26
+
         ' Internal helper for edit screen redraw
         Dim RedrawEdit As Action = Sub()
                                        EditItemHeader()
                                        DrawEditLabels()
+                                       ' Print all existing data so it's visible before you cursor into the field
+                                       Say(If(d.DevName, "").PadRight(20), valCol, 4, ConsoleColor.Yellow)
+                                       Say(If(d.DevDescription, "").PadRight(40), valCol, 5, ConsoleColor.Yellow)
+                                       Say(d.DevType.ToString().PadRight(1), valCol, 6, ConsoleColor.Yellow)
+                                       Say(d.ConnType.ToString().PadRight(1), valCol, 7, ConsoleColor.Yellow)
+                                       Say(CInt(d.OS).ToString().PadRight(2), valCol, 8, ConsoleColor.Yellow)
+                                       Say(If(d.DevDest, "").PadRight(50), valCol, 9, ConsoleColor.Yellow)
+                                       Say(If(d.PDF, "YES", "NO").PadRight(3), valCol, 10, ConsoleColor.Yellow)
+                                       Say(d.Orientation.ToString().PadRight(1), valCol, 11, ConsoleColor.Yellow)
+                                       Say(If(d.OutDest, "").PadRight(50), valCol, 12, ConsoleColor.Yellow)
+                                       Say(CInt(d.Shading).ToString().PadRight(1), valCol, 13, ConsoleColor.Yellow)
+                                       Say(d.JobNumber.ToString().PadRight(6), valCol, 14, ConsoleColor.Yellow)
                                    End Sub
 
         RedrawEdit.Invoke()
-
-        Dim valCol = 26
 
         d.DevName = GetStringWithHelp(d.DevName, valCol, 4, 20, ConsoleColor.Yellow, RedrawEdit)
         d.DevDescription = GetStringWithHelp(d.DevDescription, valCol, 5, 40, ConsoleColor.Yellow, RedrawEdit)
