@@ -1,6 +1,7 @@
 Imports System.Collections.Generic
 Imports System.Threading
 Imports System.Transactions
+Imports Microsoft.Extensions.Logging
 
 Public Class JobInformation
     Public Property JobName As String = "UnknownJob"
@@ -168,15 +169,27 @@ Public Class MpeProfile
         Dim gotInfo As Boolean = False
         Console.WriteLine($"[{devName}] resolving MPE job information.")
         For Each line In lines
-            line = line.ToUpper()
-            If line.Trim().Length > 0 Then
+            line = line.ToUpper().Trim()
+            If line.Contains("#S") AndAlso line.Contains("#O") Then
                 Dim parts As String() = line.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
-                If parts.Length > 5 Then
-                    info.JobName = parts(0).Trim().Replace("#", "").Replace(vbNullChar, "").Replace(";", "")
-                    info.JobID = parts(1).Trim().Replace("#", "").Replace(";", "").Replace("(", "").Replace(")", "")
-                    info.User = parts(5).Replace(";", "")
-                    gotInfo = True
-                    Exit For
+                If parts.Length >= 2 Then
+                    For i As Integer = 0 To parts.Length - 1
+                        Dim p As String = parts(i).Trim()
+                        If p.StartsWith("#S") Then
+                            info.JobName = p.Replace("#", "").Replace(";", "").Trim()
+                        ElseIf p.StartsWith("#O") Then
+                            info.JobID = p.Replace("#", "").Replace(";", "").Trim()
+                        ElseIf p = "*" AndAlso i + 1 < parts.Length AndAlso (info.User = "UnknownUser" OrElse String.IsNullOrEmpty(info.User)) Then
+                            ' User ID is typically the first field after the first asterisk
+                            info.User = parts(i + 1).Replace(";", "").Trim()
+                            gotInfo = True
+                        ElseIf p.StartsWith("*") AndAlso p.Length > 1 AndAlso (info.User = "UnknownUser" OrElse String.IsNullOrEmpty(info.User)) Then
+                            ' Handle case where asterisk is attached to the User ID (e.g. *MANAGER.SYS)
+                            info.User = p.Substring(1).Replace(";", "").Trim()
+                            gotInfo = True
+                        End If
+                    Next
+                    If gotInfo Then Exit For
                 End If
             End If
         Next
@@ -206,8 +219,8 @@ Public Class RstsProfile
             line = line.ToUpper()
             If line.Contains("ENTRY") Then
                 Dim parts As String() = line.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
-                If parts.Length > 5 AndAlso parts(4) = "ENTRY" Then
-                    Dim jobParts As String() = parts(5).Split(":"c)
+                If parts.Length > 5 AndAlso parts(3) = "ENTRY" Then
+                    Dim jobParts As String() = parts(4).Split(":"c)
                     If jobParts.Length > 0 Then
                         Dim jobData As String = jobParts(If(jobParts.Length > 1, 1, 0))
                         Dim EOU As Integer = jobData.IndexOf("]") + 1
