@@ -63,7 +63,8 @@ Public Class Devs
             End If
             remoteHost = splitDev(0).Trim()
             remotePort = Val(splitDev(1))
-        Catch
+        Catch ex As Exception
+            Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
         End Try
     End Sub
 
@@ -127,7 +128,8 @@ Public Class Devs
                             Try
                                 clientStream?.Close()
                                 client?.Close()
-                            Catch
+                            Catch ex As Exception
+                                Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
                             End Try
                             Log($"[{DevName}] Session ended. Listening for next job.", ConsoleColor.Gray)
                         Catch ex As ObjectDisposedException
@@ -163,9 +165,7 @@ Public Class Devs
             End If
             
         Catch ex As Exception
-            If ConnType <> 3 Then
-                Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
-            End If
+            Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
             IsConnected = False
         Finally
             Try
@@ -208,12 +208,13 @@ Public Class Devs
                                 Exit While
                             End If
                         End If
-                    Catch
+                    Catch ex As Exception
                         ' Connection closed by peer - this is often how Port 9100 jobs end
                         If dataBuilder.Length > 0 Then
                             ProcessDocumentData(dataBuilder.ToString())
                             dataBuilder.Clear()
                         End If
+                        Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
                         Exit While
                     End Try
 
