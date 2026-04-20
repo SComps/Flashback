@@ -36,8 +36,10 @@ Public Class Worker
         While Not stoppingToken.IsCancellationRequested
             For Each d In _devList
                 If Not d.Connected AndAlso Not d.Connecting Then
-                    _logger.LogInformation("Attempting to connect {Dev}...", d.DevName)
+                    _logger.LogInformation("DIAGNOSTIC: {Dev} appears offline (Connected={IsConn}, Connecting={IsConnecting}). Attempting connect...", d.DevName, d.Connected, d.Connecting)
                     d.Connect()
+                Else
+                    _logger.LogTrace("DIAGNOSTIC: {Dev} check. Connected={IsConn}, Connecting={IsConnecting}", d.DevName, d.Connected, d.Connecting)
                 End If
             Next
 
@@ -91,11 +93,14 @@ Public Class Worker
                 Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
                 
                 If existing IsNot Nothing AndAlso existing.DevDest = p(4) AndAlso existing.OS = CType(Val(p(5)), OSType) Then
-                    ' Configuration matches, just update JobNumber and keep current connection
+                    _logger.LogInformation("DIAGNOSTIC: {Dev} matched existing object. Updating job number to {Job}.", devName, Val(If(p.Length >= 12, p(11), p(p.Length - 1))))
                     existing.JobNumber = Val(If(p.Length >= 12, p(11), p(p.Length - 1)))
                     activeDevices.Add(existing)
                     _devList.Remove(existing)
                 Else
+                    If existing IsNot Nothing Then
+                        _logger.LogInformation("DIAGNOSTIC: {Dev} config change. Match Failed: Dest({ObjDest} vs {FileDest}), OS({ObjOS} vs {FileOS})", devName, existing.DevDest, p(4), existing.OS, p(5))
+                    End If
                     ' New or significantly changed device
                     If existing IsNot Nothing Then
                         _logger.LogInformation("Configuration change detected for {Dev}. Recreating device object.", devName)

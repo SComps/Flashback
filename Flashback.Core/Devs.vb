@@ -76,15 +76,19 @@ Public Class Devs
     End Sub
 
     Public Async Sub Connect()
+        Log($"[{DevName}] Connect() called. IsConnected={IsConnected}, IsConnecting={IsConnecting}", ConsoleColor.Cyan)
         If IsConnected OrElse IsConnecting Then Exit Sub
         IsConnecting = True
         Try
             SplitDestination(DevDest)
             If remotePort > 0 Then
                 Await StartAsync()
+            Else
+                Log($"[{DevName}] Connect skipped: remotePort is 0.", ConsoleColor.DarkYellow)
             End If
         Finally
             IsConnecting = False
+            Log($"[{DevName}] Connect() finished. IsConnecting set to False.", ConsoleColor.Cyan)
         End Try
     End Sub
 
@@ -172,15 +176,17 @@ Public Class Devs
             End If
             
         Catch ex As Exception
-            Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] StartAsync Error: {ex.GetType().Name} (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
             IsConnected = False
         Finally
             Try
+                Log($"[{DevName}] StartAsync entering Finally. Current IsConnected={IsConnected}. Disconnecting...", ConsoleColor.Cyan)
                 Disconnect()
             Catch disconnectEx As Exception
-                Log($"[{DevName}] {disconnectEx.Message}", ConsoleColor.Red)
+                Log($"[{DevName}] Disconnection error: {disconnectEx.Message}", ConsoleColor.Red)
             End Try
             IsConnected = False
+            Log($"[{DevName}] StartAsync Finalized. IsConnected set to False.", ConsoleColor.Cyan)
             
             If ConnType = 3 Then
                  Log($"[{DevName}] Port 9100 Listener stopped.", ConsoleColor.Gray)
@@ -243,7 +249,7 @@ Public Class Devs
                     End If
                     Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
                     If recd = 0 Then
-                        ' EOF reached
+                        Log($"[{DevName}] ReceiveDataAsync: 0 bytes received (EOF). Exiting loop.", ConsoleColor.DarkYellow)
                         If dataBuilder.Length > 0 Then
                             ProcessDocumentData(dataBuilder.ToString())
                             dataBuilder.Clear()
@@ -255,11 +261,13 @@ Public Class Devs
                 End If
             End While
         Catch ex As OperationCanceledException
-            Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
+            Log($"[{DevName}] ReceiveDataAsync: Session canceled.", ConsoleColor.Gray)
         Catch ex As IO.IOException
-            Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] ReceiveDataAsync: IO Error (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
         Catch ex As Exception
-            Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] ReceiveDataAsync: Error (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
+        Finally
+            Log($"[{DevName}] ReceiveDataAsync finished.", ConsoleColor.Cyan)
         End Try
     End Function
 
