@@ -97,6 +97,9 @@ Public Class Worker
                     _devList.Remove(existing)
                 Else
                     ' New or significantly changed device
+                    If existing IsNot Nothing Then
+                        _logger.LogInformation("Configuration change detected for {Dev}. Recreating device object.", devName)
+                    End If
                     Dim d As New Devs()
                     d.DevName = p(0)
                     d.DevDescription = p(1)
