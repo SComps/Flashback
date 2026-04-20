@@ -116,6 +116,7 @@ Public Class Worker
                     AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
                     AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
                     d.Logger = _logger
+                    _logger.LogInformation("Device object created: {Dev}", d.DevName)
                     d.Connect()
                     activeDevices.Add(d)
                 End If
@@ -135,6 +136,7 @@ Public Class Worker
 
     Private Sub Cleanup()
         For Each d In _devList
+            _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
             d.Disconnect()
         Next
         _devList.Clear()
