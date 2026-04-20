@@ -190,7 +190,9 @@ Public Class RenderPDF
                         currentLine += 1
                     End If
                 Catch ex As Exception
-                    Logger?.LogError("{Dev}: Error processing line: {Error}", DevName, ex.Message)
+                    If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                        Logger?.LogError("{Dev}: Error processing line: {Error}", DevName, ex.Message)
+                    End If
                 End Try
             Next
 
@@ -200,7 +202,9 @@ Public Class RenderPDF
             doc.Close()
             Return outputFile
         Catch ex As Exception
-            Logger?.LogError("{Dev}: Error in CreatePDF: {Error}", DevName, ex.Message)
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                Logger?.LogError("{Dev}: Error in CreatePDF: {Error}", DevName, ex.Message)
+            End If
         End Try
         Return ""
     End Function

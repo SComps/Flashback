@@ -55,7 +55,9 @@ Public Class Worker
                 _configDate = File.GetLastWriteTime(_configFile)
             End SyncLock
         Catch ex As Exception
-            _logger.LogError("Error saving configuration: {Error}", ex.Message)
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                _logger.LogError("ERROR saving configuration: {Error}", ex.Message)
+            End If
         End Try
     End Sub
 
@@ -122,7 +124,9 @@ Public Class Worker
             _devList.AddRange(activeDevices)
             _configDate = File.GetLastWriteTime(_configFile)
         Catch ex As Exception
-            _logger.LogError("Error loading configuration: {Error}", ex.Message)
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                _logger.LogError("ERROR loading configuration: {Error}", ex.Message)
+            End If
         End Try
     End Sub
 
@@ -174,7 +178,9 @@ Public Class Worker
                 End If
             Next
         Catch ex As Exception
-            _logger.LogError("Error processing command file: {Error}", ex.Message)
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                _logger.LogError("ERROR processing command file: {Error}", ex.Message)
+            End If
         End Try
     End Sub
 End Class

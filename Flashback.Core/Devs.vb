@@ -110,10 +110,16 @@ Public Class Devs
                             Log($"[{DevName}] Accepted connection from {client.Client.RemoteEndPoint}", ConsoleColor.Green)
                             
                             OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-                            If Not Directory.Exists(OutDest) Then
-                                Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
-                                Directory.CreateDirectory(OutDest)
-                            End If
+                            Try
+                                If Not Directory.Exists(OutDest) Then
+                                    Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
+                                    Directory.CreateDirectory(OutDest)
+                                End If
+                            Catch ex As Exception
+                                If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                                    Log($"[{DevName}] ERROR creating directory: {ex.Message}", ConsoleColor.Red)
+                                End If
+                            End Try
                             
                             clientStream = client.GetStream()
                             Await ReceiveDataAsync(_cancellationTokenSource.Token)
@@ -140,10 +146,16 @@ Public Class Devs
                 Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
                 
                 OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-                If Not Directory.Exists(OutDest) Then
-                    Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
-                    Directory.CreateDirectory(OutDest)
-                End If
+                Try
+                    If Not Directory.Exists(OutDest) Then
+                        Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Cyan)
+                        Directory.CreateDirectory(OutDest)
+                    End If
+                Catch ex As Exception
+                    If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                        Log($"[{DevName}] ERROR creating directory: {ex.Message}", ConsoleColor.Red)
+                    End If
+                End Try
                 
                 clientStream = client.GetStream()
                 IsConnected = True
@@ -332,15 +344,21 @@ Public Class Devs
 
     Private Sub ProcessDocument(doc As List(Of String))
         OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
-        If Not Directory.Exists(OutDest) Then
-            Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
-            Directory.CreateDirectory(OutDest)
-        End If
-        Dim dataDir = Path.Combine(OutDest, "data")
-        If Not Directory.Exists(dataDir) Then
-            Log($"[{DevName}] Created data directory {dataDir}", ConsoleColor.Yellow)
-            Directory.CreateDirectory(dataDir)
-        End If
+        Try
+            If Not Directory.Exists(OutDest) Then
+                Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
+                Directory.CreateDirectory(OutDest)
+            End If
+            Dim dataDir = Path.Combine(OutDest, "data")
+            If Not Directory.Exists(dataDir) Then
+                Log($"[{DevName}] Created data directory {dataDir}", ConsoleColor.Yellow)
+                Directory.CreateDirectory(dataDir)
+            End If
+        Catch ex As Exception
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                Log($"[{DevName}] ERROR creating directories: {ex.Message}", ConsoleColor.Red)
+            End If
+        End Try
 
         Receiving = False
         Log($"[{DevName}] received {doc.Count} lines.", ConsoleColor.Cyan)
@@ -390,10 +408,17 @@ Public Class Devs
         End If
 
         Dim userDir = Path.Combine(OutDest, UserID)
-        If Not Directory.Exists(userDir) Then
-            Log($"[{DevName}] creating user directory {userDir}", ConsoleColor.Yellow)
-            Directory.CreateDirectory(userDir)
-        End If
+        Try
+            If Not Directory.Exists(userDir) Then
+                Log($"[{DevName}] creating user directory {userDir}", ConsoleColor.Yellow)
+                Directory.CreateDirectory(userDir)
+            End If
+        Catch ex As Exception
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                Log($"[{DevName}] ERROR creating user directory: {ex.Message}", ConsoleColor.Red)
+            End If
+            Return
+        End Try
 
         Dim pdfName As String = Path.Combine(userDir, $"{DevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
 
