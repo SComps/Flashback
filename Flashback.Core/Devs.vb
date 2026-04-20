@@ -164,7 +164,7 @@ Public Class Devs
             
         Catch ex As Exception
             If ConnType <> 3 Then
-                Log($"[{DevName}] ERROR: Connection failed: {ex.Message}", ConsoleColor.Red)
+                Log($"[{DevName}] ERROR: Connection failed: {ex.Message}. Engine will retry shortly.", ConsoleColor.Red)
             End If
             IsConnected = False
         Finally
@@ -249,9 +249,9 @@ Public Class Devs
         Catch ex As OperationCanceledException
             Log($"[{DevName}] Connection closing: Session canceled.", ConsoleColor.Gray)
         Catch ex As IO.IOException
-            Log($"[{DevName}] Connection lost: Stream error: {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] Connection lost: Stream error: {ex.Message}. Engine will attempt to restart shortly.", ConsoleColor.Red)
         Catch ex As Exception
-            Log($"[{DevName}] Connection disconnected: {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] Connection disconnected: {ex.Message}. Engine will attempt to restart shortly.", ConsoleColor.Red)
         End Try
     End Function
 
