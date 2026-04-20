@@ -39,6 +39,13 @@ Public Class Devs
 
     Public ReadOnly Property Connected As Boolean
         Get
+            Try
+                ' Live socket check: Is the TCP client active and responsive?
+                If client IsNot Nothing AndAlso client.Client IsNot Nothing Then
+                    Return client.Connected AndAlso Not (client.Client.Poll(0, SelectMode.SelectRead) AndAlso client.Available = 0)
+                End If
+            Catch
+            End Try
             Return IsConnected
         End Get
     End Property
@@ -145,6 +152,7 @@ Public Class Devs
                 client = New TcpClient()
                 Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort}...", ConsoleColor.Yellow)
                 Await client.ConnectAsync(remoteHost, remotePort)
+                IsConnected = True
                 Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
                 
                 OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
@@ -160,7 +168,6 @@ Public Class Devs
                 End Try
                 
                 clientStream = client.GetStream()
-                IsConnected = True
                 Await ReceiveDataAsync(_cancellationTokenSource.Token)
             End If
             
