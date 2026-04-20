@@ -347,8 +347,8 @@ Module Program
             Say(CInt(d.OS).ToString(), 52, rowCount, ConsoleColor.White)
             Say(If(d.PDF, "YES", "NO "), 56, rowCount, ConsoleColor.Yellow)
             Say(d.Shading.ToString().ToUpper(), 61, rowCount, ConsoleColor.Green)
-            
-            Say($"   -> {d.DevDest}", 5, rowCount + 1, ConsoleColor.DarkGray)
+
+            Say($"   -> {d.DevDest}", 5, rowCount + 1, ConsoleColor.Yellow)
             rowCount += 2
         Next
 

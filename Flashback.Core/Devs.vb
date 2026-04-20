@@ -164,7 +164,7 @@ Public Class Devs
             
         Catch ex As Exception
             If ConnType <> 3 Then
-                Log($"[{DevName}] unable to connect to remote host.", ConsoleColor.Red)
+                Log($"[{DevName}] ERROR: Connection failed: {ex.Message}", ConsoleColor.Red)
             End If
             IsConnected = False
         Finally
@@ -247,13 +247,11 @@ Public Class Devs
                 End If
             End While
         Catch ex As OperationCanceledException
-            Log("Receiving canceled.")
+            Log($"[{DevName}] Connection closing: Session canceled.", ConsoleColor.Gray)
+        Catch ex As IO.IOException
+            Log($"[{DevName}] Connection lost: Stream error: {ex.Message}", ConsoleColor.Red)
         Catch ex As Exception
-            If ex.HResult = -2146232800 Then
-                Log($"[{DevName}] Session connection closed.", ConsoleColor.Red)
-            Else
-                Log($"Error receiving data: [{ex.HResult}] {ex.Message}", ConsoleColor.Red)
-            End If
+            Log($"[{DevName}] Connection disconnected: {ex.Message}", ConsoleColor.Red)
         End Try
     End Function
 
