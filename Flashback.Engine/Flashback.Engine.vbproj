@@ -24,6 +24,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Engine</RootNamespace>
     <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <Version>1.0.101</Version>
   </PropertyGroup>
 
 </Project>

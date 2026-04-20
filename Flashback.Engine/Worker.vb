@@ -23,7 +23,8 @@ Public Class Worker
     End Sub
 
     Protected Overrides Async Function ExecuteAsync(stoppingToken As CancellationToken) As Task
-        _logger.LogInformation("Flashback Engine Service Starting.")
+        Dim version = Reflection.Assembly.GetExecutingAssembly().GetName().Version
+        _logger.LogInformation("Flashback Engine Service v{Ver} Starting.", version.ToString())
 
         LoadDevices()
 
