@@ -112,6 +112,7 @@ Public Class ZosProfile
 
                     End If
                 Catch ex As Exception
+                    Console.WriteLine($"[{devName}] ERROR parsing line: {ex.Message}")
                 End Try
             End If
         Next

@@ -66,7 +66,11 @@ Public Class Worker
         If lic.IsLicensed Then
             Dim limitStr As String = If(lic.MaxPrinters = 0, "Unlimited", lic.MaxPrinters.ToString())
             _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, limitStr)
-        Else
+        If Not lic.IsLicensed AndAlso Not String.IsNullOrEmpty(lic.Error) Then
+            _logger.LogError("LICENSE ERROR: {Error}", lic.Error)
+        End If
+
+        If Not lic.IsLicensed Then
             _logger.LogWarning("LICENSE: No valid license found. Running in FREE mode (Max 2 printers).")
         End If
 
@@ -147,6 +151,9 @@ Public Class Worker
                 End If
             End If
         Catch ex As Exception
+            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                _logger.LogError("ERROR monitoring configuration: {Error}", ex.Message)
+            End If
         End Try
     End Sub
 
