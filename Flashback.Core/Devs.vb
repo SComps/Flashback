@@ -25,7 +25,7 @@ Public Class Devs
 
     Private remoteHost As String
     Private remotePort As Integer
-    Private client As TcpClient
+    Private socket As Socket
     Private listener As TcpListener
     Private clientStream As NetworkStream
 #If WINDOWS Then
@@ -40,9 +40,8 @@ Public Class Devs
     Public ReadOnly Property Connected As Boolean
         Get
             Try
-                ' Live socket check: Is the TCP client active and responsive?
-                If client IsNot Nothing AndAlso client.Client IsNot Nothing Then
-                    Return client.Connected AndAlso Not (client.Client.Poll(0, SelectMode.SelectRead) AndAlso client.Available = 0)
+                If socket IsNot Nothing Then
+                    Return socket.Connected AndAlso Not (socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0)
                 End If
             Catch
             End Try
@@ -118,8 +117,14 @@ Public Class Devs
                 Using registration = _cancellationTokenSource.Token.Register(Sub() listener.Stop())
                     While Not _cancellationTokenSource.IsCancellationRequested
                         Try
-                            client = Await listener.AcceptTcpClientAsync()
-                            Log($"[{DevName}] Accepted connection from {client.Client.RemoteEndPoint}", ConsoleColor.Green)
+                            Dim incomingSocket = Await listener.AcceptSocketAsync()
+                            Log($"[{DevName}] Accepted connection from {incomingSocket.RemoteEndPoint}", ConsoleColor.Green)
+                            
+                            ' Configure aggressive Keep-Alives on the accepted socket
+                            incomingSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
+                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10)
+                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5)
+                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
                             
                             OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
                             Try
@@ -133,12 +138,12 @@ Public Class Devs
                                 End If
                             End Try
                             
-                            clientStream = client.GetStream()
+                            clientStream = New NetworkStream(incomingSocket, True)
                             Await ReceiveDataAsync(_cancellationTokenSource.Token)
                             
                             Try
                                 clientStream?.Close()
-                                client?.Close()
+                                incomingSocket?.Close()
                             Catch ex As Exception
                                 Log($"[{DevName}] {ex.Message}", ConsoleColor.Red)
                             End Try
@@ -153,9 +158,17 @@ Public Class Devs
                     End While
                 End Using
             Else
-                client = New TcpClient()
-                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort}...", ConsoleColor.Yellow)
-                Await client.ConnectAsync(remoteHost, remotePort)
+                Log($"[{DevName}] DIAGNOSTIC: Creating raw Socket.", ConsoleColor.Cyan)
+                socket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+
+                ' Configure Aggressive OS-level Keep-Alives
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10)
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5)
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
+
+                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (Socket)...", ConsoleColor.Yellow)
+                Await socket.ConnectAsync(remoteHost, remotePort)
                 IsConnected = True
                 Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
                 
@@ -171,7 +184,7 @@ Public Class Devs
                     End If
                 End Try
                 
-                clientStream = client.GetStream()
+                clientStream = New NetworkStream(socket, True)
                 Await ReceiveDataAsync(_cancellationTokenSource.Token)
             End If
             
@@ -212,8 +225,8 @@ Public Class Devs
                         If ConnType <> 3 Then 
                             clientStream.WriteByte(0)
                         Else
-                            ' Silent connection check for JetDirect
-                            If client.Client.Poll(0, SelectMode.SelectRead) AndAlso client.Available = 0 Then
+                            ' Silent connection check for JetDirect using raw Socket Poll
+                            If socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
                                 If dataBuilder.Length > 0 Then
                                     ProcessDocumentData(dataBuilder.ToString())
                                     dataBuilder.Clear()
@@ -342,7 +355,8 @@ Public Class Devs
         Try
             _cancellationTokenSource?.Cancel()
             clientStream?.Close()
-            client?.Close()
+            socket?.Close()
+            socket = Nothing
             listener?.Stop()
 #If WINDOWS Then
             If serviceDiscovery IsNot Nothing Then
