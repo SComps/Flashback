@@ -68,7 +68,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{group}\Flashback Config Console"; Filename: "{app}\Flashback.Config.Console.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Console Configuration"
 Name: "{group}\Flashback Config WPF"; Filename: "{app}\Flashback.Config.WPF.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WPF Configuration"
 Name: "{group}\Flashback Config WinUI"; Filename: "{app}\Flashback.Config.WinUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WinUI Configuration"
-Name: "{group}\Flashback Engine"; Filename: "{app}\Flashback.Engine.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Print Engine"
+Name: "{group}\Flashback Engine"; Filename: "{app}\Flashback.Engine.exe"; Parameters: "{code:GetWebArg}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Print Engine"
 Name: "{group}\Flashback Config 3270"; Filename: "{app}\Flashback.Config.3270.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback 3270 Terminal Configuration"
 Name: "{group}\Uninstall Flashback LPT"; Filename: "{uninstallexe}"; Comment: "Uninstall Flashback LPT"
 
@@ -79,7 +79,7 @@ Name: "{group}\Uninstall Flashback LPT"; Filename: "{uninstallexe}"; Comment: "U
 ; ============================================================================
 [Run]
 ; Install and start services if the user selected the services task
-Filename: "sc.exe"; Parameters: "create {#EngineServiceName} binPath= ""{app}\Flashback.Engine.exe"" DisplayName= ""{#EngineServiceDisplay}"" start= auto"; Flags: runhidden waituntilterminated; Tasks: installservices; StatusMsg: "Installing Flashback Engine service..."
+Filename: "sc.exe"; Parameters: "create {#EngineServiceName} binPath= ""\""{app}\Flashback.Engine.exe\"" {code:GetWebArg}"" DisplayName= ""{#EngineServiceDisplay}"" start= auto"; Flags: runhidden waituntilterminated; Tasks: installservices; StatusMsg: "Installing Flashback Engine service..."
 Filename: "sc.exe"; Parameters: "description {#EngineServiceName} ""Flashback LPT Print Engine Service"""; Flags: runhidden waituntilterminated; Tasks: installservices
 Filename: "sc.exe"; Parameters: "start {#EngineServiceName}"; Flags: runhidden waituntilterminated; Tasks: installservices; StatusMsg: "Starting Flashback Engine service..."
 
@@ -127,6 +127,7 @@ Type: dirifempty; Name: "{app}"
 [Code]
 var
   PortPage: TInputQueryWizardPage;
+  WebPortPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
 begin
@@ -136,13 +137,20 @@ begin
   
   PortPage.Add('Port Number:', False);
   PortPage.Values[0] := '3270'; // Default port
+
+  WebPortPage := CreateInputQueryPage(PortPage.ID,
+    'Web Access Configuration', 'Embedded Spool View Web Server',
+    'Specify the port number for the Engine Web Server to allow secure remote spool viewing. Leave blank or enter 0 to disable web access.');
+  
+  WebPortPage.Add('Web Port (e.g. 8080):', False);
+  WebPortPage.Values[0] := '8080'; // Default web port
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
-  // Only show the port page if the user has selected the services task
-  if (PageID = PortPage.ID) and (not WizardIsTaskSelected('installservices')) then
+  // Only show the port pages if the user has selected the services task
+  if ((PageID = PortPage.ID) or (PageID = WebPortPage.ID)) and (not WizardIsTaskSelected('installservices')) then
     Result := True;
 end;
 
@@ -151,17 +159,28 @@ begin
   Result := PortPage.Values[0];
 end;
 
+function GetWebArg(Param: String): String;
+begin
+  if (WebPortPage.Values[0] <> '') and (WebPortPage.Values[0] <> '0') then
+    Result := '-w ' + WebPortPage.Values[0]
+  else
+    Result := '';
+end;
+
 // Before installation, stop any existing services that might be running
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
 begin
-  Result := '';
+    Result := '';
   NeedsRestart := False;
 
-  // Attempt to stop existing services (ignore errors if they don't exist)
+  // Stop and DELETE existing services to ensure binPath updates with new arguments
   Exec('sc.exe', 'stop {#EngineServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('sc.exe', 'delete {#EngineServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  
   Exec('sc.exe', 'stop {#Config3270ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('sc.exe', 'delete {#Config3270ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
   // Kill tray process if running
   Exec('taskkill.exe', '/F /IM Flashback.Tray.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);

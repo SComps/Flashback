@@ -22,29 +22,53 @@ Public Class WebWorker
     End Sub
 
     Protected Overrides Async Function ExecuteAsync(stoppingToken As CancellationToken) As Task
-        _logger.LogInformation("Flashback Web Server starting on port {Port}.", _port)
+        _logger.LogInformation("Flashback Web Server initializing on port {Port}...", _port)
         
         _listener = New HttpListener()
-        _listener.Prefixes.Add($"http://*:{_port}/")
-        
         Try
+            ' Explicitly bind to both wildcard and localhost for maximum compatibility
+            _listener.Prefixes.Add($"http://*:{_port}/")
             _listener.Start()
+            _logger.LogInformation("Flashback Web Server active and listening at http://*:{Port}/", _port)
+        Catch ex As HttpListenerException When ex.ErrorCode = 5 ' Access Denied
+            _logger.LogWarning("Access Denied for *: {Port}. Falling back to localhost.", _port)
+            Try
+                _listener = New HttpListener()
+                _listener.Prefixes.Add($"http://localhost:{_port}/")
+                _listener.Start()
+                _logger.LogInformation("Flashback Web Server active at http://localhost:{Port}/ (Local Only)", _port)
+            Catch ex2 As Exception
+                _logger.LogCritical("Web Server failed to start on localhost: {Error}", ex2.Message)
+                Return
+            End Try
         Catch ex As Exception
             _logger.LogCritical("Failed to start HttpListener: {Error}", ex.Message)
             Return
         End Try
 
-        While Not stoppingToken.IsCancellationRequested
-            Try
-                Dim context = Await _listener.GetContextAsync()
-                ProcessRequest(context)
-            Catch ex As HttpListenerException
-                If stoppingToken.IsCancellationRequested Then Exit While
-                _logger.LogError("HttpListener error: {Error}", ex.Message)
-            Catch ex As Exception
-                _logger.LogError("Unexpected web server error: {Error}", ex.Message)
-            End Try
-        End While
+        _logger.LogInformation("Web Server request loop started.")
+
+        ' Use a registration to stop the listener immediately on cancellation, 
+        ' otherwise GetContextAsync will block until the next request arrives.
+        Using stoppingToken.Register(Sub()
+                                         Try
+                                             _listener?.Stop()
+                                         Catch
+                                         End Try
+                                     End Sub)
+
+            While Not stoppingToken.IsCancellationRequested
+                Try
+                    ' Wait for a request
+                    Dim context = Await _listener.GetContextAsync()
+                    _logger.LogDebug("Incoming request: {Method} {Url}", context.Request.HttpMethod, context.Request.Url)
+                    ProcessRequest(context)
+                Catch ex As Exception
+                    If stoppingToken.IsCancellationRequested Then Exit While
+                    _logger.LogError("HttpListener error in loop: {Error}", ex.Message)
+                End Try
+            End While
+        End Using
 
         _listener.Stop()
         _logger.LogInformation("Flashback Web Server stopped.")
@@ -53,28 +77,64 @@ Public Class WebWorker
     Private Sub ProcessRequest(context As HttpListenerContext)
         Task.Run(Sub()
             Try
-                ' Basic Auth Check
-                Dim authHeader = context.Request.Headers("Authorization")
+                Dim url = context.Request.Url.LocalPath
+                Dim printerFilter = context.Request.QueryString("printer")
+                Dim userFilter = context.Request.QueryString("subuser")
+                
+                ' Authentication Logic:
+                ' Level 1 (All Printers) -> Public
+                ' Level 2 (User folders in Printer) -> Public
+                ' Level 3 (Files in User folder) -> Protected ONLY if the subuser exists in users.dat
+                
                 Dim user As UserInfo = Nothing
-
-                If Not String.IsNullOrEmpty(authHeader) AndAlso authHeader.StartsWith("Basic ") Then
-                    Dim creds = Encoding.UTF8.GetString(Convert.FromBase64String(authHeader.Substring(6))).Split(":")
-                    If creds.Length = 2 Then
-                        user = UserManager.Authenticate(creds(0), creds(1))
+                Dim requiresAuth = False
+                
+                If Not String.IsNullOrEmpty(userFilter) Then
+                    ' Check if this sub-user directory is a registered web user
+                    If UserManager.GetUsers().Any(Function(u) u.Username.Equals(userFilter, StringComparison.OrdinalIgnoreCase)) Then
+                        requiresAuth = True
                     End If
                 End If
 
-                If user Is Nothing Then
-                    context.Response.StatusCode = 401
-                    context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Spool View""")
-                    context.Response.Close()
-                    Return
+                ' Also require auth for direct downloads if they belong to a protected sub-user
+                If url.StartsWith("/download/", StringComparison.OrdinalIgnoreCase) Then
+                    Dim pathPart = WebUtility.UrlDecode(url.Substring(10))
+                    Dim folderName = pathPart.Split("/"c)(0)
+                    If Not String.IsNullOrEmpty(folderName) AndAlso UserManager.GetUsers().Any(Function(u) u.Username.Equals(folderName, StringComparison.OrdinalIgnoreCase)) Then
+                        requiresAuth = True
+                    End If
                 End If
 
-                Dim url = context.Request.Url.LocalPath
+                _logger.LogInformation("Request: {Method} {Url} (Printer: {Printer}, SubUser: {SubUser}) -> RequiresAuth: {Req}", context.Request.HttpMethod, url, printerFilter, userFilter, requiresAuth)
+
+                If requiresAuth Then
+                    Dim authHeader = context.Request.Headers("Authorization")
+                    If Not String.IsNullOrEmpty(authHeader) AndAlso authHeader.StartsWith("Basic ") Then
+                        Dim creds = Encoding.UTF8.GetString(Convert.FromBase64String(authHeader.Substring(6))).Split(":"c)
+                        If creds.Length = 2 Then
+                            user = UserManager.Authenticate(creds(0), creds(1))
+                            
+                            ' The logged in user must match the directory they are trying to access
+                            Dim targetFolder = If(Not String.IsNullOrEmpty(userFilter), userFilter, If(url.StartsWith("/download/"), url.Substring(10).Split("/"c)(0), ""))
+                            
+                            If user IsNot Nothing AndAlso Not user.Username.Equals(targetFolder, StringComparison.OrdinalIgnoreCase) Then
+                                _logger.LogWarning("Auth Failure: User {User} attempted to access folder {Folder}", user.Username, targetFolder)
+                                user = Nothing
+                            End If
+                        End If
+                    End If
+
+                    If user Is Nothing Then
+                        _logger.LogInformation("Sending 401 Challenge for {Url}", url)
+                        context.Response.StatusCode = 401
+                        context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Spool View""")
+                        context.Response.Close()
+                        Return
+                    End If
+                End If
+
                 If url = "/" OrElse url = "/index.html" Then
-                    Dim printerFilter = context.Request.QueryString("printer")
-                    ServeDashboard(context, user, printerFilter)
+                    ServeDashboard(context, user, printerFilter, userFilter)
                 ElseIf url.StartsWith("/download/") Then
                     ServeFile(context, user, url.Substring(10))
                 Else
@@ -92,8 +152,8 @@ Public Class WebWorker
         End Sub)
     End Sub
 
-    Private Sub ServeDashboard(context As HttpListenerContext, user As UserInfo, printerFilter As String)
-        Dim html = GenerateHtml(user, printerFilter)
+    Private Sub ServeDashboard(context As HttpListenerContext, user As UserInfo, printerFilter As String, userFilter As String)
+        Dim html = GenerateHtml(user, printerFilter, userFilter)
         Dim buffer = Encoding.UTF8.GetBytes(html)
         context.Response.ContentLength64 = buffer.Length
         context.Response.ContentType = "text/html; charset=utf-8"
@@ -110,9 +170,11 @@ Public Class WebWorker
             Dim targetFile As String = Nothing
             
             For Each kvp In allowedDevices
-                Dim root = kvp.Value
-                Dim testPath = Path.Combine(root, relPath)
-                If File.Exists(testPath) AndAlso testPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) Then
+                Dim root = Path.GetFullPath(kvp.Value).TrimEnd(Path.DirectorySeparatorChar)
+                Dim testPath = Path.GetFullPath(Path.Combine(root, relPath))
+                
+                ' Ensure the file exists AND it is actually inside the root (No .. escapes)
+                If testPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) AndAlso File.Exists(testPath) Then
                     targetFile = testPath
                     Exit For
                 End If
@@ -146,8 +208,8 @@ Public Class WebWorker
                     Dim devName = p(0)
                     Dim outDir = p(9)
                     If Not String.IsNullOrEmpty(outDir) AndAlso Directory.Exists(outDir) Then
-                        ' Filter by HomeFolder if set
-                        If String.IsNullOrEmpty(user.HomeFolder) OrElse outDir.Contains(user.HomeFolder, StringComparison.OrdinalIgnoreCase) Then
+                        ' Filter by HomeFolder if set and user is logged in
+                        If user Is Nothing OrElse String.IsNullOrEmpty(user.HomeFolder) OrElse outDir.Contains(user.HomeFolder, StringComparison.OrdinalIgnoreCase) Then
                             If Not devices.ContainsKey(devName) Then devices.Add(devName, outDir)
                         End If
                     End If
@@ -158,66 +220,99 @@ Public Class WebWorker
         Return devices
     End Function
 
-    Private Function GenerateHtml(user As UserInfo, printerFilter As String) As String
+    Private Function GenerateHtml(user As UserInfo, printerFilter As String, userFilter As String) As String
         Dim sb As New StringBuilder()
         sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
         sb.AppendLine("<title>Flashback Spool View</title>")
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
         sb.AppendLine("<header><div class=""container"">")
-        If Not String.IsNullOrEmpty(printerFilter) Then
-            sb.AppendLine($"<h1><a href=""/"" style=""text-decoration:none; color:inherit;"">🖨️</a> {printerFilter}</h1>")
+        
+        If Not String.IsNullOrEmpty(userFilter) Then
+            sb.AppendLine($"<h1><a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" style=""text-decoration:none; color:inherit;"">📂</a> {WebUtility.HtmlEncode(userFilter)}</h1>")
+        ElseIf Not String.IsNullOrEmpty(printerFilter) Then
+            sb.AppendLine($"<h1><a href=""/"" style=""text-decoration:none; color:inherit;"">🖨️</a> {WebUtility.HtmlEncode(printerFilter)}</h1>")
         Else
             sb.AppendLine("<h1>🖨️ Flashback Spool View</h1>")
         End If
+        
         sb.AppendLine("</div></header>")
         sb.AppendLine("<main class=""container"">")
 
         Dim allowedDevices = GetAllowedDevices(user)
 
         If String.IsNullOrEmpty(printerFilter) Then
-            ' Show Printer Selection
+            ' Level 1: List Printers (Public)
             sb.AppendLine("<div class=""section"">")
             sb.AppendLine("<h2 class=""section-title"">Select a Printer</h2>")
             sb.AppendLine("<div class=""file-list"">")
             For Each kvp In allowedDevices
                 sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""file-card"">")
-                sb.AppendLine("<div style=""font-size: 32px; margin-bottom: 10px;"">📠</div>")
-                sb.AppendLine($"<div class=""file-name"">{kvp.Key}</div>")
-                sb.AppendLine("<div class=""file-meta"">View spool files</div>")
+                sb.AppendLine("<div style=""font-size: 32px; margin-bottom: 10px;"">🖨️</div>")
+                sb.AppendLine($"<div class=""file-name"">{WebUtility.HtmlEncode(kvp.Key)}</div>")
+                sb.AppendLine("<div class=""file-meta"">Browse user folders</div>")
                 sb.AppendLine("</a>")
             Next
             sb.AppendLine("</div></div>")
-        Else
-            ' Show Files for specific printer
+        ElseIf String.IsNullOrEmpty(userFilter) Then
+            ' Level 2: List User Folders within Printer (Public)
             If allowedDevices.ContainsKey(printerFilter) Then
                 Dim root = allowedDevices(printerFilter)
-                Dim files = Directory.GetFiles(root, "*.pdf", SearchOption.AllDirectories) _
-                            .Select(Function(f) New FileInfo(f)) _
-                            .OrderByDescending(Function(f) f.LastWriteTime)
+                Dim subDirs = Directory.GetDirectories(root)
                 
-                If files.Any() Then
-                    sb.AppendLine("<div class=""file-list"">")
-                    For Each fi In files
-                        Dim relPath = Path.GetRelativePath(root, fi.FullName).Replace(Path.DirectorySeparatorChar, "/"c)
-                        Dim url = "/download/" & WebUtility.UrlEncode(relPath)
-                        Dim sizeMb = fi.Length / (1024 * 1024)
-                        
-                        sb.AppendLine($"<a href=""{url}"" class=""file-card"" target=""_blank"">")
-                        sb.AppendLine("<div class=""thumbnail-container"">")
-                        sb.AppendLine($"<object class=""pdf-preview"" data=""{url}#page=1&toolbar=0&navpanes=0&scrollbar=0"" type=""application/pdf""></object>")
-                        sb.AppendLine($"<div class=""file-icon-overlay"">{WebAssets.FileIconSvg}</div>")
+                sb.AppendLine("<div class=""section"">")
+                sb.AppendLine($"<h2 class=""section-title"">User Folders for {WebUtility.HtmlEncode(printerFilter)}</h2>")
+                sb.AppendLine("<div class=""file-list"">")
+                
+                For Each subDir In subDirs
+                    Dim dirName = Path.GetFileName(subDir)
+                    ' Check if this directory corresponds to a protected web user
+                    Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase))
+                    
+                    sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-card"">")
+                    If isProtected Then
+                        sb.AppendLine("<div class=""badge-locked"" style=""position:absolute; top:8px; right:8px;"">🔒 Protected</div>")
+                    End If
+                    sb.AppendLine("<div style=""font-size: 32px; margin-bottom: 10px;"">📁</div>")
+                    sb.AppendLine($"<div class=""file-name"">{WebUtility.HtmlEncode(dirName)}</div>")
+                    sb.AppendLine("<div class=""file-meta"">View documents</div>")
+                    sb.AppendLine("</a>")
+                Next
+                sb.AppendLine("</div></div>")
+            End If
+        Else
+            ' Level 3: List Files for specific sub-user (Conditional Auth)
+            If allowedDevices.ContainsKey(printerFilter) Then
+                Dim root = allowedDevices(printerFilter)
+                Dim targetDir = Path.Combine(root, userFilter)
+                
+                If Directory.Exists(targetDir) Then
+                    Dim files = Directory.GetFiles(targetDir, "*.pdf", SearchOption.TopDirectoryOnly) _
+                                .Select(Function(f) New FileInfo(f)) _
+                                .OrderByDescending(Function(f) f.LastWriteTime)
+                    
+                    If files.Any() Then
+                        sb.AppendLine("<div class=""file-list"">")
+                        For Each fi In files
+                            ' Path for download is user/filename.pdf
+                            Dim relPath = userFilter & "/" & fi.Name
+                            Dim url = "/download/" & WebUtility.UrlEncode(relPath)
+                            Dim sizeMb = fi.Length / (1024 * 1024)
+                            
+                            sb.AppendLine($"<a href=""{url}"" class=""file-card"" target=""_blank"">")
+                            sb.AppendLine("<div class=""thumbnail-container"">")
+                            sb.AppendLine($"<object class=""pdf-preview"" data=""{url}#page=1&toolbar=0&navpanes=0&scrollbar=0"" type=""application/pdf""></object>")
+                            sb.AppendLine($"<div class=""file-icon-overlay"">{WebAssets.FileIconSvg}</div>")
+                            sb.AppendLine("</div>")
+                            sb.AppendLine($"<div class=""file-name"" title=""{WebUtility.HtmlEncode(fi.Name)}"">{WebUtility.HtmlEncode(fi.Name)}</div>")
+                            sb.AppendLine($"<div class=""file-meta"">{sizeMb:F2} MB • {fi.LastWriteTime:yyyy-MM-dd HH:mm}</div>")
+                            sb.AppendLine("</a>")
+                        Next
                         sb.AppendLine("</div>")
-                        sb.AppendLine($"<div class=""file-name"" title=""{fi.Name}"">{fi.Name}</div>")
-                        sb.AppendLine($"<div class=""file-meta"">{sizeMb:F2} MB • {fi.LastWriteTime:yyyy-MM-dd HH:mm}</div>")
-                        sb.AppendLine("</a>")
-                    Next
-                    sb.AppendLine("</div>")
-                Else
-                    sb.AppendLine("<div class=""empty-state"">No spool files found for this printer.</div>")
+                    Else
+                        sb.AppendLine("<div class=""empty-state"">No spool files found for this user.</div>")
+                    End If
                 End If
-            Else
-                sb.AppendLine("<div class=""empty-state"">Printer not found or access denied.</div>")
             End If
         End If
 

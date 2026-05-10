@@ -154,6 +154,9 @@ Public Class Worker
     End Sub
 
     Private Sub Cleanup()
+        _statTimer.Stop()
+        _cmdTimer.Stop()
+        _logger.LogInformation("Stopping all printer connection tasks...")
         For Each d In _devList
             _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
             d.Disconnect()

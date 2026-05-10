@@ -16,8 +16,11 @@ Module Program
         End If
 
         Dim isDaemon As Boolean = False
+        Dim webPort As Integer = 0
+
         ' Validate and handle help
-        For i As Integer = 0 To args.Length - 1
+        Dim i As Integer = 0
+        While i < args.Length
             Dim arg = args(i).ToLower()
             Select Case arg
                 Case "-h", "--help"
@@ -27,25 +30,28 @@ Module Program
                     isDaemon = True
                 Case "-w", "--web"
                     If i + 1 < args.Length Then
-                        Dim port As Integer
-                        If Integer.TryParse(args(i + 1), port) Then
-                            Environment.SetEnvironmentVariable("FLASHBACK_WEB_PORT", port.ToString())
+                        If Integer.TryParse(args(i + 1), webPort) Then
                             i += 1
                         End If
                     End If
                 Case Else
-                    System.Console.WriteLine($"Unknown option: {args(i)}")
-                    ShowHelp()
-                    Environment.Exit(1)
+                    ' Ignore unknown args in service mode as they might be injected by host
             End Select
-        Next
+            i += 1
+        End While
+
+        ' Also check Environment Variable as fallback
+        Dim envPort As String = Environment.GetEnvironmentVariable("FLASHBACK_WEB_PORT")
+        If webPort = 0 AndAlso Not String.IsNullOrEmpty(envPort) Then
+            Integer.TryParse(envPort, webPort)
+        End If
 
         If isDaemon Then
             Dim psi As New ProcessStartInfo(Environment.ProcessPath)
-            psi.Arguments = String.Join(" ", args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon"))
+            Dim daemonArgs = args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon").ToList()
+            psi.Arguments = String.Join(" ", daemonArgs)
             psi.UseShellExecute = False
             psi.CreateNoWindow = True
-            ' Redirect output to disconnect from terminal
             psi.RedirectStandardOutput = True
             psi.RedirectStandardError = True
             Process.Start(psi)
@@ -67,9 +73,12 @@ Module Program
             builder.Services.AddSystemd()
         End If
 
+        ' Register the core worker
         builder.Services.AddHostedService(Of Worker)()
 
-        If Not String.IsNullOrEmpty(Environment.GetEnvironmentVariable("FLASHBACK_WEB_PORT")) Then
+        ' Always set the env var if we have a port so the WebWorker can find it
+        If webPort > 0 Then
+            Environment.SetEnvironmentVariable("FLASHBACK_WEB_PORT", webPort.ToString())
             builder.Services.AddHostedService(Of WebWorker)()
         End If
 

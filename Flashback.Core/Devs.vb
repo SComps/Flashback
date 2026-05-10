@@ -36,6 +36,7 @@ Public Class Devs
     Private currentDocument As New List(Of String)()
     Private IsConnected As Boolean = False
     Private IsConnecting As Boolean = False
+    Private IsClosing As Boolean = False
     Private Receiving As Boolean = False
 
     Public ReadOnly Property Connected As Boolean
@@ -76,8 +77,8 @@ Public Class Devs
     End Sub
 
     Public Async Sub Connect()
-        Log($"[{DevName}] Connect() called. IsConnected={IsConnected}, IsConnecting={IsConnecting}", ConsoleColor.Cyan)
-        If IsConnected OrElse IsConnecting Then Exit Sub
+        Log($"[{DevName}] Connect() called. IsConnected={IsConnected}, IsConnecting={IsConnecting}, IsClosing={IsClosing}", ConsoleColor.Cyan)
+        If IsConnected OrElse IsConnecting OrElse IsClosing Then Exit Sub
         IsConnecting = True
         Try
             SplitDestination(DevDest)
@@ -353,6 +354,7 @@ Public Class Devs
     End Sub
 
     Public Sub Disconnect()
+        IsClosing = True
         Try
             _cancellationTokenSource?.Cancel()
             clientStream?.Close()
