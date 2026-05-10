@@ -39,7 +39,7 @@ Public Class WebWorker
                 Dim context = Await _listener.GetContextAsync()
                 ProcessRequest(context)
             Catch ex As HttpListenerException
-                If stoppingToken.IsCancellationRequested Then Break
+                If stoppingToken.IsCancellationRequested Then Exit While
                 _logger.LogError("HttpListener error: {Error}", ex.Message)
             Catch ex As Exception
                 _logger.LogError("Unexpected web server error: {Error}", ex.Message)

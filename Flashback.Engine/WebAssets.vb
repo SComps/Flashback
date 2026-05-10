@@ -1,6 +1,5 @@
-Namespace Flashback.Engine
-    Public Class WebAssets
-        Public Shared ReadOnly Property Css As String = "
+Public Class WebAssets
+    Public Shared ReadOnly Property Css As String = "
 body { font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 0; }
 .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
 header { background-color: #fff; border-bottom: 1px solid #e5e7eb; padding: 20px 0; margin-bottom: 30px; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
@@ -23,6 +22,5 @@ h1 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #111827; }
 .badge-locked { font-size: 0.75rem; font-weight: 500; color: #059669; background-color: #ecfdf5; padding: 2px 8px; border-radius: 9999px; display: flex; align-items: center; gap: 4px; }
 "
 
-        Public Shared ReadOnly Property FileIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" viewBox=""0 0 24 24"" fill=""currentColor"" class=""file-icon""><path d=""M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z"" /><path d=""M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"" /></svg>"
-    End Class
-End Namespace
+    Public Shared ReadOnly Property FileIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" viewBox=""0 0 24 24"" fill=""currentColor"" class=""file-icon""><path d=""M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z"" /><path d=""M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"" /></svg>"
+End Class

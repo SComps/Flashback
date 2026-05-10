@@ -1,6 +1,7 @@
 Imports System.Linq
 Imports System.Security.Cryptography
 Imports System.Text
+Imports System.IO
 
 Public Class SecurityUtils
     Public Shared Function SanitizeFilename(input As String) As String
