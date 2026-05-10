@@ -78,6 +78,9 @@ Public Class Config3270Worker
                             d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
                             d.JobNumber = Val(p(11))
                         End If
+                        If p.Length >= 13 Then
+                            d.Enabled = (p(12) = "True")
+                        End If
                         _devList.Add(d)
                     End If
                 End While

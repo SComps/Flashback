@@ -142,7 +142,10 @@ Public Class MainForm
                 Dim parts = line.Split("||")
                 If parts.Length > 0 Then
                     Dim dName = parts(0)
-                    Dim dItem = New ToolStripMenuItem(dName)
+                    Dim isEnabled = If(parts.Length > 12, parts(12) = "True", True)
+                    Dim displayName = If(isEnabled, dName, dName & " (Disabled)")
+                    Dim dItem = New ToolStripMenuItem(displayName)
+
                     
                     Dim connectBtn = New ToolStripMenuItem("Connect", Nothing, Sub() SendCommand("CONNECT", dName))
                     Dim disconnectBtn = New ToolStripMenuItem("Disconnect", Nothing, Sub() SendCommand("DISCONNECT", dName))

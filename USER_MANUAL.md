@@ -43,7 +43,7 @@ Flashback is a robust, high-performance suite designed to modernize print servic
 ### Console Configuration Utility
 The primary way to manage devices is the **Flashback.Config.Console** tool. It provides a full-screen interactive interface for:
 - Adding/Deleting virtual printer devices.
-- Configuring destination IP addresses and ports.
+- Configuring source IP addresses and ports.
 - Setting up PDF rendering preferences (Orientation, Shading, Job Numbering).
 
 ### 3270 Remote Administration

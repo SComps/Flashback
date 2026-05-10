@@ -168,6 +168,7 @@ Module Program
                                        Say(If(d.OutDest, "").PadRight(50), valCol, 12, ConsoleColor.Yellow)
                                        Say(CInt(d.Shading).ToString().PadRight(1), valCol, 13, ConsoleColor.Yellow)
                                        Say(d.JobNumber.ToString().PadRight(6), valCol, 14, ConsoleColor.Yellow)
+                                       Say(If(d.Enabled, "YES", "NO").PadRight(3), valCol, 15, ConsoleColor.Yellow)
                                    End Sub
 
         RedrawEdit.Invoke()
@@ -186,6 +187,7 @@ Module Program
         d.Shading = CType(shadeVal, RenderPDF.ShadingColor)
         
         d.JobNumber = Val(GetStringWithHelp(d.JobNumber.ToString(), valCol, 14, 6, ConsoleColor.Yellow, RedrawEdit))
+        d.Enabled = GetBoolWithHelp(d.Enabled, valCol, 15, RedrawEdit)
 
         Say("Save changes? (Y/n) ==> ", 0, 17, ConsoleColor.Green)
         Dim saveInput As String = ""
@@ -221,7 +223,7 @@ Module Program
         Say("DEVICE TYPE     : 0=Generic, 1=Printer, 2=Plotter", 2, 6, ConsoleColor.Cyan)
         Say("CONN TYPE       : 0=Socket (Connect to Host), 1=File, 2=Physical, 3=Raw", 2, 7, ConsoleColor.Cyan)
         Say("OPERATING SYSTEM: The profile used to parse job headers (0-9).", 2, 8, ConsoleColor.Cyan)
-        Say("DESTINATION     : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", 2, 9, ConsoleColor.Cyan)
+        Say("SOURCE          : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", 2, 9, ConsoleColor.Cyan)
         Say("OUTPUT PDF      : Set to YES to generate PDF files.", 2, 10, ConsoleColor.Cyan)
         Say("ORIENTATION     : 0=Portrait, 1=Landscape.", 2, 11, ConsoleColor.Cyan)
         Say("SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", 2, 12, ConsoleColor.Cyan)
@@ -334,7 +336,7 @@ Module Program
         Say(ErrMsg, 1, 5, ConsoleColor.Red)
         ErrMsg = ""
 
-        Say("ID   NAME            DESCRIPTION                    OS  PDF   SHADE", 0, 6, ConsoleColor.Cyan)
+        Say("ID   NAME            DESCRIPTION                    OS  PDF   EN  SHD", 0, 6, ConsoleColor.Cyan)
         Say(New String("-"c, max_Cols), 0, 7, ConsoleColor.Blue)
 
         Dim rowCount As Integer = 8
@@ -346,7 +348,8 @@ Module Program
             Say(d.DevDescription.PadRight(30), 21, rowCount, ConsoleColor.White)
             Say(CInt(d.OS).ToString(), 52, rowCount, ConsoleColor.White)
             Say(If(d.PDF, "YES", "NO "), 56, rowCount, ConsoleColor.Yellow)
-            Say(d.Shading.ToString().ToUpper(), 61, rowCount, ConsoleColor.Green)
+            Say(If(d.Enabled, "YES", "NO "), 62, rowCount, ConsoleColor.White)
+            Say(d.Shading.ToString().ToUpper(), 66, rowCount, ConsoleColor.Green)
 
             Say($"   -> {d.DevDest}", 5, rowCount + 1, ConsoleColor.Yellow)
             rowCount += 2
@@ -392,6 +395,9 @@ Module Program
                             d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
                             d.JobNumber = Val(p(11))
                         End If
+                        If p.Length >= 13 Then
+                            d.Enabled = (p(12) = "True")
+                        End If
                         list.Add(d)
                     End If
                 End While
@@ -406,9 +412,7 @@ Module Program
         Try
             Using w As New StreamWriter(configFile, False)
                 For Each d As Devs In devList
-                    w.WriteLine($"{d.DevName}||{d.DevDescription}||{d.DevType}||{d.ConnType}||{d.DevDest}||" &
-                                $"{CInt(d.OS)}||True||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
-                                $"{CInt(d.Shading)}||{d.JobNumber}")
+                    w.WriteLine(d.ToConfigLine())
                 Next
             End Using
         Catch ex As Exception
@@ -432,12 +436,13 @@ Module Program
         Say("       DEVICE TYPE:", labelColSum, 6, ConsoleColor.Cyan)
         Say("   CONNECTION TYPE:", labelColSum, 7, ConsoleColor.Cyan)
         Say("  OPERATING SYSTEM:", labelColSum, 8, ConsoleColor.Cyan)
-        Say("DEVICE DESTINATION:", labelColSum, 9, ConsoleColor.Cyan)
+        Say("       DEVICE SOURCE:", labelColSum, 9, ConsoleColor.Cyan)
         Say("        OUTPUT PDF:", labelColSum, 10, ConsoleColor.Cyan)
         Say("       ORIENTATION:", labelColSum, 11, ConsoleColor.Cyan)
         Say("        OUTPUT DIR:", labelColSum, 12, ConsoleColor.Cyan)
         Say("   SHADING COLOR  :", labelColSum, 13, ConsoleColor.Cyan)
         Say("   START JOB NO.  :", labelColSum, 14, ConsoleColor.Cyan)
+        Say("   DEVICE ENABLED :", labelColSum, 15, ConsoleColor.Cyan)
 
         Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
         Say("(0:Sock 1:File 2:Phys 3:Raw)", 45, 7, ConsoleColor.DarkGray)

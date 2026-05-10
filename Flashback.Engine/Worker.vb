@@ -36,11 +36,14 @@ Public Class Worker
 
         While Not stoppingToken.IsCancellationRequested
             For Each d In _devList
-                If Not d.Connected AndAlso Not d.Connecting Then
+                If d.Enabled AndAlso Not d.Connected AndAlso Not d.Connecting Then
                     _logger.LogInformation("DIAGNOSTIC: {Dev} appears offline (Connected={IsConn}, Connecting={IsConnecting}). Attempting connect...", d.DevName, d.Connected, d.Connecting)
                     d.Connect()
+                ElseIf Not d.Enabled AndAlso (d.Connected OrElse d.Connecting) Then
+                    _logger.LogInformation("DIAGNOSTIC: {Dev} is disabled but currently connected. Disconnecting...", d.DevName)
+                    d.Disconnect()
                 Else
-                    _logger.LogTrace("DIAGNOSTIC: {Dev} check. Connected={IsConn}, Connecting={IsConnecting}", d.DevName, d.Connected, d.Connecting)
+                    _logger.LogTrace("DIAGNOSTIC: {Dev} check. Connected={IsConn}, Connecting={IsConnecting}, Enabled={IsEnabled}", d.DevName, d.Connected, d.Connecting, d.Enabled)
                 End If
             Next
 
@@ -121,12 +124,19 @@ Public Class Worker
                         d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
                         d.JobNumber = Val(p(11))
                     End If
+                    If p.Length >= 13 Then
+                        d.Enabled = (p(12) = "True")
+                    End If
 
                     AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
                     AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
                     d.Logger = _logger
                     _logger.LogInformation("Device object created: {Dev}", d.DevName)
-                    d.Connect()
+                    If d.Enabled Then
+                        d.Connect()
+                    Else
+                        _logger.LogInformation("Device {Dev} is disabled, will not connect.", d.DevName)
+                    End If
                     activeDevices.Add(d)
                 End If
                 loadedCount += 1

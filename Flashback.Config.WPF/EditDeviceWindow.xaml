@@ -49,7 +49,7 @@
                         <ComboBoxItem Content="Listener (Inbound Port 9100)"/>
                         <ComboBoxItem Content="Batch Processing"/>
                     </ComboBox>
-                    <TextBlock Text="DESTINATION (IP:PORT)" FontWeight="Bold" Margin="0,15,0,5"/>
+                    <TextBlock Text="SOURCE (IP:PORT)" FontWeight="Bold" Margin="0,15,0,5"/>
                     <TextBox x:Name="txtDest" Padding="8"/>
                 </StackPanel>
             </TabItem>

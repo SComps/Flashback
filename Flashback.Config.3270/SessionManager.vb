@@ -194,6 +194,11 @@ Public Class SessionStateManager
         d.Shading = CType(Val(_session.GetFieldValue("txtShade")), RenderPDF.ShadingColor)
         d.JobNumber = Val(_session.GetFieldValue("txtJob"))
 
+        Dim enVal = _session.GetFieldValue("txtEnabled")?.Trim().ToUpper()
+        If Not String.IsNullOrEmpty(enVal) Then
+            d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
+        End If
+
         _statusMsg = $"Device '{d.DevName}' updated."
         _statusColor = TN3270Color.Green
         _hasUnsavedChanges = True
@@ -219,6 +224,11 @@ Public Class SessionStateManager
         
         d.Shading = CType(Val(_session.GetFieldValue("txtShade")), RenderPDF.ShadingColor)
         d.JobNumber = Val(_session.GetFieldValue("txtJob"))
+
+        Dim enVal = _session.GetFieldValue("txtEnabled")?.Trim().ToUpper()
+        If Not String.IsNullOrEmpty(enVal) Then
+            d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
+        End If
     End Sub
 
     Private Sub ProcessDeleteInput(e As AidKeyEventArgs)
@@ -284,7 +294,7 @@ Public Class SessionStateManager
             _session.WriteText(5, 7, _statusMsg, _statusColor)
         End If
 
-        _session.WriteText(7, 2, "ID   NAME            DESCRIPTION                    OS  PDF  SHADE", TN3270Color.Turquoise)
+        _session.WriteText(7, 2, "ID   NAME            DESCRIPTION                    OS  PDF  EN   SHADE", TN3270Color.Turquoise)
         _session.WriteText(8, 1, StrDup(78, "-"), TN3270Color.Blue)
 
         Dim rowPos = 9
@@ -294,8 +304,9 @@ Public Class SessionStateManager
             _session.WriteText(rowPos, 7, d.DevName.PadRight(14).Substring(0, 14), TN3270Color.White)
             _session.WriteText(rowPos, 23, d.DevDescription.PadRight(29).Substring(0, 29), TN3270Color.White)
             _session.WriteText(rowPos, 54, CInt(d.OS).ToString(), TN3270Color.White)
-            _session.WriteText(rowPos, 58, If(d.PDF, "YES ", "NO  "), TN3270Color.Pink)
-            _session.WriteText(rowPos, 64, d.Shading.ToString().ToUpper(), TN3270Color.Green)
+            _session.WriteText(rowPos, 58, If(d.PDF, "Y", "N"), TN3270Color.Pink)
+            _session.WriteText(rowPos, 63, If(d.Enabled, "Y", "N"), TN3270Color.White)
+            _session.WriteText(rowPos, 68, d.Shading.ToString().ToUpper(), TN3270Color.Green)
             
             _session.WriteText(rowPos + 1, 7, d.DevDest.PadRight(50).Substring(0, 50), TN3270Color.Green)
             rowPos += 3
@@ -339,7 +350,7 @@ Public Class SessionStateManager
         _session.WriteText(10, labelCol, "   OPERATING SYSTEM:", TN3270Color.Turquoise)
         _session.AddField(10, fieldCol, 2, CInt(d.OS).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOS").Modified = True
 
-        _session.WriteText(12, labelCol, " DEVICE DESTINATION:", TN3270Color.Turquoise)
+        _session.WriteText(12, labelCol, "        DEVICE SOURCE:", TN3270Color.Turquoise)
         _session.AddField(12, fieldCol, 50, d.DevDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDest").Modified = True
 
         _session.WriteText(14, labelCol, "         OUTPUT PDF:", TN3270Color.Turquoise)
@@ -356,6 +367,9 @@ Public Class SessionStateManager
 
         _session.WriteText(18, labelCol, "   NEXT JOB NUMBER :", TN3270Color.Turquoise)
         _session.AddField(18, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob").Modified = True
+
+        _session.WriteText(19, labelCol, "   DEVICE ENABLED  :", TN3270Color.Turquoise)
+        _session.AddField(19, fieldCol, 5, d.Enabled.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEnabled").Modified = True
 
         _session.WriteText(22, 2, "ENTER:SAVE   PF1:HELP   PF3:CANCEL", TN3270Color.White)
         _session.ShowScreen()
@@ -382,7 +396,7 @@ Public Class SessionStateManager
         _session.WriteText(5, 2, "DEVICE TYPE     : 0=Generic, 1=Printer, 2=Plotter", TN3270Color.Turquoise)
         _session.WriteText(6, 2, "CONN TYPE       : 0=Socket (Connect to Host), 1=File, 2=Physical, 3=Raw", TN3270Color.Turquoise)
         _session.WriteText(7, 2, "OPERATING SYSTEM: The profile used to parse job headers (0-9).", TN3270Color.Turquoise)
-        _session.WriteText(8, 2, "DESTINATION     : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", TN3270Color.Turquoise)
+        _session.WriteText(8, 2, "SOURCE          : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", TN3270Color.Turquoise)
         
         _session.WriteText(10, 2, "OUTPUT PDF      : Set to TRUE to generate PDF files in the Output path.", TN3270Color.Turquoise)
         _session.WriteText(11, 2, "ORIENTATION     : 0=Portrait, 1=Landscape.", TN3270Color.Turquoise)
@@ -413,9 +427,7 @@ Public Class SessionStateManager
         Try
             Using writer As New StreamWriter(_configFile, append:=False)
                 For Each d In _devList
-                    writer.WriteLine($"{d.DevName}||{d.DevDescription}||{d.DevType}||{d.ConnType}||{d.DevDest}||" &
-                                     $"{CInt(d.OS)}||True||{d.PDF}||{d.Orientation}||{d.OutDest}||" &
-                                     $"{CInt(d.Shading)}||{d.JobNumber}")
+                    writer.WriteLine(d.ToConfigLine())
                 Next
             End Using
         Catch ex As Exception

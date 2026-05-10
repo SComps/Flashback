@@ -21,6 +21,7 @@ Public Class Devs
     Public Property OutDest As String = "Output"
     Public Property Shading As RenderPDF.ShadingColor = RenderPDF.ShadingColor.Green
     Public Property JobNumber As Integer = 0
+    Public Property Enabled As Boolean = True
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Private remoteHost As String
@@ -461,7 +462,7 @@ Public Class Devs
         renderer.CreatePDF(JobName, doc)
     End Sub
     Public Function ToConfigLine() As String
-        Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}"
+        Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}||{Enabled}"
     End Function
 End Class
 

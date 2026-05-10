@@ -94,7 +94,7 @@ namespace Flashback.Config.WinUI
                 foreach (var line in lines)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    var parts = line.Split("||");
+                    var parts = line.Split(new string[] { "||" }, StringSplitOptions.None);
                     if (parts.Length >= 6)
                     {
                         Devices.Add(new DeviceItem 
@@ -170,7 +170,7 @@ namespace Flashback.Config.WinUI
 
         private async void AddDevice_Click(object sender, RoutedEventArgs e)
         {
-            var newRecord = new string[] { "New Device", "Flashback Device", "0", "3", "127.0.0.1:9100", "0", "False", "True", "0", "Output", "0", "0" };
+            var newRecord = new string[] { "New Device", "Flashback Device", "0", "3", "127.0.0.1:9100", "0", "False", "True", "0", "Output", "0", "0", "True" };
             var newItem = new DeviceItem { Name = "New Device", Type = "Printer", Port = "9100", FullRecord = newRecord };
             
             var dialog = new EditDeviceDialog(newItem);
