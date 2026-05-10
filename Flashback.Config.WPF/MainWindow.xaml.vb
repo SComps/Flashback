@@ -233,7 +233,7 @@ Class MainWindow
             .Content = stack
         }
         
-        Dim btnAdd As New Button With {.Content = "Add User", .Padding = New Thickness(20, 10), .Margin = New Thickness(0, 10, 0, 0)}
+        Dim btnAdd As New Button With {.Content = "Add User", .Padding = New Thickness(20, 10, 20, 10), .Margin = New Thickness(0, 10, 0, 0)}
         stack.Children.Add(btnAdd)
         
         AddHandler btnAdd.Click, Sub()
