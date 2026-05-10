@@ -7,4 +7,5 @@ Public Class DeviceItem
     Public Property ConnTypeRaw As String
     Public Property DestRaw As String
     Public Property FullRecord As String()
+    Public Property Enabled As Boolean = True
 End Class

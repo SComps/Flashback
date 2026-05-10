@@ -100,7 +100,9 @@ Class MainWindow
                 If String.IsNullOrWhiteSpace(line) Then Continue For
                 Dim parts = line.Split(New String() {"||"}, StringSplitOptions.None)
                 If parts.Length >= 6 Then
-                    Devices.Add(New DeviceItem With {.Name = parts(0), .Description = parts(1), .Type = If(parts(2) = "0", "Printer", "3270 Terminal"), .Port = parts(4).Split(":"c).Last(), .FullRecord = parts})
+                    Dim isEnabled As Boolean = True
+                    If parts.Length >= 13 Then isEnabled = (parts(12).ToLower() = "true")
+                    Devices.Add(New DeviceItem With {.Name = parts(0), .Description = parts(1), .Type = If(parts(2) = "0", "Printer", "3270 Terminal"), .Port = parts(4).Split(":"c).Last(), .FullRecord = parts, .Enabled = isEnabled})
                 End If
             Next
             DeviceList.ItemsSource = Devices
@@ -135,7 +137,7 @@ Class MainWindow
         If e.Key = System.Windows.Input.Key.Enter Then Login_Click(Nothing, Nothing)
     End Sub
     Private Sub AddDevice_Click(sender As Object, e As RoutedEventArgs)
-        Dim newRecord = New String() {"New Device", "Flashback Device", "0", "3", "127.0.0.1:9100", "0", "False", "True", "0", "Output", "0", "0"}
+        Dim newRecord = New String() {"New Device", "Flashback Device", "0", "3", "127.0.0.1:9100", "0", "False", "True", "0", "Output", "0", "0", "True"}
         Dim newItem As New DeviceItem With {.Name = "New Device", .Type = "Printer", .Port = "9100", .FullRecord = newRecord}
         Dim editWin As New EditDeviceWindow(newItem)
         editWin.Owner = Me
@@ -154,6 +156,10 @@ Class MainWindow
                 p(2) = If(item.Type = "Printer", "0", "1")
                 Dim hostPart = p(4).Split(":"c)(0)
                 p(4) = $"{hostPart}:{item.Port}"
+                
+                If p.Length < 13 Then ReDim Preserve p(12)
+                p(12) = item.Enabled.ToString()
+                
                 lines.Add(String.Join("||", p))
             Next
             File.WriteAllLines(configFile, lines)

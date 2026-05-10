@@ -18,6 +18,7 @@
                 <StackPanel Margin="10">
                     <TextBlock Text="NAME" FontWeight="Bold" Margin="0,10,0,5"/>
                     <TextBox x:Name="txtName" Padding="8"/>
+                    <CheckBox x:Name="chkEnabled" Content="Device Enabled" Margin="0,10,0,5" IsChecked="True"/>
                     <TextBlock Text="DESCRIPTION" FontWeight="Bold" Margin="0,15,0,5"/>
                     <TextBox x:Name="txtDesc" Padding="8"/>
                     <TextBlock Text="OS PROFILE" FontWeight="Bold" Margin="0,15,0,5"/>

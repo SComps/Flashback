@@ -10,6 +10,12 @@ Public Class EditDeviceWindow
             txtName.Text = item.Name
             txtDesc.Text = item.Description
             cmbOS.SelectedIndex = Math.Min(Val(item.FullRecord(5)), Math.Max(0, cmbOS.Items.Count - 1))
+            
+            If item.FullRecord.Length >= 13 Then
+                chkEnabled.IsChecked = (item.FullRecord(12).ToLower() = "true")
+            Else
+                chkEnabled.IsChecked = True
+            End If
 
             ' Tab: Network
             cmbType.SelectedIndex = If(item.FullRecord(2) = "0", 0, 1)
@@ -50,6 +56,12 @@ Public Class EditDeviceWindow
             Device.FullRecord(8) = cmbOrient.SelectedIndex.ToString()
             Device.FullRecord(9) = txtOut.Text
             Device.FullRecord(10) = cmbShade.SelectedIndex.ToString()
+
+            If Device.FullRecord.Length < 13 Then
+                ReDim Preserve Device.FullRecord(12)
+            End If
+            Device.FullRecord(12) = chkEnabled.IsChecked.ToString()
+            Device.Enabled = chkEnabled.IsChecked.Value
 
             Me.DialogResult = True
             Me.Close()
