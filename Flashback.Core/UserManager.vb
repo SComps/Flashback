@@ -33,7 +33,8 @@ Public Class UserManager
     End Sub
 
     Public Shared Function Authenticate(username As String, password As String) As UserInfo
-        If _users Is Nothing Then LoadUsers()
+        LoadUsers() ' Always reload to pick up changes from config tools
+        
         Dim user = _users.FirstOrDefault(Function(u) u.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
         If user IsNot Nothing Then
             If SecurityUtils.VerifyPassword(password, user.Salt, user.PasswordHash) Then
