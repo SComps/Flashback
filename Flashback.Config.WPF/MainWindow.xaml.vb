@@ -120,10 +120,16 @@ Class MainWindow
     Private Sub Nav_Click(sender As Object, e As RoutedEventArgs)
         viewPrinters.Visibility = Visibility.Collapsed
         viewSettings.Visibility = Visibility.Collapsed
+        viewSettings.Visibility = Visibility.Collapsed
         viewSecurity.Visibility = Visibility.Collapsed
+        viewUsers.Visibility = Visibility.Collapsed
         If sender Is btnNavPrinters Then viewPrinters.Visibility = Visibility.Visible
         If sender Is btnNavSettings Then viewSettings.Visibility = Visibility.Visible
         If sender Is btnNavSecurity Then viewSecurity.Visibility = Visibility.Visible
+        If sender Is btnNavUsers Then
+            viewUsers.Visibility = Visibility.Visible
+            LoadUsers()
+        End If
     End Sub
     Private Sub Login_Click(sender As Object, e As RoutedEventArgs)
         If pbLogin.Password.Trim() = _syspw Then
@@ -195,5 +201,63 @@ Class MainWindow
         If item Is Nothing Then Return
         File.AppendAllText("commands.dat", $"{CType(sender, Button).Tag}||{item.Name}{vbCrLf}")
         MessageBox.Show("Signal Sent")
+    End Sub
+
+    Private Sub LoadUsers()
+        UserList.ItemsSource = Nothing
+        UserList.ItemsSource = UserManager.GetUsers()
+    End Sub
+
+    Private Sub AddUser_Click(sender As Object, e As RoutedEventArgs)
+        ' Simple input dialog for WPF
+        ' Normally we'd use a separate window, but for simplicity we can use a quick mock-up or custom dialog.
+        ' I'll implement a simple one here.
+        
+        Dim userBox As New TextBox With {.Margin = New Thickness(0, 5, 0, 10), .Padding = New Thickness(5)}
+        Dim passBox As New PasswordBox With {.Margin = New Thickness(0, 5, 0, 10), .Padding = New Thickness(5)}
+        Dim homeBox As New TextBox With {.Margin = New Thickness(0, 5, 0, 10), .Padding = New Thickness(5)}
+        
+        Dim stack As New StackPanel With {.Margin = New Thickness(20)}
+        stack.Children.Add(New TextBlock With {.Text = "Username:"})
+        stack.Children.Add(userBox)
+        stack.Children.Add(New TextBlock With {.Text = "Password:"})
+        stack.Children.Add(passBox)
+        stack.Children.Add(New TextBlock With {.Text = "Home Folder (Optional):"})
+        stack.Children.Add(homeBox)
+        
+        Dim dialog As New Window With {
+            .Title = "Add Web User",
+            .Width = 300, .Height = 350,
+            .WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            .Owner = Me, .ResizeMode = ResizeMode.NoResize,
+            .Content = stack
+        }
+        
+        Dim btnAdd As New Button With {.Content = "Add User", .Padding = New Thickness(20, 10), .Margin = New Thickness(0, 10, 0, 0)}
+        stack.Children.Add(btnAdd)
+        
+        AddHandler btnAdd.Click, Sub()
+                                     If Not String.IsNullOrWhiteSpace(userBox.Text) AndAlso Not String.IsNullOrWhiteSpace(passBox.Password) Then
+                                         UserManager.AddUser(userBox.Text, passBox.Password, homeBox.Text)
+                                         dialog.DialogResult = True
+                                         dialog.Close()
+                                     Else
+                                         MessageBox.Show("Username and Password are required.")
+                                     End If
+                                 End Sub
+        
+        If dialog.ShowDialog() = True Then
+            LoadUsers()
+        End If
+    End Sub
+
+    Private Sub DeleteUser_Click(sender As Object, e As RoutedEventArgs)
+        Dim user = CType(CType(sender, Button).DataContext, UserInfo)
+        If user IsNot Nothing Then
+            If MessageBox.Show($"Delete user {user.Username}?", "Confirm", MessageBoxButton.YesNo) = MessageBoxResult.Yes Then
+                UserManager.DeleteUser(user.Username)
+                LoadUsers()
+            End If
+        End If
     End Sub
 End Class

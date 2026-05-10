@@ -8,6 +8,8 @@ Public Enum ScreenMode
     Edit
     ConfirmDelete
     Help
+    Users
+    AddUser
 End Enum
 
 Public Class SessionStateManager
@@ -70,6 +72,10 @@ Public Class SessionStateManager
                 ProcessDeleteInput(e)
             Case ScreenMode.Help
                 ProcessHelpInput(e)
+            Case ScreenMode.Users
+                ProcessUsersInput(e)
+            Case ScreenMode.AddUser
+                ProcessAddUserInput(e)
         End Select
     End Sub
 
@@ -139,6 +145,9 @@ Public Class SessionStateManager
             ShowMenu()
         ElseIf cmd = "EXIT" Then
             _session.Close()
+        ElseIf cmd = "USERS" Then
+            _mode = ScreenMode.Users
+            ShowUsers()
         ElseIf cmd.StartsWith("DELETE ") Then
             Dim idStr = cmd.Substring(7).Trim()
             Dim id As Integer
@@ -433,5 +442,112 @@ Public Class SessionStateManager
         Catch ex As Exception
             ' Log to console or elsewhere
         End Try
+    End Sub
+
+    Private Sub ShowUsers()
+        _session.ClearFields()
+        Dim dateStr = DateTime.Now.ToString("MM/dd/yy")
+        Dim timeStr = DateTime.Now.ToString("HH:mm:ss")
+
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK02", TN3270Color.Turquoise)
+        _session.WriteText(1, 25, "WEB USER MANAGEMENT", TN3270Color.White)
+        _session.WriteText(1, 65, $"DATE: {dateStr}", TN3270Color.Turquoise)
+        _session.WriteText(2, 65, $"TIME: {timeStr}", TN3270Color.Turquoise)
+        _session.WriteText(3, 1, StrDup(78, "-"), TN3270Color.Blue)
+
+        _session.WriteText(5, 2, "NO  USERNAME             HOME DIRECTORY", TN3270Color.Turquoise)
+        _session.WriteText(6, 1, StrDup(78, "-"), TN3270Color.Blue)
+
+        Dim users = UserManager.GetUsers()
+        Dim row = 7
+        For i = 0 To Math.Min(users.Count - 1, 12)
+            Dim u = users(i)
+            _session.WriteText(row, 2, (i + 1).ToString("00"), TN3270Color.Yellow)
+            _session.WriteText(row, 6, u.Username.PadRight(20), TN3270Color.White)
+            _session.WriteText(row, 27, u.HomeFolder.PadRight(50), TN3270Color.White)
+            row += 1
+        Next
+
+        _session.WriteText(21, 1, StrDup(78, "-"), TN3270Color.Blue)
+        _session.WriteText(22, 2, "COMMAND ==>", TN3270Color.Yellow)
+        _session.AddField(22, 14, 40, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtUserCmd")
+        _session.WriteText(23, 2, "ENTER:PROCESS   PF1:HELP   PF3:MENU (EXIT)", TN3270Color.White)
+        _session.WriteText(24, 2, "COMMANDS: ADD, DELETE [NO]", TN3270Color.Turquoise)
+        _session.ShowScreen()
+    End Sub
+
+    Private Sub ProcessUsersInput(e As AidKeyEventArgs)
+        If e.AidKey = &HF3 Then
+            _mode = ScreenMode.Menu
+            ShowMenu()
+            Return
+        End If
+
+        If e.AidKey <> &H7D Then
+            ShowUsers()
+            Return
+        End If
+
+        Dim cmd = _session.GetFieldValue("txtUserCmd")?.ToUpper().Trim()
+        If cmd = "ADD" Then
+            _mode = ScreenMode.AddUser
+            ShowAddUser()
+        ElseIf cmd.StartsWith("DELETE ") Then
+            Dim idStr = cmd.Substring(7).Trim()
+            Dim id As Integer
+            Dim users = UserManager.GetUsers()
+            If Integer.TryParse(idStr, id) AndAlso id > 0 AndAlso id <= users.Count Then
+                UserManager.DeleteUser(users(id - 1).Username)
+                _statusMsg = "User deleted."
+                _statusColor = TN3270Color.Yellow
+                ShowUsers()
+            End If
+        Else
+            ShowUsers()
+        End If
+    End Sub
+
+    Private Sub ShowAddUser()
+        _session.ClearFields()
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK02", TN3270Color.Turquoise)
+        _session.WriteText(1, 30, "ADD NEW WEB USER", TN3270Color.White)
+        
+        _session.WriteText(10, 20, "USERNAME: ", TN3270Color.Turquoise)
+        _session.AddField(10, 30, 20, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtNewUser")
+        
+        _session.WriteText(12, 20, "PASSWORD: ", TN3270Color.Turquoise)
+        _session.AddField(12, 30, 20, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.None, "txtNewPass").Intensity = TN3270Intensity.Hidden
+        
+        _session.WriteText(14, 20, "HOME DIR: ", TN3270Color.Turquoise)
+        _session.AddField(14, 30, 30, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtNewHome")
+
+        _session.WriteText(22, 2, "ENTER:SAVE   PF3:CANCEL", TN3270Color.White)
+        _session.ShowScreen()
+    End Sub
+
+    Private Sub ProcessAddUserInput(e As AidKeyEventArgs)
+        If e.AidKey = &HF3 Then
+            _mode = ScreenMode.Users
+            ShowUsers()
+            Return
+        End If
+
+        If e.AidKey <> &H7D Then
+            ShowAddUser()
+            Return
+        End If
+
+        Dim uname = _session.GetFieldValue("txtNewUser")?.Trim()
+        Dim pass = _session.GetFieldValue("txtNewPass")?.Trim()
+        Dim hdir = _session.GetFieldValue("txtNewHome")?.Trim()
+
+        If Not String.IsNullOrEmpty(uname) AndAlso Not String.IsNullOrEmpty(pass) Then
+            UserManager.AddUser(uname, pass, hdir)
+            _statusMsg = "User added successfully."
+            _statusColor = TN3270Color.Green
+        End If
+
+        _mode = ScreenMode.Users
+        ShowUsers()
     End Sub
 End Class

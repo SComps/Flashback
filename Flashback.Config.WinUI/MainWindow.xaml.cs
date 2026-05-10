@@ -129,6 +129,7 @@ namespace Flashback.Config.WinUI
             viewPrinters.Visibility = Visibility.Collapsed;
             viewSettings.Visibility = Visibility.Collapsed;
             viewSecurity.Visibility = Visibility.Collapsed;
+            viewUsers.Visibility = Visibility.Collapsed;
 
             var selectedItem = args.SelectedItem as NavigationViewItem;
             if (selectedItem == null) return;
@@ -143,6 +144,10 @@ namespace Flashback.Config.WinUI
                     break;
                 case "security":
                     viewSecurity.Visibility = Visibility.Visible;
+                    break;
+                case "users":
+                    viewUsers.Visibility = Visibility.Visible;
+                    LoadUsers();
                     break;
                 case "help":
                     // Show help dialog or content
@@ -244,6 +249,53 @@ namespace Flashback.Config.WinUI
             {
                 Devices.Remove(item);
                 SaveDevices();
+            }
+        }
+
+        private void LoadUsers()
+        {
+            UserList.ItemsSource = null;
+            UserList.ItemsSource = UserManager.GetUsers();
+        }
+
+        private async void AddUser_Click(object sender, RoutedEventArgs e)
+        {
+            // Simple dialog for adding a user
+            var userBox = new TextBox { Header = "Username", PlaceholderText = "john.doe" };
+            var passBox = new PasswordBox { Header = "Password" };
+            var homeBox = new TextBox { Header = "Home Directory (Optional)", PlaceholderText = "C:\\Spool\\John" };
+            
+            var stack = new StackPanel { Spacing = 12 };
+            stack.Children.Add(userBox);
+            stack.Children.Add(passBox);
+            stack.Children.Add(homeBox);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Add Web User",
+                Content = stack,
+                PrimaryButtonText = "Add",
+                CloseButtonText = "Cancel",
+                XamlRoot = this.Content.XamlRoot
+            };
+
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                if (!string.IsNullOrWhiteSpace(userBox.Text) && !string.IsNullOrWhiteSpace(passBox.Password))
+                {
+                    UserManager.AddUser(userBox.Text, passBox.Password, homeBox.Text);
+                    LoadUsers();
+                }
+            }
+        }
+
+        private void DeleteUser_Click(object sender, RoutedEventArgs e)
+        {
+            var user = (sender as Button)?.DataContext as UserInfo;
+            if (user != null)
+            {
+                UserManager.DeleteUser(user.Username);
+                LoadUsers();
             }
         }
     }

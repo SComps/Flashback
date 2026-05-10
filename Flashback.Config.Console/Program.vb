@@ -126,6 +126,8 @@ Module Program
                     Case "U", "UP"
                         StartShow = Math.Max(0, StartShow - 5)
                         StopShow = Math.Min(devList.Count - 1, StartShow + 4)
+                    Case "USERS"
+                        ManageUsers()
                     Case ""
                         ' Ignore empty
                     Case Else
@@ -229,7 +231,7 @@ Module Program
         Say("SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", 2, 12, ConsoleColor.Cyan)
 
         Say("COMMANDS:", 2, 15, ConsoleColor.Yellow)
-        Say("ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 2, 17, ConsoleColor.Cyan)
+        Say("ADD, SAVE, USERS, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 2, 17, ConsoleColor.Cyan)
 
         Say("Press any key to return...", 2, 20, ConsoleColor.White)
         System.Console.ReadKey(True)
@@ -355,7 +357,7 @@ Module Program
             rowCount += 2
         Next
 
-        Say("Commands: ADD, SAVE, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 0, max_Rows - 2, ConsoleColor.Cyan)
+        Say("Commands: ADD, SAVE, USERS, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 0, max_Rows - 2, ConsoleColor.Cyan)
         Say("F1: Help", max_Cols - 10, 1, ConsoleColor.Yellow)
     End Sub
 
@@ -449,5 +451,75 @@ Module Program
         Say("(0-9, 0:MVS 9:GENERIC)", 45, 8, ConsoleColor.DarkGray)
         Say("(0:Land 1:Port)", 45, 12, ConsoleColor.DarkGray)
         Say("(0:Green 1:Blue 2:None)", 45, 14, ConsoleColor.DarkGray)
+    End Sub
+
+    Private Sub ManageUsers()
+        Do While True
+            System.Console.Clear()
+            Dim bannerLine As String = New String("="c, max_Cols)
+            Say(bannerLine, 0, 0, ConsoleColor.White)
+            Say(CenterString("W E B   U S E R   M A N A G E M E N T", max_Cols), 0, 1, ConsoleColor.White)
+            Say(bannerLine, 0, 2, ConsoleColor.White)
+
+            Dim users = UserManager.GetUsers()
+            Say("NO  USERNAME             HOME DIRECTORY", 2, 4, ConsoleColor.Cyan)
+            Say(New String("-"c, max_Cols - 4), 2, 5, ConsoleColor.Blue)
+
+            Dim row As Integer = 6
+            For i As Integer = 0 To users.Count - 1
+                Say((i + 1).ToString("00"), 2, row, ConsoleColor.Yellow)
+                Say(users(i).Username.PadRight(20), 6, row, ConsoleColor.White)
+                Say(users(i).HomeFolder, 27, row, ConsoleColor.White)
+                row += 1
+            Next
+
+            Say("Commands: ADD, DELETE [NO], EXIT (Returns to devices)", 2, max_Rows - 2, ConsoleColor.Cyan)
+            Say("USER COMMAND ==> ", 1, max_Rows - 4, ConsoleColor.White)
+            
+            Dim cmd As String = System.Console.ReadLine()
+            If cmd Is Nothing Then cmd = ""
+            cmd = cmd.ToUpper().Trim()
+
+            If cmd = "EXIT" OrElse cmd = "QUIT" OrElse cmd = "Q" Then Return
+            
+            If cmd = "ADD" Then
+                System.Console.Clear()
+                Say("ADD NEW WEB USER", 2, 2, ConsoleColor.Yellow)
+                Say("USERNAME: ", 2, 4, ConsoleColor.Cyan)
+                Dim uname = System.Console.ReadLine().Trim()
+                If String.IsNullOrEmpty(uname) Then Continue Do
+                
+                Say("PASSWORD: ", 2, 5, ConsoleColor.Cyan)
+                Dim pass = ""
+                ' Mask password entry
+                Do
+                    Dim key = System.Console.ReadKey(True)
+                    If key.Key = ConsoleKey.Enter Then Exit Do
+                    If key.Key = ConsoleKey.Backspace AndAlso pass.Length > 0 Then
+                        pass = pass.Substring(0, pass.Length - 1)
+                        System.Console.Write(vbBack & " " & vbBack)
+                    ElseIf Not Char.IsControl(key.KeyChar) Then
+                        pass &= key.KeyChar
+                        System.Console.Write("*")
+                    End If
+                Loop
+                System.Console.WriteLine()
+
+                Say("HOME DIR: ", 2, 6, ConsoleColor.Cyan)
+                Dim hdir = System.Console.ReadLine().Trim()
+
+                UserManager.AddUser(uname, pass, hdir)
+                Say("User added successfully. Press any key...", 2, 8, ConsoleColor.Green)
+                System.Console.ReadKey()
+            ElseIf cmd.StartsWith("DELETE") Then
+                Dim parts = cmd.Split(" "c, StringSplitOptions.RemoveEmptyEntries)
+                If parts.Length = 2 Then
+                    Dim id = Val(parts(1))
+                    If id > 0 AndAlso id <= users.Count Then
+                        UserManager.DeleteUser(users(id - 1).Username)
+                    End If
+                End If
+            End If
+        Loop
     End Sub
 End Module

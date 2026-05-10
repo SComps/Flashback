@@ -21,6 +21,9 @@
                     <RadioButton x:Name="btnNavSecurity" Click="Nav_Click" GroupName="nav" Margin="0,10,0,0">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBlock Text="Security" VerticalAlignment="Center"/></StackPanel>
                     </RadioButton>
+                    <RadioButton x:Name="btnNavUsers" Click="Nav_Click" GroupName="nav" Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBlock Text="Web Users" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
                     <Separator Margin="0,20"/>
                     <Button Click="ShowHelp_Click" Background="Transparent" BorderThickness="0" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBlock Text="Help &amp; Docs" VerticalAlignment="Center"/></StackPanel>
@@ -60,6 +63,25 @@
                 <StackPanel><TextBlock Text="Security" FontSize="28" FontWeight="SemiBold"/><Border BorderThickness="1" BorderBrush="#33000000" Padding="20" Margin="0,20,0,0">
                     <StackPanel><TextBlock Text="System Password"/><PasswordBox x:Name="pbSysPw" Margin="0,5,0,10"/><Button Content="Update" HorizontalAlignment="Left" Padding="15,5"/></StackPanel>
                 </Border></StackPanel>
+            </Grid>
+
+            <Grid x:Name="viewUsers" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid Margin="0,0,0,30">
+                    <StackPanel><TextBlock Text="Web Access Users" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Authentication for Spool View" Foreground="#666666"/></StackPanel>
+                    <Button Click="AddUser_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="15,8" Content="Add Web User"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1"><ItemsControl x:Name="UserList">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                        <Border BorderThickness="1" BorderBrush="#33000000" CornerRadius="8" Margin="0,0,0,10" Padding="15" Background="White">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Border Width="40" Height="40" CornerRadius="20" Background="#F0F0F0"><TextBlock Text="" FontFamily="Segoe MDL2 Assets" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#0078D4"/></Border>
+                                <StackPanel Grid.Column="1" Margin="15,0"><TextBlock Text="{Binding Username}" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="{Binding HomeFolder}" FontSize="11" Foreground="#666666"/></StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal"><Button Content="" Click="DeleteUser_Click" FontFamily="Segoe MDL2 Assets" Background="Transparent" BorderThickness="0" Foreground="Red"/></StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl></ScrollViewer>
             </Grid>
         </Grid>
 

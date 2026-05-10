@@ -25,6 +25,14 @@ Module Program
                     Environment.Exit(0)
                 Case "-d", "--daemon"
                     isDaemon = True
+                Case "-w", "--web"
+                    If i + 1 < args.Length Then
+                        Dim port As Integer
+                        If Integer.TryParse(args(i + 1), port) Then
+                            Environment.SetEnvironmentVariable("FLASHBACK_WEB_PORT", port.ToString())
+                            i += 1
+                        End If
+                    End If
                 Case Else
                     System.Console.WriteLine($"Unknown option: {args(i)}")
                     ShowHelp()
@@ -61,6 +69,10 @@ Module Program
 
         builder.Services.AddHostedService(Of Worker)()
 
+        If Not String.IsNullOrEmpty(Environment.GetEnvironmentVariable("FLASHBACK_WEB_PORT")) Then
+            builder.Services.AddHostedService(Of WebWorker)()
+        End If
+
         Dim engineHost = builder.Build()
         engineHost.Run()
     End Sub
@@ -72,6 +84,7 @@ Module Program
         Console.WriteLine("Options:")
         Console.WriteLine("  -h, --help            Show this help message")
         Console.WriteLine("  -d, --daemon          Run in background (Linux only)")
+        Console.WriteLine("  -w, --web <port>      Enable web server on specified port")
         Console.WriteLine()
     End Sub
 End Module

@@ -14,6 +14,7 @@
                 <NavigationViewItem x:Name="btnNavPrinters" Content="Printers &amp; Devices" Icon="Print" Tag="printers"/>
                 <NavigationViewItem x:Name="btnNavSettings" Content="Server Settings" Icon="Setting" Tag="settings"/>
                 <NavigationViewItem x:Name="btnNavSecurity" Content="Security" Icon="Permissions" Tag="security"/>
+                <NavigationViewItem x:Name="btnNavUsers" Content="Web Users" Icon="People" Tag="users"/>
             </NavigationView.MenuItems>
             <NavigationView.FooterMenuItems>
                 <NavigationViewItem x:Name="btnNavHelp" Content="Help &amp; Docs" Icon="Help" Tag="help"/>
@@ -89,6 +90,47 @@
                             </StackPanel>
                         </Border>
                     </StackPanel>
+                </Grid>
+
+                <Grid x:Name="viewUsers" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,24">
+                        <StackPanel>
+                            <TextBlock Text="Web Access Users" FontSize="28" FontWeight="SemiBold"/>
+                            <TextBlock Text="Authentication for Spool View" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <Button Click="AddUser_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{ThemeResource AccentButtonStyle}" Content="Add Web User"/>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1">
+                        <ItemsControl x:Name="UserList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" CornerRadius="8" Margin="0,0,0,12" Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="40" Height="40" CornerRadius="20" Background="{ThemeResource SystemAccentColorLight3}">
+                                                <FontIcon Glyph="&#xE716;" FontSize="20" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="16,0">
+                                                <TextBlock Text="{Binding Username}" FontSize="16" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding HomeFolder}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Click="DeleteUser_Click" Content="&#xE74D;" FontFamily="{ThemeResource SymbolThemeFontFamily}" Background="Transparent" BorderThickness="0" Foreground="Red"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Grid>
             </Grid>
         </NavigationView>
