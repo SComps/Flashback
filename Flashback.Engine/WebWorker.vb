@@ -91,7 +91,8 @@ Public Class WebWorker
                 
                 If Not String.IsNullOrEmpty(userFilter) Then
                     ' Check if this sub-user directory is a registered web user
-                    If UserManager.GetUsers().Any(Function(u) u.Username.Equals(userFilter, StringComparison.OrdinalIgnoreCase)) Then
+                    Dim domainUser = $"{printerFilter}\{userFilter}"
+                    If UserManager.GetUsers().Any(Function(u) u.Username.Equals(userFilter, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainUser, StringComparison.OrdinalIgnoreCase)) Then
                         requiresAuth = True
                     End If
                 End If
@@ -100,7 +101,8 @@ Public Class WebWorker
                 If url.StartsWith("/download/", StringComparison.OrdinalIgnoreCase) Then
                     Dim pathPart = WebUtility.UrlDecode(url.Substring(10))
                     Dim folderName = pathPart.Split("/"c)(0)
-                    If Not String.IsNullOrEmpty(folderName) AndAlso UserManager.GetUsers().Any(Function(u) u.Username.Equals(folderName, StringComparison.OrdinalIgnoreCase)) Then
+                    Dim domainFolder = $"{printerFilter}\{folderName}"
+                    If Not String.IsNullOrEmpty(folderName) AndAlso UserManager.GetUsers().Any(Function(u) u.Username.Equals(folderName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainFolder, StringComparison.OrdinalIgnoreCase)) Then
                         requiresAuth = True
                     End If
                 End If
@@ -111,13 +113,24 @@ Public Class WebWorker
                     Dim authHeader = context.Request.Headers("Authorization")
                     If Not String.IsNullOrEmpty(authHeader) AndAlso authHeader.StartsWith("Basic ") Then
                         Dim creds = Encoding.UTF8.GetString(Convert.FromBase64String(authHeader.Substring(6))).Split(":"c)
-                        If creds.Length = 2 Then
-                            user = UserManager.Authenticate(creds(0), creds(1))
+                        If creds.Length >= 2 Then
+                            Dim inputUser = creds(0)
+                            Dim inputPass = creds(1)
+                            
+                            ' Try exact match first
+                            user = UserManager.Authenticate(inputUser, inputPass)
+                            
+                            ' If failed, try prefixing with printer name
+                            If user Is Nothing AndAlso Not String.IsNullOrEmpty(printerFilter) AndAlso Not inputUser.Contains("\"c) Then
+                                Dim prefixedUser = $"{printerFilter}\{inputUser}"
+                                user = UserManager.Authenticate(prefixedUser, inputPass)
+                            End If
                             
                             ' The logged in user must match the directory they are trying to access
                             Dim targetFolder = If(Not String.IsNullOrEmpty(userFilter), userFilter, If(url.StartsWith("/download/"), url.Substring(10).Split("/"c)(0), ""))
+                            Dim expectedDomainTarget = $"{printerFilter}\{targetFolder}"
                             
-                            If user IsNot Nothing AndAlso Not user.Username.Equals(targetFolder, StringComparison.OrdinalIgnoreCase) Then
+                            If user IsNot Nothing AndAlso Not user.Username.Equals(targetFolder, StringComparison.OrdinalIgnoreCase) AndAlso Not user.Username.Equals(expectedDomainTarget, StringComparison.OrdinalIgnoreCase) Then
                                 _logger.LogWarning("Auth Failure: User {User} attempted to access folder {Folder}", user.Username, targetFolder)
                                 user = Nothing
                             End If
@@ -267,7 +280,8 @@ Public Class WebWorker
                 For Each subDir In subDirs
                     Dim dirName = Path.GetFileName(subDir)
                     ' Check if this directory corresponds to a protected web user
-                    Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase))
+                    Dim domainDirName = $"{printerFilter}\{dirName}"
+                    Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainDirName, StringComparison.OrdinalIgnoreCase))
                     
                     sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-card"">")
                     If isProtected Then
@@ -296,7 +310,7 @@ Public Class WebWorker
                         For Each fi In files
                             ' Path for download is user/filename.pdf
                             Dim relPath = userFilter & "/" & fi.Name
-                            Dim url = "/download/" & WebUtility.UrlEncode(relPath)
+                            Dim url = $"/download/{WebUtility.UrlEncode(relPath)}?printer={WebUtility.UrlEncode(printerFilter)}"
                             Dim sizeMb = fi.Length / (1024 * 1024)
                             
                             sb.AppendLine($"<a href=""{url}"" class=""file-card"" target=""_blank"">")

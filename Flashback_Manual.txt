@@ -1,0 +1,123 @@
+=============================================================================
+                          FLASHBACK SUITE
+             DETAILED CONFIGURATION & HOW-TO MANUAL
+=============================================================================
+
+This manual provides step-by-step instructions for installing, configuring, 
+and operating the Flashback print suite with legacy emulators.
+
+-----------------------------------------------------------------------------
+CHAPTER 1: HOW TO SET UP YOUR FIRST PRINTER
+-----------------------------------------------------------------------------
+Before legacy hosts can print, you must define a virtual printer in Flashback.
+
+1. Launch your preferred Configuration Utility:
+   - Flashback.Config.WPF (Windows Desktop UI)
+   - Flashback.Config.WinUI (Modern Windows 11 UI)
+   - Flashback.Config.Console (Text-based CLI, ideal for Linux/SSH)
+
+2. Add a New Device:
+   - Device Name: Enter a unique identifier (e.g., HR_Printer).
+   - Listen Port: Enter the TCP port Flashback will listen on (e.g., 9000).
+   - OS Type: Select the legacy operating system that will generate the 
+     print jobs (e.g., MVS, MPE, VMS). This is critical, as Flashback 
+     uses this to translate EBCDIC/ASCII and interpret legacy carriage controls.
+     (Note: Use "RAW" for standard JetDirect/Port 9100 printing).
+   - Output Directory: Select where the generated PDFs will be stored 
+     (e.g., C:\Spools).
+   - Shading/Orientation: Set visual preferences for the final PDF.
+
+3. Save the configuration. If the Flashback Engine service is currently 
+   running, it will automatically detect the new printer and begin 
+   listening on the configured port.
+
+-----------------------------------------------------------------------------
+CHAPTER 2: CONFIGURING HOST EMULATORS TO PRINT TO FLASHBACK
+-----------------------------------------------------------------------------
+Once Flashback is listening on a port (e.g., 9000), you must configure your 
+legacy emulator to forward print data to that local port.
+
+[A] Hercules (MVS, z/OS, VM)
+In your Hercules configuration file (hercules.cnf), define a 1403 or 3211 
+printer device and point it to the Flashback IP and Port:
+    000E 1403 127.0.0.1:9000
+    000F 1403 127.0.0.1:9001
+When MVS starts JES2 and routes output to 000E, Hercules will stream the 
+raw EBCDIC data directly to Flashback.
+
+[B] SimH (PDP-11, VAX, MicroVAX)
+For DEC-style systems, attach a DZ11/DZV11 terminal multiplexer line 
+to the Flashback port:
+    SET DZ LINES=8
+    ATTACH DZ LINE=0,CONNECT=127.0.0.1:9000
+When VMS prints to the corresponding terminal device (e.g., TTA0:), the 
+output is routed to Flashback over the network.
+
+-----------------------------------------------------------------------------
+CHAPTER 3: HOW TO TEST YOUR PRINTER WITHOUT A HOST
+-----------------------------------------------------------------------------
+Before bringing your legacy host online, you can validate your setup using 
+the Flashback.TestTool:
+
+1. Ensure the Flashback Engine service is running.
+2. Launch Flashback.TestTool.
+3. Target the port you configured in Chapter 1 (e.g., 127.0.0.1:9000).
+4. Send a test document stream.
+5. Check your configured Output Directory. You should see a newly generated 
+   subfolder containing a rendered PDF file.
+
+-----------------------------------------------------------------------------
+CHAPTER 4: SETTING UP WEB SPOOL VIEWER SECURITY (PER-PRINTER)
+-----------------------------------------------------------------------------
+The Flashback Engine includes a built-in Web Spool Viewer (default: port 8080).
+By default, the dashboard is public. To secure a specific printer (e.g., 
+HR_Printer) so only authorized users can view its PDFs:
+
+1. Open a Flashback Configuration Utility.
+2. Navigate to "User Management".
+3. Add a New User.
+4. For the Username, you MUST prefix the exact printer name followed by a 
+   backslash before the username.
+   Format:  PrinterName\Username
+   Example: HR_Printer\JaneDoe
+5. Enter a secure password and Save.
+
+Now, when Jane visits the web dashboard (http://localhost:8080) and clicks 
+on "HR_Printer", she will be prompted for a password. 
+
+*User Experience Tip: She only needs to type "JaneDoe" and her password into 
+the browser prompt; the web engine will automatically detect she is accessing 
+the HR_Printer and validate her against the "HR_Printer\JaneDoe" account.
+
+-----------------------------------------------------------------------------
+CHAPTER 5: REMOTE ADMINISTRATION VIA 3270
+-----------------------------------------------------------------------------
+Mainframe operators can configure the Flashback system without leaving their 
+TN3270 terminal emulators.
+
+1. Connect your TN3270 emulator to the Flashback server on port 3270.
+   (e.g., connect to 127.0.0.1:3270).
+2. The interactive 3270 Configuration Screen will appear.
+3. You can Add, Edit, or Delete printers and users using standard PF keys.
+   (Note: You can configure Per-Printer security here by simply typing 
+   "PrinterName\Username" into the User ID field).
+   
+* Security Tip: Ensure the 3270 server is protected by setting a System 
+  Password (SYSPW) to prevent unauthorized network users from altering 
+  your printer configurations.
+
+=============================================================================
+TROUBLESHOOTING
+=============================================================================
+- "Garbage Text in PDF": Ensure the Flashback OS Type exactly matches 
+  your host OS. Flashback relies on this to translate EBCDIC to ASCII 
+  and interpret legacy carriage controls.
+- "Connection Refused": Verify the Flashback Engine is running and that 
+  your Windows/Linux firewall allows inbound TCP connections on the 
+  configured printer ports.
+- "Directory Not Found Error": Ensure Flashback has write permissions to 
+  your configured Output Directory.
+
+=============================================================================
+End of Manual
+=============================================================================

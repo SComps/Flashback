@@ -7,11 +7,18 @@ Public Class SecurityUtils
     Public Shared Function SanitizeFilename(input As String) As String
         If String.IsNullOrWhiteSpace(input) Then Return "Unknown"
         
-        Dim filename = Path.GetFileName(input)
         Dim invalidChars = Path.GetInvalidFileNameChars().Concat({Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar}).Distinct().ToArray()
-        Dim clean = New String(filename.Where(Function(c) Not invalidChars.Contains(c)).ToArray())
+        Dim cleanBuilder As New StringBuilder(input.Length)
         
-        clean = clean.Trim("."c)
+        For Each c As Char In input
+            If invalidChars.Contains(c) Then
+                cleanBuilder.Append("_"c)
+            Else
+                cleanBuilder.Append(c)
+            End If
+        Next
+        
+        Dim clean = cleanBuilder.ToString().Trim("."c)
         If String.IsNullOrWhiteSpace(clean) Then Return "Unknown"
         Return clean
     End Function

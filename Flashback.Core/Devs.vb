@@ -451,7 +451,8 @@ Public Class Devs
             Return
         End Try
 
-        Dim pdfName As String = Path.Combine(userDir, $"{DevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
+        Dim safeDevName = SecurityUtils.SanitizeFilename(DevName)
+        Dim pdfName As String = Path.Combine(userDir, $"{safeDevName}-{UserID}-{JobID}-{JobName}_{JobNumber}.pdf")
 
         Dim renderer As New RenderPDF()
         renderer.Logger = Logger
