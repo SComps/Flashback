@@ -60,7 +60,7 @@ Public Class Mvs38jProfile
     Public ReadOnly Property FirstLine As Double = 45 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 5 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -94,7 +94,7 @@ Public Class ZosProfile
     Public ReadOnly Property FirstLine As Double = 46 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 5 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -128,7 +128,7 @@ Public Class VmsProfile
     Public ReadOnly Property FirstLine As Double = 25 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 3 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -163,7 +163,7 @@ Public Class MpeProfile
     Public ReadOnly Property FirstLine As Double = 25 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 3 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -211,7 +211,7 @@ Public Class RstsProfile
     Public ReadOnly Property FirstLine As Double = 27 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 0 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -246,7 +246,7 @@ Public Class Vm370Profile
     Public ReadOnly Property FirstLine As Double = 7 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 2 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -278,7 +278,7 @@ Public Class Nos278Profile
     Public ReadOnly Property FirstLine As Double = 25 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 3 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -320,7 +320,7 @@ Public Class VmspProfile
     Public ReadOnly Property FirstLine As Double = 7 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 0 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Dim info As New JobInformation()
@@ -352,7 +352,7 @@ Public Class TandyXenixProfile
     Public ReadOnly Property FirstLine As Double = 25 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 0 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         Console.WriteLine($"[{devName}] OS Type is TANDY XENIX")
@@ -373,7 +373,7 @@ Public Class GenericProfile
     Public ReadOnly Property FirstLine As Double = 10 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 0 Implements IOsProfile.StartLine
-    Public ReadOnly Property DefaultFont As String = "Chainprinter" Implements IOsProfile.DefaultFont
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
 
     Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
         ' Generic jobs don't usually have parsable headers in the stream

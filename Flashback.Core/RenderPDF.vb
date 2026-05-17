@@ -56,8 +56,8 @@ Public Class RenderPDF
     Public Property DevName As String = "Printer"
     Public Property TargetFileName As String = "out.pdf"
     Public Property Shading As ShadingColor = ShadingColor.Green
-    Public Property TypeFaceName As String = "Chainprinter"
-    Public Property CustomFontPath As String = "ibmplexmono.ttf"
+    Public Property TypeFaceName As String = "OCR-B"
+    Public Property CustomFontPath As String = "OCR-B.ttf"
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Public Function CreatePDF(title As String, outList As List(Of String)) As String
@@ -85,7 +85,7 @@ Public Class RenderPDF
                 firstline = profile.FirstLine
                 linesPerPage = profile.LinesPerPage
                 StartLine = profile.StartLine
-                If TypeFaceName = "Chainprinter" AndAlso profile.DefaultFont <> "" Then
+                If TypeFaceName = "OCR-B" AndAlso profile.DefaultFont <> "" Then
                     TypeFaceName = profile.DefaultFont
                 End If
             End If
