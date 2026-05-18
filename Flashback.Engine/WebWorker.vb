@@ -328,9 +328,8 @@ Public Class WebWorker
                             Dim sizeMb = fi.Length / (1024 * 1024)
                             
                             sb.AppendLine($"<a href=""{downloadUrl}"" class=""file-card"" target=""_blank"">")
-                            sb.AppendLine("<div class=""thumbnail-container"">")
-                            sb.AppendLine($"<object class=""pdf-preview"" data=""{downloadUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0"" type=""application/pdf""></object>")
-                            sb.AppendLine($"<div class=""file-icon-overlay"">{WebAssets.FileIconSvg}</div>")
+                            sb.AppendLine("<div class=""file-icon-container"" style=""text-align: center; padding: 20px 0;"">")
+                            sb.AppendLine(WebAssets.FileIconSvg)
                             sb.AppendLine("</div>")
                             sb.AppendLine($"<div class=""file-name"" title=""{WebUtility.HtmlEncode(fi.Name)}"">{WebUtility.HtmlEncode(fi.Name)}</div>")
                             sb.AppendLine($"<div class=""file-meta"">{sizeMb:F2} MB • {fi.LastWriteTime:yyyy-MM-dd HH:mm}</div>")
