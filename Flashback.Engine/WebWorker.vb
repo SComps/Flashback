@@ -84,14 +84,14 @@ Public Class WebWorker
                 Dim userFilter = context.Request.QueryString("subuser")
                 Dim fileParam = context.Request.QueryString("file")
                 
-                Dim isDirectDownload = parts.Length >= 4 AndAlso parts(0).Equals("download", StringComparison.OrdinalIgnoreCase)
+                Dim isDirectDownload = url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) AndAlso parts.Length >= 3
                 
                 If isDirectDownload Then
                     If String.IsNullOrEmpty(printerFilter) Then
-                        printerFilter = WebUtility.UrlDecode(parts(1))
+                        printerFilter = WebUtility.UrlDecode(parts(0))
                     End If
                     If String.IsNullOrEmpty(userFilter) Then
-                        userFilter = WebUtility.UrlDecode(parts(2))
+                        userFilter = WebUtility.UrlDecode(parts(1))
                     End If
                 End If
                 
@@ -158,9 +158,9 @@ Public Class WebWorker
                 If url = "/" OrElse url = "/index.html" Then
                     ServeDashboard(context, user, printerFilter, userFilter)
                 ElseIf isDirectDownload Then
-                    Dim printerName = WebUtility.UrlDecode(parts(1))
-                    Dim subFolder = WebUtility.UrlDecode(parts(2))
-                    Dim fileName = WebUtility.UrlDecode(String.Join("/", parts.Skip(3)))
+                    Dim printerName = WebUtility.UrlDecode(parts(0))
+                    Dim subFolder = WebUtility.UrlDecode(parts(1))
+                    Dim fileName = WebUtility.UrlDecode(String.Join("/", parts.Skip(2)))
                     
                     Dim allowedDevices = GetAllowedDevices(Nothing)
                     If allowedDevices.ContainsKey(printerName) Then
@@ -172,8 +172,6 @@ Public Class WebWorker
                         context.Response.StatusCode = 404
                         context.Response.Close()
                     End If
-                ElseIf url = "/download" AndAlso Not String.IsNullOrEmpty(fileParam) Then
-                    ServeFile(context, fileParam)
                 Else
                     context.Response.StatusCode = 404
                     context.Response.Close()
@@ -326,7 +324,7 @@ Public Class WebWorker
                         sb.AppendLine("<div class=""file-list"">")
                         For Each fi In files
                             ' Generate a clean, direct, relative URL that won't trip up nginx/WAF
-                            Dim downloadUrl = $"download/{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
+                            Dim downloadUrl = $"{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
                             Dim sizeMb = fi.Length / (1024 * 1024)
                             
                             sb.AppendLine($"<a href=""{downloadUrl}"" class=""file-card"" target=""_blank"">")
