@@ -7,14 +7,16 @@ Public Class SecurityUtils
     Public Shared Function SanitizeFilename(input As String) As String
         If String.IsNullOrWhiteSpace(input) Then Return "Unknown"
         
-        Dim invalidChars = Path.GetInvalidFileNameChars().Concat({Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar}).Distinct().ToArray()
+        ' Whitelist: only allow characters that are safe in both filenames AND URLs.
+        ' This prevents issues with #, %, &, +, = etc. that are valid in filenames
+        ' but cause problems when served through web/nginx.
         Dim cleanBuilder As New StringBuilder(input.Length)
         
         For Each c As Char In input
-            If invalidChars.Contains(c) Then
-                cleanBuilder.Append("_"c)
-            Else
+            If Char.IsLetterOrDigit(c) OrElse c = "-"c OrElse c = "_"c OrElse c = "."c Then
                 cleanBuilder.Append(c)
+            Else
+                cleanBuilder.Append("_"c)
             End If
         Next
         

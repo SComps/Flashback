@@ -80,6 +80,7 @@ Public Class WebWorker
                 Dim url = context.Request.Url.LocalPath
                 Dim printerFilter = context.Request.QueryString("printer")
                 Dim userFilter = context.Request.QueryString("subuser")
+                Dim fileParam = context.Request.QueryString("file")
                 
                 ' Authentication Logic:
                 ' Level 1 (All Printers) -> Public
@@ -89,20 +90,16 @@ Public Class WebWorker
                 Dim user As UserInfo = Nothing
                 Dim requiresAuth = False
                 
-                If Not String.IsNullOrEmpty(userFilter) Then
-                    ' Check if this sub-user directory is a registered web user
-                    Dim domainUser = $"{printerFilter}\{userFilter}"
-                    If UserManager.GetUsers().Any(Function(u) u.Username.Equals(userFilter, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainUser, StringComparison.OrdinalIgnoreCase)) Then
-                        requiresAuth = True
-                    End If
+                ' Determine the user-folder being accessed (from subuser param or from the file path)
+                Dim targetFolder As String = userFilter
+                If String.IsNullOrEmpty(targetFolder) AndAlso Not String.IsNullOrEmpty(fileParam) Then
+                    ' The parent directory of the file IS the user folder
+                    targetFolder = Path.GetFileName(Path.GetDirectoryName(fileParam))
                 End If
 
-                ' Also require auth for direct downloads if they belong to a protected sub-user
-                If url.StartsWith("/download/", StringComparison.OrdinalIgnoreCase) Then
-                    Dim pathPart = WebUtility.UrlDecode(url.Substring(10))
-                    Dim folderName = pathPart.Split("/"c)(0)
-                    Dim domainFolder = $"{printerFilter}\{folderName}"
-                    If Not String.IsNullOrEmpty(folderName) AndAlso UserManager.GetUsers().Any(Function(u) u.Username.Equals(folderName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainFolder, StringComparison.OrdinalIgnoreCase)) Then
+                If Not String.IsNullOrEmpty(targetFolder) Then
+                    Dim domainUser = $"{printerFilter}\{targetFolder}"
+                    If UserManager.GetUsers().Any(Function(u) u.Username.Equals(targetFolder, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainUser, StringComparison.OrdinalIgnoreCase)) Then
                         requiresAuth = True
                     End If
                 End If
@@ -127,7 +124,6 @@ Public Class WebWorker
                             End If
                             
                             ' The logged in user must match the directory they are trying to access
-                            Dim targetFolder = If(Not String.IsNullOrEmpty(userFilter), userFilter, If(url.StartsWith("/download/"), url.Substring(10).Split("/"c)(0), ""))
                             Dim expectedDomainTarget = $"{printerFilter}\{targetFolder}"
                             
                             If user IsNot Nothing AndAlso Not user.Username.Equals(targetFolder, StringComparison.OrdinalIgnoreCase) AndAlso Not user.Username.Equals(expectedDomainTarget, StringComparison.OrdinalIgnoreCase) Then
@@ -148,8 +144,8 @@ Public Class WebWorker
 
                 If url = "/" OrElse url = "/index.html" Then
                     ServeDashboard(context, user, printerFilter, userFilter)
-                ElseIf url.StartsWith("/download/") Then
-                    ServeFile(context, user, url.Substring(10))
+                ElseIf url = "/download" AndAlso Not String.IsNullOrEmpty(fileParam) Then
+                    ServeFile(context, fileParam)
                 Else
                     context.Response.StatusCode = 404
                     context.Response.Close()
@@ -174,36 +170,29 @@ Public Class WebWorker
         context.Response.Close()
     End Sub
 
-    Private Sub ServeFile(context As HttpListenerContext, user As UserInfo, encodedPath As String)
+    Private Sub ServeFile(context As HttpListenerContext, filePath As String)
         Try
-            Dim relPath = WebUtility.UrlDecode(encodedPath).Replace("/", Path.DirectorySeparatorChar)
+            filePath = Path.GetFullPath(filePath)
             
-            ' Verify the file is within an allowed directory
-            Dim allowedDevices = GetAllowedDevices(user)
-            Dim targetFile As String = Nothing
-            
-            For Each kvp In allowedDevices
-                Dim root = Path.GetFullPath(kvp.Value).TrimEnd(Path.DirectorySeparatorChar)
-                Dim testPath = Path.GetFullPath(Path.Combine(root, relPath))
-                
-                ' Ensure the file exists AND it is actually inside the root (No .. escapes)
-                If testPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) AndAlso File.Exists(testPath) Then
-                    targetFile = testPath
-                    Exit For
-                End If
-            Next
+            ' Security: verify the file is within an allowed device output directory
+            Dim allowedDevices = GetAllowedDevices(Nothing)
+            Dim isAllowed = allowedDevices.Values.Any(Function(root)
+                Dim fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar)
+                Return filePath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)
+            End Function)
 
-            If targetFile IsNot Nothing Then
-                Dim buffer = File.ReadAllBytes(targetFile)
+            If isAllowed AndAlso File.Exists(filePath) Then
+                Dim buffer = File.ReadAllBytes(filePath)
                 context.Response.ContentType = "application/pdf"
                 context.Response.ContentLength64 = buffer.Length
-                context.Response.AddHeader("Content-Disposition", $"inline; filename=""{Path.GetFileName(targetFile)}""")
+                context.Response.AddHeader("Content-Disposition", $"inline; filename=""{Path.GetFileName(filePath)}""")
                 context.Response.OutputStream.Write(buffer, 0, buffer.Length)
             Else
+                _logger.LogWarning("Download rejected - path not allowed or not found: {Path}", filePath)
                 context.Response.StatusCode = 404
             End If
         Catch ex As Exception
-            _logger.LogError("Error serving file {Path}: {Error}", encodedPath, ex.Message)
+            _logger.LogError("Error serving file: {Error}", ex.Message)
             context.Response.StatusCode = 500
         End Try
         context.Response.Close()
@@ -308,14 +297,13 @@ Public Class WebWorker
                     If files.Any() Then
                         sb.AppendLine("<div class=""file-list"">")
                         For Each fi In files
-                            ' Path for download is user/filename.pdf
-                            Dim relPath = userFilter & "/" & fi.Name
-                            Dim url = $"/download/{WebUtility.UrlEncode(relPath)}?printer={WebUtility.UrlEncode(printerFilter)}"
+                            ' Just pass the actual file path as a query parameter
+                            Dim downloadUrl = $"/download?file={WebUtility.UrlEncode(fi.FullName)}&printer={WebUtility.UrlEncode(printerFilter)}"
                             Dim sizeMb = fi.Length / (1024 * 1024)
                             
-                            sb.AppendLine($"<a href=""{url}"" class=""file-card"" target=""_blank"">")
+                            sb.AppendLine($"<a href=""{downloadUrl}"" class=""file-card"" target=""_blank"">")
                             sb.AppendLine("<div class=""thumbnail-container"">")
-                            sb.AppendLine($"<object class=""pdf-preview"" data=""{url}#page=1&toolbar=0&navpanes=0&scrollbar=0"" type=""application/pdf""></object>")
+                            sb.AppendLine($"<object class=""pdf-preview"" data=""{downloadUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0"" type=""application/pdf""></object>")
                             sb.AppendLine($"<div class=""file-icon-overlay"">{WebAssets.FileIconSvg}</div>")
                             sb.AppendLine("</div>")
                             sb.AppendLine($"<div class=""file-name"" title=""{WebUtility.HtmlEncode(fi.Name)}"">{WebUtility.HtmlEncode(fi.Name)}</div>")
