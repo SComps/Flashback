@@ -72,6 +72,53 @@
                         <ComboBoxItem Content="Standard White"/>
                     </ComboBox>
                 </StackPanel>
+            <TabItem Header="Email">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <CheckBox x:Name="chkEmailEnabled" Content="Enable Email Delivery" Margin="0,10,0,15"/>
+                        
+                        <TextBlock Text="RECIPIENTS (comma-separated)" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <TextBox x:Name="txtEmailRecipients" Padding="8" TextWrapping="Wrap"/>
+                        
+                        <TextBlock Text="SMTP Configuration" FontWeight="Bold" Margin="0,20,0,10" FontSize="14"/>
+                        
+                        <TextBlock Text="SMTP SERVER" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <TextBox x:Name="txtSmtpServer" Padding="8"/>
+                        
+                        <TextBlock Text="SMTP PORT" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <TextBox x:Name="txtSmtpPort" Padding="8" Text="587"/>
+                        
+                        <TextBlock Text="SMTP USERNAME" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <TextBox x:Name="txtSmtpUsername" Padding="8"/>
+                        
+                        <TextBlock Text="SMTP PASSWORD" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <PasswordBox x:Name="txtSmtpPassword" Padding="8"/>
+                        
+                        <CheckBox x:Name="chkSmtpUseTLS" Content="Use TLS/SSL Encryption" Margin="0,15,0,0" IsChecked="True"/>
+                        
+                        <TextBlock Text="Email Template" FontWeight="Bold" Margin="0,20,0,10" FontSize="14"/>
+                        
+                        <TextBlock Text="FROM ADDRESS" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <TextBox x:Name="txtEmailFrom" Padding="8" Text="flashback@localhost"/>
+                        
+                        <TextBlock Text="FROM NAME" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <TextBox x:Name="txtEmailFromName" Padding="8" Text="Flashback Print Server"/>
+                        
+                        <TextBlock Text="SUBJECT TEMPLATE" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <TextBox x:Name="txtEmailSubject" Padding="8" Text="Print Job: {JobName} from {DeviceName}"/>
+                        
+                        <TextBlock Text="BODY TEMPLATE" FontWeight="Bold" Margin="0,15,0,5"/>
+                        <TextBox x:Name="txtEmailBody" Padding="8" TextWrapping="Wrap" AcceptsReturn="True" Height="80"/>
+                        
+                        <TextBlock Text="Available variables: {JobName}, {DeviceName}, {UserName}, {PageCount}, {DateTime}, {Date}, {Time}" 
+                                   FontSize="11" 
+                                   Foreground="Gray" 
+                                   TextWrapping="Wrap"
+                                   Margin="0,10,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             </TabItem>
         </TabControl>
 
