@@ -81,6 +81,20 @@ Public Class Config3270Worker
                         If p.Length >= 13 Then
                             d.Enabled = (p(12) = "True")
                         End If
+                        
+                        ' Load email configuration (backward compatible - fields 13-23)
+                        If p.Length >= 14 Then d.EmailEnabled = (p(13) = "True")
+                        If p.Length >= 15 Then d.EmailRecipients = p(14)
+                        If p.Length >= 16 Then d.SmtpServer = p(15)
+                        If p.Length >= 17 Then d.SmtpPort = Val(p(16))
+                        If p.Length >= 18 Then d.SmtpUsername = p(17)
+                        If p.Length >= 19 Then d.SmtpPassword = p(18)
+                        If p.Length >= 20 Then d.SmtpUseTLS = (p(19) = "True")
+                        If p.Length >= 21 Then d.EmailFromAddress = p(20)
+                        If p.Length >= 22 Then d.EmailFromName = p(21)
+                        If p.Length >= 23 Then d.EmailSubject = p(22)
+                        If p.Length >= 24 Then d.EmailBody = p(23)
+                        
                         _devList.Add(d)
                     End If
                 End While
