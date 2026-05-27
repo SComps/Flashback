@@ -157,6 +157,15 @@ Public Class WebWorker
 
                 If url = "/" OrElse url = "/index.html" Then
                     ServeDashboard(context, user, printerFilter, userFilter)
+                ElseIf url = "/email" Then
+                    If context.Request.HttpMethod = "GET" Then
+                        ServeEmailForm(context, printerFilter, userFilter, fileParam)
+                    ElseIf context.Request.HttpMethod = "POST" Then
+                        HandleEmailSubmit(context, printerFilter, userFilter, fileParam)
+                    Else
+                        context.Response.StatusCode = 405
+                        context.Response.Close()
+                    End If
                 ElseIf isDirectDownload Then
                     Dim printerName = WebUtility.UrlDecode(parts(0))
                     Dim subFolder = WebUtility.UrlDecode(parts(1))
@@ -256,14 +265,18 @@ Public Class WebWorker
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
         sb.AppendLine("<header><div class=""container"">")
         
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
+        
         If Not String.IsNullOrEmpty(userFilter) Then
-            sb.AppendLine($"<h1><a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" style=""text-decoration:none; color:inherit;"">📂</a> {WebUtility.HtmlEncode(userFilter)}</h1>")
+            sb.AppendLine($"<h1>FLASHBACK SPOOL MANAGEMENT - USER: {WebUtility.HtmlEncode(userFilter).ToUpper()}</h1>")
         ElseIf Not String.IsNullOrEmpty(printerFilter) Then
-            sb.AppendLine($"<h1><a href=""/"" style=""text-decoration:none; color:inherit;"">🖨️</a> {WebUtility.HtmlEncode(printerFilter)}</h1>")
+            sb.AppendLine($"<h1>FLASHBACK SPOOL MANAGEMENT - PRINTER: {WebUtility.HtmlEncode(printerFilter).ToUpper()}</h1>")
         Else
-            sb.AppendLine("<h1>🖨️ Flashback Spool View</h1>")
+            sb.AppendLine("<h1>FLASHBACK SPOOL MANAGEMENT SYSTEM</h1>")
         End If
         
+        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  USER: {If(user IsNot Nothing, user.Username.ToUpper(), "GUEST")}  TERMINAL: WEB</div>")
         sb.AppendLine("</div></header>")
         sb.AppendLine("<main class=""container"">")
 
@@ -272,13 +285,12 @@ Public Class WebWorker
         If String.IsNullOrEmpty(printerFilter) Then
             ' Level 1: List Printers (Public)
             sb.AppendLine("<div class=""section"">")
-            sb.AppendLine("<h2 class=""section-title"">Select a Printer</h2>")
+            sb.AppendLine("<h2 class=""section-title"">Available Printers</h2>")
             sb.AppendLine("<div class=""file-list"">")
             For Each kvp In allowedDevices
-                sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""file-card"">")
-                sb.AppendLine("<div style=""font-size: 32px; margin-bottom: 10px;"">🖨️</div>")
+                sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""file-card printer-icon"">")
                 sb.AppendLine($"<div class=""file-name"">{WebUtility.HtmlEncode(kvp.Key)}</div>")
-                sb.AppendLine("<div class=""file-meta"">Browse user folders</div>")
+                sb.AppendLine("<div class=""file-meta"">READY | ONLINE</div>")
                 sb.AppendLine("</a>")
             Next
             sb.AppendLine("</div></div>")
@@ -325,15 +337,16 @@ Public Class WebWorker
                         For Each fi In files
                             ' Generate a clean, direct, relative URL that won't trip up nginx/WAF
                             Dim downloadUrl = $"{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
+                            Dim emailUrl = $"/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fi.Name)}"
                             Dim sizeMb = fi.Length / (1024 * 1024)
                             
-                            sb.AppendLine($"<a href=""{downloadUrl}"" class=""file-card"" target=""_blank"">")
-                            sb.AppendLine("<div class=""file-icon-container"" style=""text-align: center; padding: 20px 0;"">")
-                            sb.AppendLine(WebAssets.FileIconSvg)
-                            sb.AppendLine("</div>")
-                            sb.AppendLine($"<div class=""file-name"" title=""{WebUtility.HtmlEncode(fi.Name)}"">{WebUtility.HtmlEncode(fi.Name)}</div>")
-                            sb.AppendLine($"<div class=""file-meta"">{sizeMb:F2} MB • {fi.LastWriteTime:yyyy-MM-dd HH:mm}</div>")
+                            sb.AppendLine($"<div class=""file-card"">")
+                            sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" style=""flex: 1;"">")
+                            sb.AppendLine($"<span class=""file-name"">{WebUtility.HtmlEncode(fi.Name).PadRight(40)}</span>")
+                            sb.AppendLine($"<span class=""file-meta"">{sizeMb:F2} MB  {fi.LastWriteTime:yyyy-MM-dd HH:mm}</span>")
                             sb.AppendLine("</a>")
+                            sb.AppendLine($"<a href=""{emailUrl}"" class=""email-link"" title=""Email this file"">[ EMAIL ]</a>")
+                            sb.AppendLine("</div>")
                         Next
                         sb.AppendLine("</div>")
                     Else
@@ -346,4 +359,202 @@ Public Class WebWorker
         sb.AppendLine("</main></body></html>")
         Return sb.ToString()
     End Function
+
+    Private Sub ServeEmailForm(context As HttpListenerContext, printerFilter As String, userFilter As String, fileName As String)
+        Dim sb As New StringBuilder()
+        sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
+        sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
+        sb.AppendLine("<title>Email PDF - Flashback</title>")
+        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<h1>EMAIL PDF DOCUMENT</h1>")
+        
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
+        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        sb.AppendLine("</div></header>")
+        sb.AppendLine("<main class=""container"">")
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine($"<h2 class=""section-title"">SEND FILE VIA EMAIL</h2>")
+        sb.AppendLine($"<p style=""color: #ffffff; margin-bottom: 20px;"">FILE: {WebUtility.HtmlEncode(fileName)}</p>")
+        
+        sb.AppendLine($"<form method=""POST"" action=""/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fileName)}"" style=""max-width: 600px;"">")
+        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
+        sb.AppendLine("<label for=""email"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">RECIPIENT EMAIL ADDRESS:</label>")
+        sb.AppendLine("<input type=""email"" id=""email"" name=""email"" required style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none;"" />")
+        sb.AppendLine("</div>")
+        
+        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
+        sb.AppendLine("<label for=""subject"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">SUBJECT (OPTIONAL):</label>")
+        sb.AppendLine($"<input type=""text"" id=""subject"" name=""subject"" value=""Flashback Spool: {WebUtility.HtmlEncode(fileName)}"" style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none;"" />")
+        sb.AppendLine("</div>")
+        
+        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
+        sb.AppendLine("<label for=""message"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">MESSAGE (OPTIONAL):</label>")
+        sb.AppendLine("<textarea id=""message"" name=""message"" rows=""4"" style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none; resize: vertical;"">Please find the attached PDF document from the Flashback spool system.</textarea>")
+        sb.AppendLine("</div>")
+        
+        sb.AppendLine("<div style=""display: flex; gap: 15px;"">")
+        sb.AppendLine("<button type=""submit"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; border: none; cursor: pointer; text-transform: uppercase;"">[ SEND EMAIL ]</button>")
+        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: transparent; color: #00ffff; border: 1px solid #00ffff; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ CANCEL ]</a>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("</form>")
+        sb.AppendLine("</div></main>")
+        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        sb.AppendLine("</body></html>")
+        
+        Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
+        context.Response.ContentLength64 = buffer.Length
+        context.Response.ContentType = "text/html; charset=utf-8"
+        context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
+
+    Private Sub HandleEmailSubmit(context As HttpListenerContext, printerFilter As String, userFilter As String, fileName As String)
+        Try
+            ' Read POST data
+            Dim body As String
+            Using reader As New StreamReader(context.Request.InputStream, context.Request.ContentEncoding)
+                body = reader.ReadToEnd()
+            End Using
+            
+            ' Parse form data
+            Dim formData = System.Web.HttpUtility.ParseQueryString(body)
+            Dim recipientEmail = formData("email")
+            Dim subject = formData("subject")
+            Dim message = formData("message")
+            
+            If String.IsNullOrWhiteSpace(recipientEmail) Then
+                ServeErrorPage(context, "Email address is required")
+                Return
+            End If
+            
+            ' Find the file
+            Dim allowedDevices = GetAllowedDevices(Nothing)
+            If Not allowedDevices.ContainsKey(printerFilter) Then
+                ServeErrorPage(context, "Printer not found")
+                Return
+            End If
+            
+            Dim root = allowedDevices(printerFilter)
+            Dim filePath = Path.Combine(root, userFilter, fileName)
+            
+            If Not File.Exists(filePath) Then
+                ServeErrorPage(context, "File not found")
+                Return
+            End If
+            
+            ' Load device configuration to get email settings
+            Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
+            Dim device As Devs = Nothing
+            
+            If File.Exists(configFile) Then
+                For Each line In File.ReadAllLines(configFile)
+                    Dim p = line.Split("||")
+                    If p.Length >= 10 AndAlso p(0).Equals(printerFilter, StringComparison.OrdinalIgnoreCase) Then
+                        device = New Devs With {
+                            .DevName = p(0),
+                            .SmtpServer = If(p.Length > 14, p(14), ""),
+                            .SmtpPort = If(p.Length > 15 AndAlso Integer.TryParse(p(15), Nothing), CInt(p(15)), 587),
+                            .SmtpUsername = If(p.Length > 16, p(16), ""),
+                            .SmtpPassword = If(p.Length > 17, p(17), ""),
+                            .SmtpUseTLS = If(p.Length > 18, p(18).Equals("true", StringComparison.OrdinalIgnoreCase), True),
+                            .EmailFromAddress = If(p.Length > 19, p(19), ""),
+                            .EmailFromName = If(p.Length > 20, p(20), "Flashback Spool System")
+                        }
+                        Exit For
+                    End If
+                Next
+            End If
+            
+            If device Is Nothing OrElse String.IsNullOrEmpty(device.SmtpServer) Then
+                ServeErrorPage(context, "Email is not configured for this printer. Please contact your administrator.")
+                Return
+            End If
+            
+            ' Send email
+            Dim emailConfig As New Flashback.Core.EmailConfig With {
+                .SmtpServer = device.SmtpServer,
+                .SmtpPort = device.SmtpPort,
+                .SmtpUsername = device.SmtpUsername,
+                .SmtpPassword = device.SmtpPassword,
+                .UseTLS = device.SmtpUseTLS,
+                .FromAddress = device.EmailFromAddress,
+                .FromName = device.EmailFromName,
+                .Subject = If(String.IsNullOrWhiteSpace(subject), $"Flashback Spool: {fileName}", subject),
+                .Body = If(String.IsNullOrWhiteSpace(message), "Please find the attached PDF document.", message)
+            }
+            emailConfig.SetRecipientsFromString(recipientEmail)
+            
+            Dim emailService As New Flashback.Core.EmailService(New Flashback.Core.FileLogger(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "printers.log")))
+            Dim success = emailService.SendPdfEmailAsync(emailConfig, filePath, fileName, device.DevName, userFilter, 0).Result
+            
+            If success Then
+                ServeSuccessPage(context, recipientEmail, printerFilter, userFilter)
+            Else
+                ServeErrorPage(context, "Failed to send email. Please check the logs for details.")
+            End If
+            
+        Catch ex As Exception
+            _logger.LogError("Error sending email: {Error}", ex.Message)
+            ServeErrorPage(context, $"Error: {ex.Message}")
+        End Try
+    End Sub
+
+    Private Sub ServeSuccessPage(context As HttpListenerContext, email As String, printerFilter As String, userFilter As String)
+        Dim sb As New StringBuilder()
+        sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
+        sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
+        sb.AppendLine("<title>Email Sent - Flashback</title>")
+        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<h1>EMAIL SENT SUCCESSFULLY</h1>")
+        
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
+        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        sb.AppendLine("</div></header>")
+        sb.AppendLine("<main class=""container"">")
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine($"<p style=""color: #00ffff; font-size: 1.1rem; margin-bottom: 20px;"">*** EMAIL DELIVERED TO: {WebUtility.HtmlEncode(email)} ***</p>")
+        sb.AppendLine($"<p style=""color: #ffffff; margin-bottom: 30px;"">The PDF document has been successfully sent to the specified email address.</p>")
+        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ RETURN TO FILE LIST ]</a>")
+        sb.AppendLine("</div></main>")
+        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        sb.AppendLine("</body></html>")
+        
+        Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
+        context.Response.ContentLength64 = buffer.Length
+        context.Response.ContentType = "text/html; charset=utf-8"
+        context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
+
+    Private Sub ServeErrorPage(context As HttpListenerContext, errorMessage As String)
+        Dim sb As New StringBuilder()
+        sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
+        sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
+        sb.AppendLine("<title>Error - Flashback</title>")
+        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<h1>ERROR</h1>")
+        
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
+        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        sb.AppendLine("</div></header>")
+        sb.AppendLine("<main class=""container"">")
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine($"<p style=""color: #ffff00; font-size: 1.1rem; margin-bottom: 20px;"">*** ERROR: {WebUtility.HtmlEncode(errorMessage)} ***</p>")
+        sb.AppendLine($"<a href=""javascript:history.back()"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ GO BACK ]</a>")
+        sb.AppendLine("</div></main>")
+        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        sb.AppendLine("</body></html>")
+        
+        Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
+        context.Response.ContentLength64 = buffer.Length
+        context.Response.ContentType = "text/html; charset=utf-8"
+        context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
 End Class
