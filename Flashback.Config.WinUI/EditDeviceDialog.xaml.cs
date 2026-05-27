@@ -48,6 +48,19 @@ namespace Flashback.Config.WinUI
             {
                 chkEnabled.IsChecked = true;
             }
+            
+            // Load email configuration (fields 13-23)
+            if (p != null && p.Length >= 14) chkEmailEnabled.IsChecked = p[13].ToLower() == "true";
+            if (p != null && p.Length >= 15) txtEmailRecipients.Text = p[14] ?? "";
+            if (p != null && p.Length >= 16) txtSmtpServer.Text = p[15] ?? "";
+            if (p != null && p.Length >= 17) { int port = 587; int.TryParse(p[16], out port); numSmtpPort.Value = port; }
+            if (p != null && p.Length >= 18) txtSmtpUsername.Text = p[17] ?? "";
+            if (p != null && p.Length >= 19) txtSmtpPassword.Password = p[18] ?? "";
+            if (p != null && p.Length >= 20) chkSmtpUseTLS.IsChecked = p[19].ToLower() == "true";
+            if (p != null && p.Length >= 21) txtEmailFrom.Text = p[20] ?? "flashback@localhost";
+            if (p != null && p.Length >= 22) txtEmailFromName.Text = p[21] ?? "Flashback Print Server";
+            if (p != null && p.Length >= 23) txtEmailSubject.Text = p[22] ?? "Print Job: {JobName} from {DeviceName}";
+            if (p != null && p.Length >= 24) txtEmailBody.Text = p[23] ?? "";
         }
 
         public void SaveFields()
@@ -58,6 +71,14 @@ namespace Flashback.Config.WinUI
             _item.Port = txtDest.Text.Contains(':') ? txtDest.Text.Split(':')[1] : "9100";
             
             var p = _item.FullRecord;
+            
+            // Ensure array is large enough for all fields including email
+            if (p.Length < 24)
+            {
+                Array.Resize(ref p, 24);
+                _item.FullRecord = p;
+            }
+            
             p[0] = txtName.Text;
             p[1] = txtDesc.Text;
             p[2] = cmbType.SelectedIndex == 0 ? "0" : "1";
@@ -68,13 +89,20 @@ namespace Flashback.Config.WinUI
             p[8] = cmbOrient.SelectedIndex.ToString();
             p[9] = txtOut.Text;
             p[10] = cmbShade.SelectedIndex.ToString();
-            
-            if (p.Length < 13)
-            {
-                Array.Resize(ref p, 13);
-                _item.FullRecord = p;
-            }
             p[12] = chkEnabled.IsChecked.ToString();
+            
+            // Save email configuration (fields 13-23)
+            p[13] = chkEmailEnabled.IsChecked.ToString();
+            p[14] = txtEmailRecipients.Text ?? "";
+            p[15] = txtSmtpServer.Text ?? "";
+            p[16] = ((int)numSmtpPort.Value).ToString();
+            p[17] = txtSmtpUsername.Text ?? "";
+            p[18] = txtSmtpPassword.Password ?? "";
+            p[19] = chkSmtpUseTLS.IsChecked.ToString();
+            p[20] = txtEmailFrom.Text ?? "flashback@localhost";
+            p[21] = txtEmailFromName.Text ?? "Flashback Print Server";
+            p[22] = txtEmailSubject.Text ?? "Print Job: {JobName} from {DeviceName}";
+            p[23] = txtEmailBody.Text ?? "";
         }
     }
 }
