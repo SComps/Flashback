@@ -51,8 +51,9 @@ Public Class SessionStateManager
         ' Debug: Log the key code received
         Console.WriteLine($"[DEBUG] Key received: 0x{e.AidKey:X2} in mode {_mode}")
         
-        ' Intercept PF1 for global help
-        If e.AidKey = &H61 Then ' PF1
+        ' Intercept PF1 for global help (correct key code is 0xF1, not 0x61)
+        If e.AidKey = &HF1 Then ' PF1
+            Console.WriteLine("[DEBUG] PF1 pressed - showing help")
             If _mode <> ScreenMode.Help Then
                 If _mode = ScreenMode.Edit Then ScrapeEditFields()
                 _previousMode = _mode
