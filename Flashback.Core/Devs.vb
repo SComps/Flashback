@@ -387,6 +387,10 @@ Public Class Devs
 #End If
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
+        Finally
+            ' Reset IsClosing flag to allow reconnection attempts
+            IsClosing = False
+            Log($"[{DevName}] Disconnect() completed. IsClosing reset to False.", ConsoleColor.Cyan)
         End Try
     End Sub
 

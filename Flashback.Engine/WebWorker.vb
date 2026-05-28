@@ -261,39 +261,53 @@ Public Class WebWorker
         Dim sb As New StringBuilder()
         sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
-        sb.AppendLine("<title>Flashback Spool View</title>")
+        sb.AppendLine("<title>Flashback Spool Management</title>")
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        
+        ' Header
         sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<h1>Spool Management</h1>")
+        sb.AppendLine("</div>")
         
         Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
-        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
-        
-        If Not String.IsNullOrEmpty(userFilter) Then
-            sb.AppendLine($"<h1>FLASHBACK SPOOL MANAGEMENT - USER: {WebUtility.HtmlEncode(userFilter).ToUpper()}</h1>")
-        ElseIf Not String.IsNullOrEmpty(printerFilter) Then
-            sb.AppendLine($"<h1>FLASHBACK SPOOL MANAGEMENT - PRINTER: {WebUtility.HtmlEncode(printerFilter).ToUpper()}</h1>")
-        Else
-            sb.AppendLine("<h1>FLASHBACK SPOOL MANAGEMENT SYSTEM</h1>")
-        End If
-        
-        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  USER: {If(user IsNot Nothing, user.Username.ToUpper(), "GUEST")}  TERMINAL: WEB</div>")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | {If(user IsNot Nothing, user.Username, "Guest")}</div>")
         sb.AppendLine("</div></header>")
-        sb.AppendLine("<main class=""container"">")
+        
+        sb.AppendLine("<main>")
 
         Dim allowedDevices = GetAllowedDevices(user)
 
         If String.IsNullOrEmpty(printerFilter) Then
             ' Level 1: List Printers (Public)
             sb.AppendLine("<div class=""section"">")
+            sb.AppendLine("<div class=""section-header"">")
             sb.AppendLine("<h2 class=""section-title"">Available Printers</h2>")
-            sb.AppendLine("<div class=""file-list"">")
-            For Each kvp In allowedDevices
-                sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""file-card printer-icon"">")
-                sb.AppendLine($"<div class=""file-name"">{WebUtility.HtmlEncode(kvp.Key)}</div>")
-                sb.AppendLine("<div class=""file-meta"">READY | ONLINE</div>")
-                sb.AppendLine("</a>")
-            Next
+            sb.AppendLine("</div>")
+            sb.AppendLine("<div class=""section-content"">")
+            
+            If allowedDevices.Any() Then
+                sb.AppendLine("<div class=""file-list"">")
+                For Each kvp In allowedDevices
+                    sb.AppendLine("<div class=""file-card"">")
+                    sb.AppendLine("<div class=""file-info"">")
+                    sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""file-name"">{WebUtility.HtmlEncode(kvp.Key)}</a>")
+                    sb.AppendLine("<span class=""file-meta"">Ready • Online</span>")
+                    sb.AppendLine("</div>")
+                    sb.AppendLine("<div class=""file-actions"">")
+                    sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(kvp.Key)}"" class=""btn btn-primary"">View Users</a>")
+                    sb.AppendLine("</div>")
+                    sb.AppendLine("</div>")
+                Next
+                sb.AppendLine("</div>")
+            Else
+                sb.AppendLine("<div class=""empty-state"">No printers configured</div>")
+            End If
+            
             sb.AppendLine("</div></div>")
+            
         ElseIf String.IsNullOrEmpty(userFilter) Then
             ' Level 2: List User Folders within Printer (Public)
             If allowedDevices.ContainsKey(printerFilter) Then
@@ -301,26 +315,39 @@ Public Class WebWorker
                 Dim subDirs = Directory.GetDirectories(root)
                 
                 sb.AppendLine("<div class=""section"">")
-                sb.AppendLine($"<h2 class=""section-title"">User Folders for {WebUtility.HtmlEncode(printerFilter)}</h2>")
-                sb.AppendLine("<div class=""file-list"">")
+                sb.AppendLine("<div class=""section-header"">")
+                sb.AppendLine($"<h2 class=""section-title"">Users - {WebUtility.HtmlEncode(printerFilter)}</h2>")
+                sb.AppendLine("</div>")
+                sb.AppendLine("<div class=""section-content"">")
                 
-                For Each subDir In subDirs
-                    Dim dirName = Path.GetFileName(subDir)
-                    ' Check if this directory corresponds to a protected web user
-                    Dim domainDirName = $"{printerFilter}\{dirName}"
-                    Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainDirName, StringComparison.OrdinalIgnoreCase))
-                    
-                    sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-card"">")
-                    If isProtected Then
-                        sb.AppendLine("<div class=""badge-locked"" style=""position:absolute; top:8px; right:8px;"">🔒 Protected</div>")
-                    End If
-                    sb.AppendLine("<div style=""font-size: 32px; margin-bottom: 10px;"">📁</div>")
-                    sb.AppendLine($"<div class=""file-name"">{WebUtility.HtmlEncode(dirName)}</div>")
-                    sb.AppendLine("<div class=""file-meta"">View documents</div>")
-                    sb.AppendLine("</a>")
-                Next
+                If subDirs.Any() Then
+                    sb.AppendLine("<div class=""file-list"">")
+                    For Each subDir In subDirs
+                        Dim dirName = Path.GetFileName(subDir)
+                        Dim domainDirName = $"{printerFilter}\{dirName}"
+                        Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainDirName, StringComparison.OrdinalIgnoreCase))
+                        
+                        sb.AppendLine("<div class=""file-card"">")
+                        sb.AppendLine("<div class=""file-info"">")
+                        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-name"">{WebUtility.HtmlEncode(dirName)}</a>")
+                        sb.AppendLine($"<span class=""file-meta"">{If(isProtected, "Protected", "Public")} folder</span>")
+                        sb.AppendLine("</div>")
+                        sb.AppendLine("<div class=""file-actions"">")
+                        If isProtected Then
+                            sb.AppendLine("<span class=""badge-locked"">Protected</span>")
+                        End If
+                        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""btn btn-primary"">View Files</a>")
+                        sb.AppendLine("</div>")
+                        sb.AppendLine("</div>")
+                    Next
+                    sb.AppendLine("</div>")
+                Else
+                    sb.AppendLine("<div class=""empty-state"">No user folders found</div>")
+                End If
+                
                 sb.AppendLine("</div></div>")
             End If
+            
         Else
             ' Level 3: List Files for specific sub-user (Conditional Auth)
             If allowedDevices.ContainsKey(printerFilter) Then
@@ -332,31 +359,43 @@ Public Class WebWorker
                                 .Select(Function(f) New FileInfo(f)) _
                                 .OrderByDescending(Function(f) f.LastWriteTime)
                     
+                    sb.AppendLine("<div class=""section"">")
+                    sb.AppendLine("<div class=""section-header"">")
+                    sb.AppendLine($"<h2 class=""section-title"">Documents - {WebUtility.HtmlEncode(userFilter)}</h2>")
+                    sb.AppendLine("</div>")
+                    sb.AppendLine("<div class=""section-content"">")
+                    
                     If files.Any() Then
                         sb.AppendLine("<div class=""file-list"">")
                         For Each fi In files
-                            ' Generate a clean, direct, relative URL that won't trip up nginx/WAF
                             Dim downloadUrl = $"{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
                             Dim emailUrl = $"/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fi.Name)}"
-                            Dim sizeMb = fi.Length / (1024 * 1024)
+                            Dim sizeMb = fi.Length / (1024.0 * 1024.0)
                             
-                            sb.AppendLine($"<div class=""file-card"">")
-                            sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" style=""flex: 1;"">")
-                            sb.AppendLine($"<span class=""file-name"">{WebUtility.HtmlEncode(fi.Name).PadRight(40)}</span>")
-                            sb.AppendLine($"<span class=""file-meta"">{sizeMb:F2} MB  {fi.LastWriteTime:yyyy-MM-dd HH:mm}</span>")
-                            sb.AppendLine("</a>")
-                            sb.AppendLine($"<a href=""{emailUrl}"" class=""email-link"" title=""Email this file"">[ EMAIL ]</a>")
+                            sb.AppendLine("<div class=""file-card"">")
+                            sb.AppendLine("<div class=""file-info"">")
+                            sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" class=""file-name"">{WebUtility.HtmlEncode(fi.Name)}</a>")
+                            sb.AppendLine($"<span class=""file-meta"">{sizeMb:F2} MB • {fi.LastWriteTime:yyyy-MM-dd HH:mm}</span>")
+                            sb.AppendLine("</div>")
+                            sb.AppendLine("<div class=""file-actions"">")
+                            sb.AppendLine($"<a href=""{emailUrl}"" class=""btn btn-secondary"">Email</a>")
+                            sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" class=""btn btn-primary"">Download</a>")
+                            sb.AppendLine("</div>")
                             sb.AppendLine("</div>")
                         Next
                         sb.AppendLine("</div>")
                     Else
-                        sb.AppendLine("<div class=""empty-state"">No spool files found for this user.</div>")
+                        sb.AppendLine("<div class=""empty-state"">No documents found</div>")
                     End If
+                    
+                    sb.AppendLine("</div></div>")
                 End If
             End If
         End If
 
-        sb.AppendLine("</main></body></html>")
+        sb.AppendLine("</main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Spool Management System v1.0</div>")
+        sb.AppendLine("</body></html>")
         Return sb.ToString()
     End Function
 
@@ -364,43 +403,49 @@ Public Class WebWorker
         Dim sb As New StringBuilder()
         sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
-        sb.AppendLine("<title>Email PDF - Flashback</title>")
+        sb.AppendLine("<title>Email Document - Flashback</title>")
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        
+        ' Header
         sb.AppendLine("<header><div class=""container"">")
-        sb.AppendLine("<h1>EMAIL PDF DOCUMENT</h1>")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<h1>Email Document</h1>")
+        sb.AppendLine("</div>")
         
         Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
-        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
-        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime}</div>")
         sb.AppendLine("</div></header>")
-        sb.AppendLine("<main class=""container"">")
+        
+        sb.AppendLine("<main>")
         sb.AppendLine("<div class=""section"">")
-        sb.AppendLine($"<h2 class=""section-title"">SEND FILE VIA EMAIL</h2>")
-        sb.AppendLine($"<p style=""color: #ffffff; margin-bottom: 20px;"">FILE: {WebUtility.HtmlEncode(fileName)}</p>")
-        
-        sb.AppendLine($"<form method=""POST"" action=""/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fileName)}"" style=""max-width: 600px;"">")
-        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
-        sb.AppendLine("<label for=""email"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">RECIPIENT EMAIL ADDRESS:</label>")
-        sb.AppendLine("<input type=""email"" id=""email"" name=""email"" required style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none;"" />")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine("<h2 class=""section-title"">Send Document via Email</h2>")
         sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
+        sb.AppendLine($"<p style=""margin-bottom: 24px; color: #525252;"">File: <strong>{WebUtility.HtmlEncode(fileName)}</strong></p>")
         
-        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
-        sb.AppendLine("<label for=""subject"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">SUBJECT (OPTIONAL):</label>")
-        sb.AppendLine($"<input type=""text"" id=""subject"" name=""subject"" value=""Flashback Spool: {WebUtility.HtmlEncode(fileName)}"" style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none;"" />")
-        sb.AppendLine("</div>")
+        sb.AppendLine($"<form method=""POST"" action=""/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fileName)}"">")
         
-        sb.AppendLine("<div style=""margin-bottom: 20px;"">")
-        sb.AppendLine("<label for=""message"" style=""display: block; color: #00ffff; margin-bottom: 8px; font-weight: 600;"">MESSAGE (OPTIONAL):</label>")
-        sb.AppendLine("<textarea id=""message"" name=""message"" rows=""4"" style=""width: 100%; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; background-color: #000080; color: #ffffff; border: 1px solid #00ffff; outline: none; resize: vertical;"">Please find the attached PDF document from the Flashback spool system.</textarea>")
-        sb.AppendLine("</div>")
+        sb.AppendLine("<label for=""email"">Recipient Email Address</label>")
+        sb.AppendLine("<input type=""email"" id=""email"" name=""email"" required placeholder=""user@example.com"" />")
         
-        sb.AppendLine("<div style=""display: flex; gap: 15px;"">")
-        sb.AppendLine("<button type=""submit"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; border: none; cursor: pointer; text-transform: uppercase;"">[ SEND EMAIL ]</button>")
-        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: transparent; color: #00ffff; border: 1px solid #00ffff; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ CANCEL ]</a>")
+        sb.AppendLine("<label for=""subject"">Subject</label>")
+        sb.AppendLine($"<input type=""text"" id=""subject"" name=""subject"" value=""Flashback Spool: {WebUtility.HtmlEncode(fileName)}"" />")
+        
+        sb.AppendLine("<label for=""message"">Message</label>")
+        sb.AppendLine("<textarea id=""message"" name=""message"" rows=""5"">Please find the attached PDF document from the Flashback spool system.</textarea>")
+        
+        sb.AppendLine("<div style=""display: flex; gap: 12px; margin-top: 24px;"">")
+        sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Send Email</button>")
+        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-secondary"">Cancel</a>")
         sb.AppendLine("</div>")
         sb.AppendLine("</form>")
-        sb.AppendLine("</div></main>")
-        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        
+        sb.AppendLine("</div></div>")
+        sb.AppendLine("</main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Spool Management System v1.0</div>")
         sb.AppendLine("</body></html>")
         
         Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
@@ -507,20 +552,31 @@ Public Class WebWorker
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
         sb.AppendLine("<title>Email Sent - Flashback</title>")
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        
+        ' Header
         sb.AppendLine("<header><div class=""container"">")
-        sb.AppendLine("<h1>EMAIL SENT SUCCESSFULLY</h1>")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<h1>Email Sent</h1>")
+        sb.AppendLine("</div>")
         
         Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
-        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
-        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime}</div>")
         sb.AppendLine("</div></header>")
-        sb.AppendLine("<main class=""container"">")
+        
+        sb.AppendLine("<main>")
         sb.AppendLine("<div class=""section"">")
-        sb.AppendLine($"<p style=""color: #00ffff; font-size: 1.1rem; margin-bottom: 20px;"">*** EMAIL DELIVERED TO: {WebUtility.HtmlEncode(email)} ***</p>")
-        sb.AppendLine($"<p style=""color: #ffffff; margin-bottom: 30px;"">The PDF document has been successfully sent to the specified email address.</p>")
-        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ RETURN TO FILE LIST ]</a>")
-        sb.AppendLine("</div></main>")
-        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine("<h2 class=""section-title"">Success</h2>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
+        sb.AppendLine($"<p style=""color: #24a148; font-size: 1rem; margin-bottom: 16px; font-weight: 600;"">✓ Email sent successfully</p>")
+        sb.AppendLine($"<p style=""color: #525252; margin-bottom: 24px;"">The PDF document has been sent to <strong>{WebUtility.HtmlEncode(email)}</strong></p>")
+        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-primary"">Return to Documents</a>")
+        sb.AppendLine("</div></div>")
+        sb.AppendLine("</main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Spool Management System v1.0</div>")
         sb.AppendLine("</body></html>")
         
         Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
@@ -536,19 +592,31 @@ Public Class WebWorker
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
         sb.AppendLine("<title>Error - Flashback</title>")
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        
+        ' Header
         sb.AppendLine("<header><div class=""container"">")
-        sb.AppendLine("<h1>ERROR</h1>")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<h1>Error</h1>")
+        sb.AppendLine("</div>")
         
         Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
-        Dim currentDate = DateTime.Now.ToString("yyyy/MM/dd")
-        sb.AppendLine($"<div class=""system-info"">DATE: {currentDate}  TIME: {currentTime}  TERMINAL: WEB</div>")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime}</div>")
         sb.AppendLine("</div></header>")
-        sb.AppendLine("<main class=""container"">")
+        
+        sb.AppendLine("<main>")
         sb.AppendLine("<div class=""section"">")
-        sb.AppendLine($"<p style=""color: #ffff00; font-size: 1.1rem; margin-bottom: 20px;"">*** ERROR: {WebUtility.HtmlEncode(errorMessage)} ***</p>")
-        sb.AppendLine($"<a href=""javascript:history.back()"" style=""padding: 12px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 600; background-color: #00ffff; color: #000080; text-decoration: none; display: inline-block; text-transform: uppercase;"">[ GO BACK ]</a>")
-        sb.AppendLine("</div></main>")
-        sb.AppendLine("<div class=""status-bar"">FLASHBACK v1.0</div>")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine("<h2 class=""section-title"">Error</h2>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
+        sb.AppendLine($"<p style=""color: #da1e28; font-size: 1rem; margin-bottom: 16px; font-weight: 600;"">✗ An error occurred</p>")
+        sb.AppendLine($"<p style=""color: #525252; margin-bottom: 24px;"">{WebUtility.HtmlEncode(errorMessage)}</p>")
+        sb.AppendLine("<a href=""javascript:history.back()"" class=""btn btn-primary"">Go Back</a>")
+        sb.AppendLine("</div></div>")
+        sb.AppendLine("</main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Spool Management System v1.0</div>")
         sb.AppendLine("</body></html>")
         
         Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())

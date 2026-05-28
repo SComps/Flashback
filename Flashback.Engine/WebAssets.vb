@@ -1,37 +1,325 @@
 Public Class WebAssets
     Public Shared ReadOnly Property Css As String = "
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-body { font-family: 'IBM Plex Mono', 'Courier New', monospace; background-color: #000080; color: #ffffff; margin: 0; padding: 0; line-height: 1.6; }
-.container { max-width: 1400px; margin: 0 auto; padding: 0; }
-header { background-color: #000080; color: #00ffff; padding: 0; margin: 0; border-bottom: 2px solid #00ffff; }
-header .container { padding: 15px 20px; }
-h1 { margin: 0; font-size: 1.3rem; font-weight: 700; color: #00ffff; text-transform: uppercase; letter-spacing: 1px; }
-.system-info { font-size: 0.85rem; color: #ffffff; margin-top: 8px; font-weight: 400; }
-.section { margin: 0; padding: 20px; background-color: #000080; }
-.section-title { font-size: 1.1rem; font-weight: 600; color: #00ffff; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 8px; border-bottom: 1px solid #0080ff; }
-.file-list { display: block; margin: 0; padding: 0; }
-.file-card { background-color: #000080; border: none; border-bottom: 1px solid #0040a0; padding: 12px 20px; text-decoration: none; color: #ffffff; display: flex; align-items: center; justify-content: space-between; transition: background-color 0.15s; position: relative; font-family: 'IBM Plex Mono', monospace; }
-.file-card:hover { background-color: #0000a0; }
-.file-card a { color: #ffffff; text-decoration: none; }
-.file-card a:hover { color: #ffff00; }
-.email-link { color: #00ffff !important; font-weight: 600; padding: 4px 12px; border: 1px solid #00ffff; background-color: transparent; transition: all 0.15s; white-space: nowrap; }
-.email-link:hover { background-color: #00ffff; color: #000080 !important; }
-.thumbnail-container { display: none; }
-.file-icon-overlay { display: none; }
-.file-icon { display: none; }
-.file-icon-container { display: inline; }
-.file-name { font-size: 0.95rem; font-weight: 500; color: inherit; display: inline; margin-right: 20px; }
-.file-meta { font-size: 0.85rem; color: #00ffff; display: inline; }
-.empty-state { background-color: #000080; border: 1px solid #0080ff; padding: 40px; text-align: center; color: #00ffff; font-size: 0.95rem; margin: 20px; }
-.user-group { margin: 0; background-color: #000080; border: none; }
-.user-header { background-color: #000060; padding: 12px 20px; border-top: 1px solid #0080ff; border-bottom: 1px solid #0080ff; font-weight: 600; font-size: 0.95rem; color: #00ffff; text-transform: uppercase; margin-bottom: 0; }
-.badge-locked { font-size: 0.75rem; font-weight: 600; color: #ffff00; background-color: transparent; padding: 0; border: none; display: inline; text-transform: uppercase; position: static; margin-left: 15px; }
-a { color: #ffffff; text-decoration: none; }
-a:hover { color: #ffff00; }
-a:visited { color: #ffffff; }
-.status-bar { background-color: #000060; border-top: 2px solid #00ffff; padding: 12px 20px; margin-top: 0; text-align: left; font-size: 0.85rem; color: #00ffff; position: fixed; bottom: 0; left: 0; right: 0; }
-main { padding-bottom: 60px; }
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #161616;
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+.container {
+    max-width: 1584px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+/* IBM Carbon-inspired Header */
+header {
+    background-color: #161616;
+    color: #ffffff;
+    padding: 0;
+    margin: 0;
+    border-bottom: 1px solid #393939;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+header .container {
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.logo {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #ffffff;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+}
+
+.logo:hover {
+    color: #78a9ff;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.system-info {
+    font-size: 0.875rem;
+    color: #c6c6c6;
+    font-weight: 400;
+}
+
+/* Main Content Area */
+main {
+    padding: 32px;
+    min-height: calc(100vh - 120px);
+}
+
+.section {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.section-header {
+    background-color: #f4f4f4;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 16px 24px;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #161616;
+    margin: 0;
+}
+
+.section-content {
+    padding: 0;
+}
+
+/* File List - Table Style */
+.file-list {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.file-card {
+    display: table-row;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    transition: background-color 0.1s;
+}
+
+.file-card:hover {
+    background-color: #f4f4f4;
+}
+
+.file-card > div {
+    display: table-cell;
+    padding: 16px 24px;
+    vertical-align: middle;
+}
+
+.file-info {
+    width: 60%;
+}
+
+.file-actions {
+    width: 40%;
+    text-align: right;
+}
+
+.file-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #0f62fe;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+
+.file-name:hover {
+    color: #0043ce;
+    text-decoration: underline;
+}
+
+.file-meta {
+    font-size: 0.75rem;
+    color: #525252;
+    display: block;
+}
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    margin-left: 8px;
+}
+
+.btn-primary {
+    background-color: #0f62fe;
+    color: #ffffff;
+    border-color: #0f62fe;
+}
+
+.btn-primary:hover {
+    background-color: #0043ce;
+    border-color: #0043ce;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: #0f62fe;
+    border-color: #0f62fe;
+}
+
+.btn-secondary:hover {
+    background-color: #e8f4ff;
+}
+
+.email-link {
+    background-color: transparent;
+    color: #0f62fe;
+    border: 1px solid #0f62fe;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.1s;
+}
+
+.email-link:hover {
+    background-color: #e8f4ff;
+    color: #0043ce;
+    border-color: #0043ce;
+}
+
+/* User Groups */
+.user-group {
+    margin-bottom: 24px;
+}
+
+.user-header {
+    background-color: #e0e0e0;
+    padding: 12px 24px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #161616;
+    border-bottom: 1px solid #c6c6c6;
+}
+
+.badge-locked {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #da1e28;
+    background-color: #fff1f1;
+    padding: 2px 8px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-left: 12px;
+}
+
+/* Empty State */
+.empty-state {
+    background-color: #ffffff;
+    border: 1px dashed #c6c6c6;
+    padding: 48px;
+    text-align: center;
+    color: #525252;
+    font-size: 0.875rem;
+    margin: 24px;
+}
+
+/* Footer */
+.status-bar {
+    background-color: #f4f4f4;
+    border-top: 1px solid #e0e0e0;
+    padding: 12px 32px;
+    text-align: left;
+    font-size: 0.75rem;
+    color: #525252;
+}
+
+/* Links */
+a {
+    color: #0f62fe;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #0043ce;
+    text-decoration: underline;
+}
+
+a:visited {
+    color: #8a3ffc;
+}
+
+/* Form Elements */
+input[type='text'],
+input[type='email'],
+textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 0.875rem;
+    font-family: 'IBM Plex Sans', sans-serif;
+    border: 1px solid #8d8d8d;
+    background-color: #ffffff;
+    color: #161616;
+    margin-bottom: 16px;
+}
+
+input[type='text']:focus,
+input[type='email']:focus,
+textarea:focus {
+    outline: 2px solid #0f62fe;
+    outline-offset: -2px;
+    border-color: #0f62fe;
+}
+
+label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #161616;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+button[type='submit'] {
+    background-color: #0f62fe;
+    color: #ffffff;
+    border: none;
+    padding: 12px 24px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+button[type='submit']:hover {
+    background-color: #0043ce;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    main { padding: 16px; }
+    header .container { padding: 12px 16px; }
+    .file-card > div { padding: 12px 16px; }
+    .file-info, .file-actions { display: block; width: 100%; }
+    .file-actions { text-align: left; margin-top: 8px; }
+}
 "
 
-    Public Shared ReadOnly Property FileIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" viewBox=""0 0 24 24"" fill=""currentColor"" class=""file-icon""><path d=""M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z"" /><path d=""M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"" /></svg>"
+    Public Shared ReadOnly Property FileIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" width=""20"" height=""20"" viewBox=""0 0 32 32"" fill=""#0f62fe""><path d=""M25.7 9.3l-7-7A.91.91 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a.91.91 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z""/></svg>"
 End Class
