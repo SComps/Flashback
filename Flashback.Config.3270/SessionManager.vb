@@ -190,7 +190,7 @@ Public Class SessionStateManager
             Return
         End If
         
-        If e.AidKey = &H64 Then ' PF4
+        If e.AidKey = &HF4 Then ' PF4 (correct key code is 0xF4, not 0x64)
             Console.WriteLine("[DEBUG] PF4 pressed - switching to email config")
             ScrapeEditFields()
             _mode = ScreenMode.EditEmail
