@@ -48,6 +48,9 @@ Public Class SessionStateManager
     End Sub
 
     Public Sub HandleInput(sender As Object, e As AidKeyEventArgs)
+        ' Debug: Log the key code received
+        Console.WriteLine($"[DEBUG] Key received: 0x{e.AidKey:X2} in mode {_mode}")
+        
         ' Intercept PF1 for global help
         If e.AidKey = &H61 Then ' PF1
             If _mode <> ScreenMode.Help Then
@@ -178,13 +181,17 @@ Public Class SessionStateManager
     End Sub
 
     Private Sub ProcessEditInput(e As AidKeyEventArgs)
+        Console.WriteLine($"[DEBUG] ProcessEditInput: Key=0x{e.AidKey:X2}")
+        
         If e.AidKey = &HF3 Then
+            Console.WriteLine("[DEBUG] PF3 pressed - returning to menu")
             _mode = ScreenMode.Menu
             ShowMenu()
             Return
         End If
         
         If e.AidKey = &H64 Then ' PF4
+            Console.WriteLine("[DEBUG] PF4 pressed - switching to email config")
             ScrapeEditFields()
             _mode = ScreenMode.EditEmail
             ShowEditEmail()
@@ -192,9 +199,12 @@ Public Class SessionStateManager
         End If
 
         If e.AidKey <> &H7D Then
+            Console.WriteLine($"[DEBUG] Unknown key 0x{e.AidKey:X2} - refreshing screen")
             ShowEdit()
             Return
         End If
+        
+        Console.WriteLine("[DEBUG] Enter pressed - saving device")
 
         Dim d = _devList(_editingIndex)
         d.DevName = _session.GetFieldValue("txtName")?.Trim()
