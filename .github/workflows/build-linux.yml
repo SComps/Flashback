@@ -1,0 +1,87 @@
+name: Build Flashback for Linux
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_PREVIEW: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        include-prerelease: ${{ env.DOTNET_PREVIEW }}
+        
+    - name: Restore dependencies
+      run: dotnet restore Flashback.slnx
+      
+    - name: Build solution
+      run: dotnet build Flashback.slnx --configuration Release --no-restore
+      
+    - name: Publish for ${{ matrix.arch }}
+      run: |
+        echo "Publishing for linux-${{ matrix.arch }}..."
+        
+        # Publish Engine with AOT
+        dotnet publish Flashback.Engine/Flashback.Engine.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/engine
+        
+        # Publish Spooler with AOT
+        dotnet publish Flashback.Spooler/Flashback.Spooler.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/spooler
+        
+        # Publish Config.Console with AOT
+        dotnet publish Flashback.Config.Console/Flashback.Config.Console.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/config
+        
+        # Copy installation scripts
+        cp scripts/install_spooler_linux.sh publish/linux-${{ matrix.arch }}/
+        chmod +x publish/linux-${{ matrix.arch }}/install_spooler_linux.sh
+        
+    - name: Create tarball
+      run: |
+        cd publish/linux-${{ matrix.arch }}
+        tar -czf ../../flashback-linux-${{ matrix.arch }}.tar.gz *
+        cd ../..
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: flashback-linux-${{ matrix.arch }}-build
+        path: |
+          publish/linux-${{ matrix.arch }}/
+          flashback-linux-${{ matrix.arch }}.tar.gz
+        retention-days: 30
+
+# Made with Bob

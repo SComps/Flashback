@@ -1,0 +1,192 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_PREVIEW: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        include-prerelease: ${{ env.DOTNET_PREVIEW }}
+        
+    - name: Restore and build
+      run: |
+        dotnet restore Flashback.slnx
+        dotnet build Flashback.slnx --configuration Release --no-restore
+        
+    - name: Publish Windows binaries
+      shell: pwsh
+      run: .\scripts\publish_windows.ps1
+      
+    - name: Setup Inno Setup
+      run: choco install innosetup -y
+      
+    - name: Build installer
+      shell: pwsh
+      run: |
+        $innoSetup = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+        New-Item -ItemType Directory -Force -Path ".\artifacts"
+        & $innoSetup /O".\artifacts" ".\scripts\FlashbackInstaller.iss"
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-release
+        path: artifacts/*.exe
+          
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        include-prerelease: ${{ env.DOTNET_PREVIEW }}
+        
+    - name: Restore and build
+      run: |
+        dotnet restore Flashback.slnx
+        dotnet build Flashback.slnx --configuration Release --no-restore
+        
+    - name: Publish for ${{ matrix.arch }}
+      run: |
+        echo "Publishing for linux-${{ matrix.arch }}..."
+        
+        dotnet publish Flashback.Engine/Flashback.Engine.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/engine
+        
+        dotnet publish Flashback.Spooler/Flashback.Spooler.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/spooler
+        
+        dotnet publish Flashback.Config.Console/Flashback.Config.Console.vbproj \
+          -c Release \
+          -r linux-${{ matrix.arch }} \
+          --self-contained \
+          -p:PublishAot=true \
+          -p:StripSymbols=true \
+          -o publish/linux-${{ matrix.arch }}/config
+        
+        cp scripts/install_spooler_linux.sh publish/linux-${{ matrix.arch }}/
+        chmod +x publish/linux-${{ matrix.arch }}/install_spooler_linux.sh
+        
+    - name: Create tarball
+      run: |
+        cd publish/linux-${{ matrix.arch }}
+        tar -czf ../../flashback-linux-${{ matrix.arch }}.tar.gz *
+        cd ../..
+        
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ matrix.arch }}-release
+        path: flashback-linux-${{ matrix.arch }}.tar.gz
+        
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Windows artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-release
+        path: ./release-windows
+        
+    - name: Download Linux x64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-x64-release
+        path: ./release-linux
+        
+    - name: Download Linux ARM64 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-arm64-release
+        path: ./release-linux
+        
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Flashback ${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## Downloads
+          
+          ### Windows
+          - **FlashbackSetup.exe** - Complete installer with all components
+          
+          ### Linux
+          - **flashback-linux-x64.tar.gz** - For x86_64 systems (Intel/AMD)
+          - **flashback-linux-arm64.tar.gz** - For ARM64 systems (Raspberry Pi 4+, Apple Silicon via Rosetta, AWS Graviton)
+          
+          ## Installation
+          
+          **Windows:** Run the installer and follow the setup wizard.
+          
+          **Linux:** Extract the tarball and run the installation script:
+          ```bash
+          tar -xzf flashback-linux-*.tar.gz
+          cd flashback
+          sudo ./install_spooler_linux.sh
+          ```
+        files: |
+          release-windows/*.exe
+          release-linux/*.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# Made with Bob
