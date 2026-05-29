@@ -59,6 +59,8 @@
                         <ComboBoxItem Content="Standard White"/>
                     </ComboBox>
                 </StackPanel>
+            </PivotItem>
+
             <PivotItem Header="Email">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="400">
                     <StackPanel Spacing="12" Margin="0,12,0,0">
@@ -91,8 +93,6 @@
                                    TextWrapping="Wrap"/>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
-
             </PivotItem>
         </Pivot>
     </Grid>
