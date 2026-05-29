@@ -1,11 +1,6 @@
 Imports System
 Imports System.IO
 Imports Flashback.Spooler.Models
-
-''' <summary>
-''' Manages loading and parsing of the spooler configuration file
-''' Uses simple INI-style text parsing for AOT compatibility
-''' </summary>
 Public Class ConfigManager
     Private ReadOnly _configPath As String
     Private _config As SpoolerConfig
@@ -14,10 +9,6 @@ Public Class ConfigManager
         _configPath = configPath
         _config = New SpoolerConfig()
     End Sub
-
-    ''' <summary>
-    ''' Loads configuration from file, or creates default if not found
-    ''' </summary>
     Public Function LoadConfig() As SpoolerConfig
         If Not File.Exists(_configPath) Then
             Console.WriteLine($"Configuration file not found: {_configPath}")
@@ -216,15 +207,9 @@ Public Class ConfigManager
             Console.WriteLine($"Warning: Could not create default config file: {ex.Message}")
         End Try
     End Sub
-
-    ''' <summary>
-    ''' Gets the current configuration
-    ''' </summary>
     Public ReadOnly Property Config As SpoolerConfig
         Get
             Return _config
         End Get
     End Property
 End Class
-
-' Made with Bob

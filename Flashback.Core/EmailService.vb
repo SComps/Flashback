@@ -176,5 +176,3 @@ Public Class EmailConfig
         Return String.Join(", ", Recipients)
     End Function
 End Class
-
-' Made with Bob

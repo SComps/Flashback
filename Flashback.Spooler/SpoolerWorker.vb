@@ -3,11 +3,6 @@ Imports System.Threading
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
 Imports Flashback.Spooler.Models
-
-''' <summary>
-''' Main background service worker for Flashback Spooler
-''' Coordinates all components and manages service lifecycle
-''' </summary>
 Public Class SpoolerWorker
     Inherits BackgroundService
 
@@ -135,5 +130,3 @@ Public Class SpoolerWorker
         End Try
     End Sub
 End Class
-
-' Made with Bob

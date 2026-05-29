@@ -19,7 +19,6 @@ Module Program
         Dim isDaemon As Boolean = False
         Dim configPath As String = "spooler.conf"
 
-        ' Parse command line arguments
         Dim i As Integer = 0
         While i < args.Length
             Dim arg = args(i).ToLower()
@@ -38,12 +37,10 @@ Module Program
                     ShowVersion()
                     Environment.Exit(0)
                 Case Else
-                    ' Ignore unknown args in service mode
             End Select
             i += 1
         End While
 
-        ' Handle daemon mode (Linux)
         If isDaemon Then
             Dim psi As New ProcessStartInfo(Environment.ProcessPath)
             Dim daemonArgs = args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon").ToList()
@@ -58,13 +55,9 @@ Module Program
             Environment.Exit(0)
         End If
 
-        ' Build and run the host
         Dim builder = Host.CreateApplicationBuilder(args)
-
-        ' Configure File Logging
         builder.Logging.AddFile()
 
-        ' Add platform-specific service support
         If OperatingSystem.IsWindows() Then
             builder.Services.AddWindowsService(Sub(options)
                                                    options.ServiceName = "FlashbackSpooler"
@@ -73,10 +66,8 @@ Module Program
             builder.Services.AddSystemd()
         End If
 
-        ' Register the worker service
         builder.Services.AddHostedService(Of SpoolerWorker)()
 
-        ' Build and run
         Dim spoolerHost = builder.Build()
         spoolerHost.Run()
     End Sub
@@ -117,5 +108,3 @@ Module Program
         Console.WriteLine("Licensed under the terms of the Flashback license")
     End Sub
 End Module
-
-' Made with Bob

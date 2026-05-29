@@ -5,11 +5,6 @@ Imports System.Net.Sockets
 Imports System.Threading
 Imports Flashback.Spooler.Models
 Imports Microsoft.Extensions.Logging
-
-''' <summary>
-''' Listens on port 9100 for incoming print jobs (JetDirect compatible)
-''' Receives raw print data and stores it to spool files
-''' </summary>
 Public Class Port9100Listener
     Private ReadOnly _logger As ILogger
     Private ReadOnly _config As BehaviorConfig
@@ -25,10 +20,6 @@ Public Class Port9100Listener
         _spoolManager = spoolManager
         _jobQueue = jobQueue
     End Sub
-
-    ''' <summary>
-    ''' Starts the port 9100 listener
-    ''' </summary>
     Public Async Function StartAsync(cancellationToken As CancellationToken) As Task
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
         
@@ -69,10 +60,6 @@ Public Class Port9100Listener
             _logger.LogInformation("Port 9100 listener stopped.")
         End Try
     End Function
-
-    ''' <summary>
-    ''' Handles an individual client connection
-    ''' </summary>
     Private Async Function HandleClientAsync(client As TcpClient, cancellationToken As CancellationToken) As Task
         Dim job As PrintJob = Nothing
         Dim spoolFilePath As String = Nothing
@@ -171,24 +158,14 @@ Public Class Port9100Listener
             End Try
         End Try
     End Function
-
-    ''' <summary>
-    ''' Stops the port 9100 listener
-    ''' </summary>
     Public Sub [Stop]()
         _logger.LogInformation("Stopping port 9100 listener...")
         _cancellationTokenSource?.Cancel()
         _listener?.Stop()
     End Sub
-
-    ''' <summary>
-    ''' Gets whether the listener is currently running
-    ''' </summary>
     Public ReadOnly Property IsRunning As Boolean
         Get
             Return _isRunning
         End Get
     End Property
 End Class
-
-' Made with Bob

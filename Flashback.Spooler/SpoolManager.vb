@@ -3,11 +3,6 @@ Imports System.IO
 Imports System.Threading
 Imports Flashback.Spooler.Models
 Imports Microsoft.Extensions.Logging
-
-''' <summary>
-''' Manages temporary spool files for print jobs
-''' Handles file creation, reading, deletion, and cleanup
-''' </summary>
 Public Class SpoolManager
     Private ReadOnly _logger As ILogger
     Private ReadOnly _config As StorageConfig
@@ -24,10 +19,6 @@ Public Class SpoolManager
         ' Ensure spool directory exists
         InitializeSpoolDirectory()
     End Sub
-
-    ''' <summary>
-    ''' Initializes the spool directory
-    ''' </summary>
     Private Sub InitializeSpoolDirectory()
         Try
             If Not Directory.Exists(_spoolDirectory) Then
@@ -41,10 +32,6 @@ Public Class SpoolManager
             Throw
         End Try
     End Sub
-
-    ''' <summary>
-    ''' Creates a new temporary spool file for an incoming job
-    ''' </summary>
     Public Function CreateSpoolFile() As String
         Dim sequence = Interlocked.Increment(_sequenceNumber)
         Dim timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss")
@@ -64,10 +51,6 @@ Public Class SpoolManager
             Throw
         End Try
     End Function
-
-    ''' <summary>
-    ''' Writes data to a spool file using streaming
-    ''' </summary>
     Public Async Function WriteToSpoolFileAsync(filePath As String, data As Byte(), cancellationToken As CancellationToken) As Task
         Try
             Using fs As New FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.None, 8192, True)
@@ -78,10 +61,6 @@ Public Class SpoolManager
             Throw
         End Try
     End Function
-
-    ''' <summary>
-    ''' Reads data from a spool file using streaming
-    ''' </summary>
     Public Async Function ReadFromSpoolFileAsync(filePath As String, buffer As Byte(), cancellationToken As CancellationToken) As Task(Of Integer)
         Try
             Using fs As New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, True)
@@ -92,10 +71,6 @@ Public Class SpoolManager
             Throw
         End Try
     End Function
-
-    ''' <summary>
-    ''' Opens a spool file for streaming read
-    ''' </summary>
     Public Function OpenSpoolFileForRead(filePath As String) As FileStream
         Try
             Return New FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, True)
@@ -104,10 +79,6 @@ Public Class SpoolManager
             Throw
         End Try
     End Function
-
-    ''' <summary>
-    ''' Gets the size of a spool file
-    ''' </summary>
     Public Function GetSpoolFileSize(filePath As String) As Long
         Try
             Dim fileInfo As New FileInfo(filePath)
@@ -117,10 +88,6 @@ Public Class SpoolManager
             Return 0
         End Try
     End Function
-
-    ''' <summary>
-    ''' Deletes a spool file after successful transmission
-    ''' </summary>
     Public Sub DeleteSpoolFile(filePath As String)
         If String.IsNullOrEmpty(filePath) Then Return
         
@@ -134,10 +101,6 @@ Public Class SpoolManager
             ' Don't throw - file deletion failure shouldn't stop the service
         End Try
     End Sub
-
-    ''' <summary>
-    ''' Performs cleanup of old spool files based on age and count limits
-    ''' </summary>
     Public Sub CleanupOldSpoolFiles()
         Try
             Dim files = Directory.GetFiles(_spoolDirectory, "job_*.dat")
@@ -195,10 +158,6 @@ Public Class SpoolManager
             _logger.LogError(ex, "Error during spool file cleanup")
         End Try
     End Sub
-
-    ''' <summary>
-    ''' Gets statistics about the spool directory
-    ''' </summary>
     Public Function GetSpoolStatistics() As (FileCount As Integer, TotalSize As Long)
         Try
             Dim files = Directory.GetFiles(_spoolDirectory, "job_*.dat")
@@ -215,10 +174,6 @@ Public Class SpoolManager
             Return (0, 0)
         End Try
     End Function
-
-    ''' <summary>
-    ''' Checks if the spool directory has enough space for a new job
-    ''' </summary>
     Public Function HasSufficientSpace(estimatedSizeMB As Integer) As Boolean
         Try
             Dim driveInfo As New DriveInfo(Path.GetPathRoot(_spoolDirectory))
@@ -240,5 +195,3 @@ Public Class SpoolManager
         End Try
     End Function
 End Class
-
-' Made with Bob
