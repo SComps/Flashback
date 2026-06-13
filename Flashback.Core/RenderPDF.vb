@@ -104,17 +104,17 @@ Public Class RenderPDF
 
             Dim InitializeNewPage = Sub()
                                         page = doc.AddPage()
-                                        lineHeight = 12
-                                        page.Width = XUnit.FromInch(14.875)
-                                        page.Height = XUnit.FromInch(11)
-
+                                        
                                         If Orientation <= 1 Then
+                                            ' Landscape: 132 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Landscape
+                                            page.Width = XUnit.FromInch(14.875)
+                                            page.Height = XUnit.FromInch(11)
                                         Else
+                                            ' Portrait: 80 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Portrait
-                                            Dim tempWidth As XUnit = page.Width
-                                            page.Width = page.Height
-                                            page.Height = tempWidth
+                                            page.Width = XUnit.FromInch(8.5)
+                                            page.Height = XUnit.FromInch(11)
                                         End If
 
                                         gfx = XGraphics.FromPdfPage(page)
@@ -124,14 +124,24 @@ Public Class RenderPDF
                                         End If
 
                                         availableWidth = page.Width.Point - leftMargin - rightMargin
-                                        font = New XFont(TypeFaceName, 12)
-                                        Dim charWidth As Double = gfx.MeasureString("W", font).Width
-                                        If Orientation <= 1 Then
-                                            fontSize = availableWidth / (charWidth * 132) * 12
-                                        Else
-                                            fontSize = availableWidth / (charWidth * 80) * 12
-                                        End If
-                                        font = New XFont(TypeFaceName, fontSize)
+                                        
+                                        ' Calculate font size to fit exact character count per line
+                                        Dim targetCharsPerLine As Integer = If(Orientation <= 1, 132, 80)
+                                        
+                                        ' Start with a base font size and measure
+                                        Dim testFont As XFont = New XFont(TypeFaceName, 12, XFontStyleEx.Regular)
+                                        Dim testString As String = New String("M"c, targetCharsPerLine)
+                                        Dim testWidth As Double = gfx.MeasureString(testString, testFont).Width
+                                        
+                                        ' Calculate the font size needed to fit the target width
+                                        fontSize = (availableWidth / testWidth) * 12
+                                        
+                                        ' Create the final font with calculated size
+                                        font = New XFont(TypeFaceName, fontSize, XFontStyleEx.Regular)
+                                        
+                                        ' Fixed line height: 6 lines per inch = 72 points / 6 = 12 points per line
+                                        lineHeight = 12
+                                        
                                         y = firstline
                                         currentLine = 0
                                     End Sub
