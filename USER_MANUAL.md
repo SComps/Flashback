@@ -51,6 +51,109 @@ For administrators on z/OS or other terminal-heavy systems, the **3270 Config Se
 - **Port**: Default is `3270`.
 - **Security**: Can be protected with a `SYSPW` (System Password).
 
+### Email Delivery Configuration
+Flashback supports automatic email delivery of generated PDF documents on a per-device basis. Each virtual printer can be configured to send PDFs to one or more email recipients immediately after generation.
+
+#### Email Configuration Fields
+Each device supports the following email settings:
+
+| Field | Description | Example |
+| :--- | :--- | :--- |
+| **Email Enabled** | Enable/disable email delivery for this device | `true` or `false` |
+| **Recipients** | Semicolon-separated list of email addresses | `user@example.com;admin@company.com` |
+| **SMTP Server** | Mail server hostname or IP address | `smtp.gmail.com` |
+| **SMTP Port** | Mail server port (typically 587 for TLS, 465 for SSL) | `587` |
+| **SMTP Username** | Authentication username for mail server | `sender@example.com` |
+| **SMTP Password** | Authentication password for mail server | `your-password` |
+| **Use TLS** | Enable TLS/SSL encryption | `true` or `false` |
+| **From Address** | Sender email address | `flashback@company.com` |
+| **From Name** | Sender display name | `Flashback Print Server` |
+| **Subject** | Email subject line (supports variables) | `Print Job: {JobName}` |
+| **Body** | Email body text (supports variables) | `Attached is your print job from {DeviceName}.` |
+
+#### Template Variables
+The Subject and Body fields support dynamic variable substitution:
+
+| Variable | Description | Example Output |
+| :--- | :--- | :--- |
+| `{JobName}` | Generated job filename | `JOB00123.PDF` |
+| `{DeviceName}` | Virtual printer device name | `PRINTER1` |
+| `{UserName}` | User who submitted the job | `ADMIN` |
+| `{PageCount}` | Number of pages in the PDF | `5` |
+| `{DateTime}` | Full date and time | `2026-05-27 19:03:00` |
+| `{Date}` | Date only | `2026-05-27` |
+| `{Time}` | Time only | `19:03:00` |
+
+#### Configuration Methods
+
+**Console Configuration (Flashback.Config.Console)**
+1. Navigate to the device editor
+2. Scroll down to the email configuration fields
+3. Enter SMTP settings and recipient addresses
+4. Save the configuration
+
+**WinUI/WPF Configuration (GUI Applications)**
+1. Open the device editor
+2. Click the "Email" tab
+3. Fill in the email configuration form
+4. Multiple recipients can be entered separated by semicolons
+5. Click Save to apply changes
+
+**3270 Terminal Configuration (Flashback.Config.3270)**
+1. Connect to the 3270 server (default port 3270)
+2. Select a device to edit
+3. Press **PF4** to access the Email Configuration screen
+4. Update email settings as needed
+5. Press **Enter** to save changes
+
+#### SMTP Provider Examples
+
+**Gmail**
+```
+SMTP Server: smtp.gmail.com
+SMTP Port: 587
+Use TLS: true
+Username: your-email@gmail.com
+Password: your-app-password (not regular password)
+```
+
+**Microsoft 365/Outlook**
+```
+SMTP Server: smtp.office365.com
+SMTP Port: 587
+Use TLS: true
+Username: your-email@company.com
+Password: your-password
+```
+
+**SendGrid**
+```
+SMTP Server: smtp.sendgrid.net
+SMTP Port: 587
+Use TLS: true
+Username: apikey
+Password: your-sendgrid-api-key
+```
+
+#### Security Considerations
+- **App Passwords**: Many providers (Gmail, Microsoft) require app-specific passwords rather than account passwords
+- **Credentials Storage**: SMTP passwords are stored in plain text in `devices.dat` - ensure proper file permissions
+- **TLS Encryption**: Always enable TLS when available to protect credentials in transit
+- **Testing**: Use the test email feature in GUI applications to verify configuration before production use
+
+#### Troubleshooting Email Delivery
+Common issues and solutions:
+
+| Issue | Solution |
+| :--- | :--- |
+| Authentication failures | Verify username/password, check if app password is required |
+| Connection timeouts | Verify SMTP server address and port, check firewall rules |
+| TLS/SSL errors | Ensure TLS setting matches server requirements (587=TLS, 465=SSL) |
+| Emails not received | Check spam/junk folders, verify recipient addresses |
+| Missing attachments | Ensure PDF generation is enabled for the device |
+
+All email operations are logged to `printers.log` for debugging purposes.
+
 ---
 
 ## 4. Host System Integration

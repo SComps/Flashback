@@ -23,6 +23,23 @@ Public Class Devs
     Public Property JobNumber As Integer = 0
     Public Property Enabled As Boolean = True
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
+    
+    ' Email Configuration Properties
+    Public Property EmailEnabled As Boolean = False
+    Public Property EmailRecipients As String = ""
+    Public Property SmtpServer As String = ""
+    Public Property SmtpPort As Integer = 587
+    Public Property SmtpUsername As String = ""
+    Public Property SmtpPassword As String = ""
+    Public Property SmtpUseTLS As Boolean = True
+    Public Property EmailFromAddress As String = "flashback@localhost"
+    Public Property EmailFromName As String = "Flashback Print Server"
+    Public Property EmailSubject As String = "Print Job: {JobName} from {DeviceName}"
+    Public Property EmailBody As String = "Print job '{JobName}' from device '{DeviceName}' has been completed." & vbCrLf & vbCrLf &
+                                          "User: {UserName}" & vbCrLf &
+                                          "Pages: {PageCount}" & vbCrLf &
+                                          "Date/Time: {DateTime}" & vbCrLf & vbCrLf &
+                                          "The PDF output is attached to this email."
 
     Private remoteHost As String
     Private remotePort As Integer
@@ -297,7 +314,7 @@ Public Class Devs
             If ignoreChars = 0 Then
                 Select Case c
                     Case vbCr
-                        If OS = OSType.OS_VM370 OrElse OS = OSType.OS_MVS38J OrElse OS = OSType.OS_MPE Then
+                        If OS = OSType.OS_VM370 OrElse OS = OSType.OS_MVS38J OrElse OS = OSType.OS_MPE OrElse OS = OSType.OS_ZVM73 Then
                             currentLine.Append(c)
                         ElseIf OS = OSType.OS_TANDYXENIX Then
                             currentLine.Append(vbCrLf)
@@ -370,6 +387,10 @@ Public Class Devs
 #End If
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
+        Finally
+            ' Reset IsClosing flag to allow reconnection attempts
+            IsClosing = False
+            Log($"[{DevName}] Disconnect() completed. IsClosing reset to False.", ConsoleColor.Cyan)
         End Try
     End Sub
 
@@ -462,10 +483,54 @@ Public Class Devs
         renderer.TargetFileName = pdfName
         renderer.Shading = Shading
 
-        renderer.CreatePDF(JobName, doc)
+        Dim pdfPath = renderer.CreatePDF(JobName, doc)
+        
+        ' Send email if enabled and PDF was created successfully
+        If EmailEnabled AndAlso Not String.IsNullOrWhiteSpace(pdfPath) AndAlso System.IO.File.Exists(pdfPath) Then
+            Task.Run(Async Function()
+                Try
+                    ' Create email configuration from device properties
+                    Dim emailConfig As New EmailConfig()
+                    emailConfig.Enabled = EmailEnabled
+                    emailConfig.SetRecipientsFromString(EmailRecipients)
+                    emailConfig.SmtpServer = SmtpServer
+                    emailConfig.SmtpPort = SmtpPort
+                    emailConfig.SmtpUsername = SmtpUsername
+                    emailConfig.SmtpPassword = SmtpPassword
+                    emailConfig.UseTLS = SmtpUseTLS
+                    emailConfig.FromAddress = EmailFromAddress
+                    emailConfig.FromName = EmailFromName
+                    emailConfig.Subject = EmailSubject
+                    emailConfig.Body = EmailBody
+                    
+                    ' Get page count from PDF
+                    Dim pageCount As Integer = 0
+                    Try
+                        Using pdfDoc = PdfSharp.Pdf.IO.PdfReader.Open(pdfPath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import)
+                            pageCount = pdfDoc.PageCount
+                        End Using
+                    Catch
+                        ' If we can't read page count, just use 0
+                    End Try
+                    
+                    ' Send email
+                    Dim emailService As New EmailService(Logger)
+                    Dim success = Await emailService.SendPdfEmailAsync(emailConfig, pdfPath, JobName, DevName, UserID, pageCount)
+                    
+                    If success Then
+                        Log($"[{DevName}] Email sent successfully for job {JobName}", ConsoleColor.Green)
+                    Else
+                        Log($"[{DevName}] Failed to send email for job {JobName}", ConsoleColor.Red)
+                    End If
+                Catch ex As Exception
+                    Log($"[{DevName}] Email error: {ex.Message}", ConsoleColor.Red)
+                End Try
+            End Function)
+        End If
     End Sub
     Public Function ToConfigLine() As String
-        Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}||{Enabled}"
+        ' Extended format with email configuration (backward compatible)
+        Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}||{Enabled}||{EmailEnabled}||{EmailRecipients}||{SmtpServer}||{SmtpPort}||{SmtpUsername}||{SmtpPassword}||{SmtpUseTLS}||{EmailFromAddress}||{EmailFromName}||{EmailSubject}||{EmailBody}"
     End Function
 End Class
 

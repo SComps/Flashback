@@ -55,4 +55,8 @@ dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Re
 echo "-> Publishing Flashback.Config.3270..."
 dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
+# 4. Spooler Service
+echo "-> Publishing Flashback.Spooler..."
+dotnet publish ../Flashback.Spooler/Flashback.Spooler.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"

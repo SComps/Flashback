@@ -25,6 +25,7 @@
                         <ComboBoxItem Content="VM/SP"/>
                         <ComboBoxItem Content="Tandy Xenix"/>
                         <ComboBoxItem Content="zOS"/>
+                        <ComboBoxItem Content="z/VM 7.3"/>
                         <ComboBoxItem Content="Generic Profile"/>
                     </ComboBox>
                 </StackPanel>
@@ -59,6 +60,40 @@
                         <ComboBoxItem Content="Standard White"/>
                     </ComboBox>
                 </StackPanel>
+            </PivotItem>
+
+            <PivotItem Header="Email">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="400">
+                    <StackPanel Spacing="12" Margin="0,12,0,0">
+                        <CheckBox x:Name="chkEmailEnabled" Content="Enable Email Delivery"/>
+                        <TextBox x:Name="txtEmailRecipients" Header="RECIPIENTS (comma-separated)" 
+                                 PlaceholderText="user@example.com, admin@company.com"
+                                 TextWrapping="Wrap"/>
+                        
+                        <TextBlock Text="SMTP Configuration" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBox x:Name="txtSmtpServer" Header="SMTP SERVER" PlaceholderText="smtp.gmail.com"/>
+                        <NumberBox x:Name="numSmtpPort" Header="SMTP PORT" Value="587" Minimum="1" Maximum="65535" SpinButtonPlacementMode="Inline"/>
+                        <TextBox x:Name="txtSmtpUsername" Header="SMTP USERNAME" PlaceholderText="username@example.com"/>
+                        <PasswordBox x:Name="txtSmtpPassword" Header="SMTP PASSWORD" PlaceholderText="Enter password"/>
+                        <CheckBox x:Name="chkSmtpUseTLS" Content="Use TLS/SSL Encryption" IsChecked="True"/>
+                        
+                        <TextBlock Text="Email Template" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBox x:Name="txtEmailFrom" Header="FROM ADDRESS" PlaceholderText="flashback@localhost"/>
+                        <TextBox x:Name="txtEmailFromName" Header="FROM NAME" PlaceholderText="Flashback Print Server"/>
+                        <TextBox x:Name="txtEmailSubject" Header="SUBJECT TEMPLATE" 
+                                 PlaceholderText="Print Job: {JobName} from {DeviceName}"/>
+                        <TextBox x:Name="txtEmailBody" Header="BODY TEMPLATE" 
+                                 PlaceholderText="Job details..." 
+                                 TextWrapping="Wrap" 
+                                 AcceptsReturn="True" 
+                                 Height="100"/>
+                        
+                        <TextBlock Text="Available variables: {JobName}, {DeviceName}, {UserName}, {PageCount}, {DateTime}, {Date}, {Time}" 
+                                   FontSize="11" 
+                                   Foreground="Gray" 
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
             </PivotItem>
         </Pivot>
     </Grid>

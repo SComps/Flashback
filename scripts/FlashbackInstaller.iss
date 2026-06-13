@@ -16,6 +16,8 @@
 #define EngineServiceDisplay   "Flashback Engine"
 #define Config3270ServiceName  "FlashbackConfig3270"
 #define Config3270ServiceDisplay "Flashback Config 3270"
+#define SpoolerServiceName     "FlashbackSpooler"
+#define SpoolerServiceDisplay  "Flashback Spooler"
 
 [Setup]
 AppId={{A7F3B2C1-5D4E-4F6A-8B9C-1D2E3F4A5B6C}
@@ -51,6 +53,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; ============================================================================
 [Tasks]
 Name: "installservices"; Description: "Install Flashback Engine and Config 3270 as Windows Services"; GroupDescription: "System Services:"; Flags: unchecked
+Name: "installservices\installspooler"; Description: "Install Flashback Spooler Service (Port 9100 print gateway)"; Flags: unchecked
 Name: "installservices\installtray"; Description: "Launch Flashback Tray at Windows startup (monitoring)"; Flags: unchecked
 
 ; ============================================================================
@@ -87,6 +90,10 @@ Filename: "sc.exe"; Parameters: "create {#Config3270ServiceName} binPath= ""\""{
 Filename: "sc.exe"; Parameters: "description {#Config3270ServiceName} ""Flashback 3270 Terminal Configuration Service"""; Flags: runhidden waituntilterminated; Tasks: installservices
 Filename: "sc.exe"; Parameters: "start {#Config3270ServiceName}"; Flags: runhidden waituntilterminated; Tasks: installservices; StatusMsg: "Starting Flashback Config 3270 service..."
 
+Filename: "sc.exe"; Parameters: "create {#SpoolerServiceName} binPath= ""\""{app}\Flashback.Spooler.exe\"""" DisplayName= ""{#SpoolerServiceDisplay}"" start= auto"; Flags: runhidden waituntilterminated; Tasks: installservices\installspooler; StatusMsg: "Installing Flashback Spooler service..."
+Filename: "sc.exe"; Parameters: "description {#SpoolerServiceName} ""Flashback Port 9100 Print Spooler Service"""; Flags: runhidden waituntilterminated; Tasks: installservices\installspooler
+Filename: "sc.exe"; Parameters: "start {#SpoolerServiceName}"; Flags: runhidden waituntilterminated; Tasks: installservices\installspooler; StatusMsg: "Starting Flashback Spooler service..."
+
 ; Launch the tray app after install if services were installed
 Filename: "{app}\Flashback.Tray.exe"; Flags: nowait postinstall skipifsilent shellexec; Tasks: installservices\installtray; Description: "Launch Flashback Tray Monitor"
 
@@ -108,6 +115,10 @@ Filename: "sc.exe"; Parameters: "delete {#EngineServiceName}"; Flags: runhidden 
 Filename: "sc.exe"; Parameters: "stop {#Config3270ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "StopConfig3270"
 Filename: "sc.exe"; Parameters: "delete {#Config3270ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteConfig3270"
 
+; Stop and remove the Spooler service
+Filename: "sc.exe"; Parameters: "stop {#SpoolerServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "StopSpooler"
+Filename: "sc.exe"; Parameters: "delete {#SpoolerServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteSpooler"
+
 ; Kill the tray app if it's running
 Filename: "taskkill.exe"; Parameters: "/F /IM Flashback.Tray.exe"; Flags: runhidden waituntilterminated; RunOnceId: "KillTray"
 
@@ -128,6 +139,7 @@ Type: dirifempty; Name: "{app}"
 var
   PortPage: TInputQueryWizardPage;
   WebPortPage: TInputQueryWizardPage;
+  SpoolerPortPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
 begin
@@ -144,6 +156,15 @@ begin
   
   WebPortPage.Add('Web Port (e.g. 8080):', False);
   WebPortPage.Values[0] := '8080'; // Default web port
+
+  SpoolerPortPage := CreateInputQueryPage(WebPortPage.ID,
+    'Spooler Configuration', 'Configure Flashback Spooler Ports',
+    'The Spooler receives print jobs on port 9100 (JetDirect standard) and forwards them to Flashback.Engine. Specify the port where Engine should connect to receive jobs.');
+  
+  SpoolerPortPage.Add('Port 9100 (JetDirect - fixed):', False);
+  SpoolerPortPage.Values[0] := '9100'; // Fixed, display only
+  SpoolerPortPage.Add('Engine Connection Port:', False);
+  SpoolerPortPage.Values[1] := '9001'; // Default Engine port
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -151,6 +172,9 @@ begin
   Result := False;
   // Only show the port pages if the user has selected the services task
   if ((PageID = PortPage.ID) or (PageID = WebPortPage.ID)) and (not WizardIsTaskSelected('installservices')) then
+    Result := True;
+  // Only show spooler port page if spooler service is selected
+  if (PageID = SpoolerPortPage.ID) and (not WizardIsTaskSelected('installservices\installspooler')) then
     Result := True;
 end;
 
@@ -167,6 +191,46 @@ begin
     Result := '';
 end;
 
+procedure CreateSpoolerConfig();
+var
+  ConfigLines: TArrayOfString;
+  ConfigFile: String;
+  EnginePort: String;
+begin
+  if not WizardIsTaskSelected('installservices\installspooler') then
+    Exit;
+
+  ConfigFile := ExpandConstant('{app}\spooler.conf');
+  EnginePort := SpoolerPortPage.Values[1];
+  
+  SetArrayLength(ConfigLines, 23);
+  ConfigLines[0] := '# Flashback Spooler Configuration';
+  ConfigLines[1] := '# Generated by installer on ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0);
+  ConfigLines[2] := '';
+  ConfigLines[3] := '[Listener]';
+  ConfigLines[4] := 'Port9100Enabled=true';
+  ConfigLines[5] := 'EnginePort=' + EnginePort;
+  ConfigLines[6] := '';
+  ConfigLines[7] := '[Storage]';
+  ConfigLines[8] := 'SpoolDirectory=./spool';
+  ConfigLines[9] := 'MaxSpoolAge=24';
+  ConfigLines[10] := 'MaxSpoolFiles=1000';
+  ConfigLines[11] := '';
+  ConfigLines[12] := '[Logging]';
+  ConfigLines[13] := 'LogLevel=Info';
+  ConfigLines[14] := 'LogFile=./logs/spooler.log';
+  ConfigLines[15] := '';
+  ConfigLines[16] := '[Behavior]';
+  ConfigLines[17] := 'JobCompletionTimeout=5';
+  ConfigLines[18] := 'MaxJobSizeMB=100';
+  ConfigLines[19] := 'EnableRetry=true';
+  ConfigLines[20] := 'MaxRetries=3';
+  ConfigLines[21] := 'RetryDelaySeconds=30';
+  ConfigLines[22] := '';
+  
+  SaveStringsToFile(ConfigFile, ConfigLines, False);
+end;
+
 // Before installation, stop any existing services that might be running
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
@@ -178,6 +242,8 @@ begin
   // Stop and DELETE existing services to ensure binPath updates with new arguments
   Exec('sc.exe', 'stop {#EngineServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('sc.exe', 'delete {#EngineServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('sc.exe', 'stop {#SpoolerServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('sc.exe', 'delete {#SpoolerServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   
   Exec('sc.exe', 'stop {#Config3270ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('sc.exe', 'delete {#Config3270ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -187,6 +253,8 @@ begin
 
   // Brief pause to allow file handles to release
   Sleep(1500);
+  
+  CreateSpoolerConfig();
 end;
 
 // On uninstall, make sure everything is cleaned up

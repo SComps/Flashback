@@ -1,0 +1,72 @@
+name: Build Flashback for Windows
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_PREVIEW: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        include-prerelease: ${{ env.DOTNET_PREVIEW }}
+        
+    - name: Restore dependencies
+      run: dotnet restore Flashback.slnx
+      
+    - name: Build solution
+      run: dotnet build Flashback.slnx --configuration Release --no-restore
+      
+    - name: Run publish scripts
+      shell: pwsh
+      run: |
+        Write-Host "Publishing Windows binaries..."
+        & .\scripts\publish_windows.ps1
+        
+    - name: Setup Inno Setup
+      run: |
+        choco install innosetup -y
+        
+    - name: Build installer
+      shell: pwsh
+      run: |
+        $innoSetup = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+        if (Test-Path $innoSetup) {
+          Write-Host "Building installer with Inno Setup..."
+          & $innoSetup /O".\artifacts" ".\scripts\FlashbackInstaller.iss"
+        } else {
+          Write-Warning "Inno Setup not found, skipping installer build"
+        }
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: flashback-windows-build
+        path: |
+          publish/
+          artifacts/*.exe
+        retention-days: 30
+        
+    - name: Upload installer
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: flashback-windows-installer
+        path: artifacts/*.exe
+        retention-days: 90
+
+# Made with Bob

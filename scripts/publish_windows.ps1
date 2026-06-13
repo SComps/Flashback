@@ -48,6 +48,10 @@ dotnet publish ..\Flashback.Config.Console\Flashback.Config.Console.vbproj -c Re
 Write-Host "-> Publishing Flashback.Config.3270 (Native AOT)..."
 dotnet publish ..\Flashback.Config.3270\Flashback.Config.3270.vbproj -c Release -r win-x64 -f net10.0-windows --self-contained true /p:PublishAot=true /p:PublishDir=$PublishDir
 
+# Spooler Service (Console App - AOT Compatible)
+Write-Host "-> Publishing Flashback.Spooler (Native AOT)..."
+dotnet publish ..\Flashback.Spooler\Flashback.Spooler.vbproj -c Release -r win-x64 -f net10.0-windows --self-contained true /p:PublishAot=true /p:PublishDir=$PublishDir
+
 # Tray Controller (WinForms - NOT AOT Compatible, using SingleFile)
 Write-Host "-> Publishing Flashback.Tray (Single File)..."
 dotnet publish ..\Flashback.Tray\Flashback.Tray.vbproj -c Release -r win-x64 -f net10.0-windows --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:PublishDir=$PublishDir

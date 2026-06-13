@@ -6,6 +6,7 @@ Public Enum ScreenMode
     Login
     Menu
     Edit
+    EditEmail
     ConfirmDelete
     Help
     Users
@@ -47,8 +48,12 @@ Public Class SessionStateManager
     End Sub
 
     Public Sub HandleInput(sender As Object, e As AidKeyEventArgs)
-        ' Intercept PF1 for global help
-        If e.AidKey = &H61 Then ' PF1
+        ' Debug: Log the key code received
+        Console.WriteLine($"[DEBUG] Key received: 0x{e.AidKey:X2} in mode {_mode}")
+        
+        ' Intercept PF1 for global help (correct key code is 0xF1, not 0x61)
+        If e.AidKey = &HF1 Then ' PF1
+            Console.WriteLine("[DEBUG] PF1 pressed - showing help")
             If _mode <> ScreenMode.Help Then
                 If _mode = ScreenMode.Edit Then ScrapeEditFields()
                 _previousMode = _mode
@@ -68,6 +73,8 @@ Public Class SessionStateManager
                 ProcessMenuInput(e)
             Case ScreenMode.Edit
                 ProcessEditInput(e)
+            Case ScreenMode.EditEmail
+                ProcessEditEmailInput(e)
             Case ScreenMode.ConfirmDelete
                 ProcessDeleteInput(e)
             Case ScreenMode.Help
@@ -175,16 +182,30 @@ Public Class SessionStateManager
     End Sub
 
     Private Sub ProcessEditInput(e As AidKeyEventArgs)
+        Console.WriteLine($"[DEBUG] ProcessEditInput: Key=0x{e.AidKey:X2}")
+        
         If e.AidKey = &HF3 Then
+            Console.WriteLine("[DEBUG] PF3 pressed - returning to menu")
             _mode = ScreenMode.Menu
             ShowMenu()
             Return
         End If
+        
+        If e.AidKey = &HF4 Then ' PF4 (correct key code is 0xF4, not 0x64)
+            Console.WriteLine("[DEBUG] PF4 pressed - switching to email config")
+            ScrapeEditFields()
+            _mode = ScreenMode.EditEmail
+            ShowEditEmail()
+            Return
+        End If
 
         If e.AidKey <> &H7D Then
+            Console.WriteLine($"[DEBUG] Unknown key 0x{e.AidKey:X2} - refreshing screen")
             ShowEdit()
             Return
         End If
+        
+        Console.WriteLine("[DEBUG] Enter pressed - saving device")
 
         Dim d = _devList(_editingIndex)
         d.DevName = _session.GetFieldValue("txtName")?.Trim()
@@ -324,7 +345,7 @@ Public Class SessionStateManager
         _session.WriteText(21, 1, StrDup(78, "-"), TN3270Color.Blue)
         _session.WriteText(22, 2, "ENTER:PROCESS   PF1:HELP   PF3:EXIT   PF7:UP   PF8:DOWN", TN3270Color.White)
         _session.WriteText(22, 60, "CMD: ADD, USERS", TN3270Color.Turquoise)
-        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)GEN", TN3270Color.Turquoise)
+        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)ZVM73 (10)GEN", TN3270Color.Turquoise)
         _session.WriteText(24, 2, "CONN:(0)SOCK (1)FILE (2)PHYS (3)RAW", TN3270Color.Turquoise)
         _session.ShowScreen()
     End Sub
@@ -381,8 +402,114 @@ Public Class SessionStateManager
         _session.WriteText(19, labelCol, "   DEVICE ENABLED  :", TN3270Color.Turquoise)
         _session.AddField(19, fieldCol, 5, d.Enabled.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEnabled").Modified = True
 
+        _session.WriteText(22, 2, "ENTER:SAVE   PF1:HELP   PF3:CANCEL   PF4:EMAIL CONFIG", TN3270Color.White)
+        _session.ShowScreen()
+    End Sub
+
+    Private Sub ShowEditEmail()
+        _session.ClearFields()
+        Dim d = _devList(_editingIndex)
+        Dim dateStr = DateTime.Now.ToString("MM/dd/yy")
+        Dim timeStr = DateTime.Now.ToString("HH:mm:ss")
+
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK01", TN3270Color.Turquoise)
+        _session.WriteText(1, 25, "EMAIL CONFIGURATION", TN3270Color.White)
+        _session.WriteText(1, 65, $"DATE: {dateStr}", TN3270Color.Turquoise)
+        _session.WriteText(2, 2, "TRANSID: CFG1", TN3270Color.Turquoise)
+        _session.WriteText(2, 65, $"TIME: {timeStr}", TN3270Color.Turquoise)
+        _session.WriteText(3, 1, StrDup(78, "-"), TN3270Color.Blue)
+
+        _session.WriteText(4, 2, $"DEVICE: {d.DevName}", TN3270Color.Yellow)
+
+        Dim labelCol = 2
+        Dim fieldCol = 25
+
+        _session.WriteText(6, labelCol, "   EMAIL ENABLED     :", TN3270Color.Turquoise)
+        _session.AddField(6, fieldCol, 5, d.EmailEnabled.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEmailEnabled").Modified = True
+
+        _session.WriteText(7, labelCol, "   RECIPIENTS        :", TN3270Color.Turquoise)
+        _session.AddField(7, fieldCol, 50, d.EmailRecipients, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtRecipients").Modified = True
+
+        _session.WriteText(8, labelCol, "   SMTP SERVER       :", TN3270Color.Turquoise)
+        _session.AddField(8, fieldCol, 40, d.SmtpServer, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpServer").Modified = True
+
+        _session.WriteText(9, labelCol, "   SMTP PORT         :", TN3270Color.Turquoise)
+        _session.AddField(9, fieldCol, 5, d.SmtpPort.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPort").Modified = True
+
+        _session.WriteText(10, labelCol, "   SMTP USERNAME     :", TN3270Color.Turquoise)
+        _session.AddField(10, fieldCol, 40, d.SmtpUsername, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpUsername").Modified = True
+
+        _session.WriteText(11, labelCol, "   SMTP PASSWORD     :", TN3270Color.Turquoise)
+        _session.AddField(11, fieldCol, 40, d.SmtpPassword, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPassword").Modified = True
+
+        _session.WriteText(12, labelCol, "   USE TLS           :", TN3270Color.Turquoise)
+        _session.AddField(12, fieldCol, 5, d.SmtpUseTLS.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtUseTLS").Modified = True
+
+        _session.WriteText(13, labelCol, "   FROM ADDRESS      :", TN3270Color.Turquoise)
+        _session.AddField(13, fieldCol, 50, d.EmailFromAddress, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromAddress").Modified = True
+
+        _session.WriteText(14, labelCol, "   FROM NAME         :", TN3270Color.Turquoise)
+        _session.AddField(14, fieldCol, 40, d.EmailFromName, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromName").Modified = True
+
+        _session.WriteText(15, labelCol, "   SUBJECT           :", TN3270Color.Turquoise)
+        _session.AddField(15, fieldCol, 50, d.EmailSubject, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSubject").Modified = True
+
+        _session.WriteText(16, labelCol, "   BODY              :", TN3270Color.Turquoise)
+        _session.AddField(16, fieldCol, 50, d.EmailBody, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtBody").Modified = True
+
+        _session.WriteText(18, 2, "VARIABLES: {JobName} {DeviceName} {UserName} {PageCount}", TN3270Color.Green)
+        _session.WriteText(19, 2, "           {DateTime} {Date} {Time}", TN3270Color.Green)
+        _session.WriteText(20, 2, "RECIPIENTS: Separate multiple emails with semicolons", TN3270Color.Green)
+
         _session.WriteText(22, 2, "ENTER:SAVE   PF1:HELP   PF3:CANCEL", TN3270Color.White)
         _session.ShowScreen()
+    End Sub
+
+    Private Sub ProcessEditEmailInput(e As AidKeyEventArgs)
+        If e.AidKey = &HF3 Then
+            _mode = ScreenMode.Edit
+            ShowEdit()
+            Return
+        End If
+
+        If e.AidKey <> &H7D Then
+            ShowEditEmail()
+            Return
+        End If
+
+        Dim d = _devList(_editingIndex)
+
+        Dim emailEnabledVal = _session.GetFieldValue("txtEmailEnabled")?.Trim().ToLower()
+        If Not String.IsNullOrEmpty(emailEnabledVal) Then
+            d.EmailEnabled = (emailEnabledVal = "true" OrElse emailEnabledVal = "1" OrElse emailEnabledVal = "yes" OrElse emailEnabledVal = "y")
+        End If
+
+        d.EmailRecipients = _session.GetFieldValue("txtRecipients")?.Trim()
+        d.SmtpServer = _session.GetFieldValue("txtSmtpServer")?.Trim()
+
+        Dim portVal = _session.GetFieldValue("txtSmtpPort")?.Trim()
+        If Not String.IsNullOrEmpty(portVal) AndAlso IsNumeric(portVal) Then
+            d.SmtpPort = CInt(portVal)
+        End If
+
+        d.SmtpUsername = _session.GetFieldValue("txtSmtpUsername")?.Trim()
+        d.SmtpPassword = _session.GetFieldValue("txtSmtpPassword")?.Trim()
+
+        Dim tlsVal = _session.GetFieldValue("txtUseTLS")?.Trim().ToLower()
+        If Not String.IsNullOrEmpty(tlsVal) Then
+            d.SmtpUseTLS = (tlsVal = "true" OrElse tlsVal = "1" OrElse tlsVal = "yes" OrElse tlsVal = "y")
+        End If
+
+        d.EmailFromAddress = _session.GetFieldValue("txtFromAddress")?.Trim()
+        d.EmailFromName = _session.GetFieldValue("txtFromName")?.Trim()
+        d.EmailSubject = _session.GetFieldValue("txtSubject")?.Trim()
+        d.EmailBody = _session.GetFieldValue("txtBody")?.Trim()
+
+        _statusMsg = "Email configuration saved."
+        _statusColor = TN3270Color.Yellow
+        _hasUnsavedChanges = True
+        _mode = ScreenMode.Edit
+        ShowEdit()
     End Sub
 
     Private Sub ShowConfirmDelete()
@@ -412,12 +539,13 @@ Public Class SessionStateManager
         _session.WriteText(11, 2, "ORIENTATION     : 0=Portrait, 1=Landscape.", TN3270Color.Turquoise)
         _session.WriteText(12, 2, "SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", TN3270Color.Turquoise)
         
-        _session.WriteText(15, 2, "COMMANDS (MENU SCREEN):", TN3270Color.Yellow)
-        _session.WriteText(17, 2, "ADD             : Create a new device configuration.", TN3270Color.Turquoise)
-        _session.WriteText(18, 2, "SAVE            : Explicitly save all changes to disk.", TN3270Color.Turquoise)
-        _session.WriteText(19, 2, "DELETE [ID]     : Remove a device by its list ID number.", TN3270Color.Turquoise)
-        _session.WriteText(20, 2, "USERS (or 3)    : Manage Web Users for dashboard access.", TN3270Color.Turquoise)
-        _session.WriteText(21, 2, "[ID]             : Enter an ID number to edit that device.", TN3270Color.Turquoise)
+        _session.WriteText(14, 2, "EMAIL CONFIG    : Use GUI tools (Console/WinUI/WPF) for email setup.", TN3270Color.Yellow)
+        
+        _session.WriteText(16, 2, "COMMANDS (MENU SCREEN):", TN3270Color.Yellow)
+        _session.WriteText(18, 2, "ADD             : Create a new device configuration.", TN3270Color.Turquoise)
+        _session.WriteText(19, 2, "SAVE            : Explicitly save all changes to disk.", TN3270Color.Turquoise)
+        _session.WriteText(20, 2, "DELETE [ID]     : Remove a device by its list ID number.", TN3270Color.Turquoise)
+        _session.WriteText(21, 2, "USERS (or 3)    : Manage Web Users for dashboard access.", TN3270Color.Turquoise)
 
         _session.WriteText(23, 2, "PRESS ENTER OR PF3 TO RETURN TO PREVIOUS SCREEN", TN3270Color.White)
         _session.ShowScreen()

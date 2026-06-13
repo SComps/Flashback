@@ -15,6 +15,7 @@ Public Enum OSType
     OS_VMSP
     OS_TANDYXENIX
     OS_ZOS
+    OS_ZVM73
     OS_GENERIC
 End Enum
 

@@ -171,6 +171,14 @@ Module Program
                                        Say(CInt(d.Shading).ToString().PadRight(1), valCol, 13, ConsoleColor.Yellow)
                                        Say(d.JobNumber.ToString().PadRight(6), valCol, 14, ConsoleColor.Yellow)
                                        Say(If(d.Enabled, "YES", "NO").PadRight(3), valCol, 15, ConsoleColor.Yellow)
+                                       ' Email fields
+                                       Say(If(d.EmailEnabled, "YES", "NO").PadRight(3), valCol, 16, ConsoleColor.Yellow)
+                                       Say(If(d.EmailRecipients, "").PadRight(50), valCol, 17, ConsoleColor.Yellow)
+                                       Say(If(d.SmtpServer, "").PadRight(40), valCol, 18, ConsoleColor.Yellow)
+                                       Say(d.SmtpPort.ToString().PadRight(5), valCol, 19, ConsoleColor.Yellow)
+                                       Say(If(d.SmtpUsername, "").PadRight(30), valCol, 20, ConsoleColor.Yellow)
+                                       Say(New String("*"c, Math.Min(d.SmtpPassword.Length, 20)).PadRight(20), valCol, 21, ConsoleColor.Yellow)
+                                       Say(If(d.SmtpUseTLS, "YES", "NO").PadRight(3), valCol, 22, ConsoleColor.Yellow)
                                    End Sub
 
         RedrawEdit.Invoke()
@@ -190,10 +198,19 @@ Module Program
         
         d.JobNumber = Val(GetStringWithHelp(d.JobNumber.ToString(), valCol, 14, 6, ConsoleColor.Yellow, RedrawEdit))
         d.Enabled = GetBoolWithHelp(d.Enabled, valCol, 15, RedrawEdit)
+        
+        ' Email configuration fields
+        d.EmailEnabled = GetBoolWithHelp(d.EmailEnabled, valCol, 16, RedrawEdit)
+        d.EmailRecipients = GetStringWithHelp(d.EmailRecipients, valCol, 17, 50, ConsoleColor.Yellow, RedrawEdit)
+        d.SmtpServer = GetStringWithHelp(d.SmtpServer, valCol, 18, 40, ConsoleColor.Yellow, RedrawEdit)
+        d.SmtpPort = Val(GetStringWithHelp(d.SmtpPort.ToString(), valCol, 19, 5, ConsoleColor.Yellow, RedrawEdit))
+        d.SmtpUsername = GetStringWithHelp(d.SmtpUsername, valCol, 20, 30, ConsoleColor.Yellow, RedrawEdit)
+        d.SmtpPassword = GetStringWithHelp(d.SmtpPassword, valCol, 21, 20, ConsoleColor.Yellow, RedrawEdit)
+        d.SmtpUseTLS = GetBoolWithHelp(d.SmtpUseTLS, valCol, 22, RedrawEdit)
 
-        Say("Save changes? (Y/n) ==> ", 0, 17, ConsoleColor.Green)
+        Say("Save changes? (Y/n) ==> ", 0, 24, ConsoleColor.Green)
         Dim saveInput As String = ""
-        If Not GetInputWithHelp(saveInput, 25, 17, 1, ConsoleColor.White, AddressOf DisplayMenu) Then
+        If Not GetInputWithHelp(saveInput, 25, 24, 1, ConsoleColor.White, AddressOf DisplayMenu) Then
             ' If they hit F1 here, we just loop back and ask again
             EditItem(itemIdx)
             Return
@@ -224,16 +241,21 @@ Module Program
         Say("FIELD DESCRIPTIONS:", 2, 4, ConsoleColor.Yellow)
         Say("DEVICE TYPE     : 0=Generic, 1=Printer, 2=Plotter", 2, 6, ConsoleColor.Cyan)
         Say("CONN TYPE       : 0=Socket (Connect to Host), 1=File, 2=Physical, 3=Raw", 2, 7, ConsoleColor.Cyan)
-        Say("OPERATING SYSTEM: The profile used to parse job headers (0-9).", 2, 8, ConsoleColor.Cyan)
-        Say("SOURCE          : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", 2, 9, ConsoleColor.Cyan)
-        Say("OUTPUT PDF      : Set to YES to generate PDF files.", 2, 10, ConsoleColor.Cyan)
-        Say("ORIENTATION     : 0=Portrait, 1=Landscape.", 2, 11, ConsoleColor.Cyan)
-        Say("SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", 2, 12, ConsoleColor.Cyan)
+        Say("OPERATING SYSTEM: 0=MVS 1=VMS 2=MPE 3=RSTS 4=VM/370 5=NOS 6=VM/SP", 2, 8, ConsoleColor.Cyan)
+        Say("                  7=Xenix 8=z/OS 9=z/VM 7.3 10=Generic", 2, 9, ConsoleColor.Cyan)
+        Say("SOURCE          : For Conn 0: Host:Port. For Conn 3: Local Listen Port.", 2, 10, ConsoleColor.Cyan)
+        Say("OUTPUT PDF      : Set to YES to generate PDF files.", 2, 11, ConsoleColor.Cyan)
+        Say("ORIENTATION     : 0=Portrait, 1=Landscape.", 2, 12, ConsoleColor.Cyan)
+        Say("SHADING COLOR   : (0)Plain (1)Green Bar (2)Blue Bar (3)Gray Bar.", 2, 13, ConsoleColor.Cyan)
+        Say("EMAIL ENABLED   : Set to YES to email PDFs after generation.", 2, 14, ConsoleColor.Cyan)
+        Say("EMAIL RECIPIENTS: Comma-separated list of email addresses.", 2, 15, ConsoleColor.Cyan)
+        Say("SMTP SERVER     : SMTP server hostname (e.g., smtp.gmail.com).", 2, 16, ConsoleColor.Cyan)
+        Say("SMTP PORT       : SMTP port (typically 587 for TLS, 25 for plain).", 2, 17, ConsoleColor.Cyan)
 
-        Say("COMMANDS:", 2, 15, ConsoleColor.Yellow)
-        Say("ADD, SAVE, USERS, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 2, 17, ConsoleColor.Cyan)
+        Say("COMMANDS:", 2, 19, ConsoleColor.Yellow)
+        Say("ADD, SAVE, USERS, EXIT, [ID] to Edit, DELETE [ID], CONNECT [ID], UP, DOWN", 2, 21, ConsoleColor.Cyan)
 
-        Say("Press any key to return...", 2, 20, ConsoleColor.White)
+        Say("Press any key to return...", 2, 23, ConsoleColor.White)
         System.Console.ReadKey(True)
     End Sub
 
@@ -400,6 +422,20 @@ Module Program
                         If p.Length >= 13 Then
                             d.Enabled = (p(12) = "True")
                         End If
+                        
+                        ' Load email configuration (backward compatible)
+                        If p.Length >= 14 Then d.EmailEnabled = (p(13) = "True")
+                        If p.Length >= 15 Then d.EmailRecipients = p(14)
+                        If p.Length >= 16 Then d.SmtpServer = p(15)
+                        If p.Length >= 17 Then d.SmtpPort = Val(p(16))
+                        If p.Length >= 18 Then d.SmtpUsername = p(17)
+                        If p.Length >= 19 Then d.SmtpPassword = p(18)
+                        If p.Length >= 20 Then d.SmtpUseTLS = (p(19) = "True")
+                        If p.Length >= 21 Then d.EmailFromAddress = p(20)
+                        If p.Length >= 22 Then d.EmailFromName = p(21)
+                        If p.Length >= 23 Then d.EmailSubject = p(22)
+                        If p.Length >= 24 Then d.EmailBody = p(23)
+                        
                         list.Add(d)
                     End If
                 End While
@@ -438,19 +474,27 @@ Module Program
         Say("       DEVICE TYPE:", labelColSum, 6, ConsoleColor.Cyan)
         Say("   CONNECTION TYPE:", labelColSum, 7, ConsoleColor.Cyan)
         Say("  OPERATING SYSTEM:", labelColSum, 8, ConsoleColor.Cyan)
-        Say("       DEVICE SOURCE:", labelColSum, 9, ConsoleColor.Cyan)
+        Say("    DEVICE SOURCE :", labelColSum, 9, ConsoleColor.Cyan)
         Say("        OUTPUT PDF:", labelColSum, 10, ConsoleColor.Cyan)
         Say("       ORIENTATION:", labelColSum, 11, ConsoleColor.Cyan)
         Say("        OUTPUT DIR:", labelColSum, 12, ConsoleColor.Cyan)
         Say("   SHADING COLOR  :", labelColSum, 13, ConsoleColor.Cyan)
         Say("   START JOB NO.  :", labelColSum, 14, ConsoleColor.Cyan)
         Say("   DEVICE ENABLED :", labelColSum, 15, ConsoleColor.Cyan)
+        Say("    EMAIL ENABLED :", labelColSum, 16, ConsoleColor.Cyan)
+        Say("  EMAIL RECIPIENTS:", labelColSum, 17, ConsoleColor.Cyan)
+        Say("      SMTP SERVER :", labelColSum, 18, ConsoleColor.Cyan)
+        Say("        SMTP PORT :", labelColSum, 19, ConsoleColor.Cyan)
+        Say("    SMTP USERNAME :", labelColSum, 20, ConsoleColor.Cyan)
+        Say("    SMTP PASSWORD :", labelColSum, 21, ConsoleColor.Cyan)
+        Say("      SMTP USE TLS:", labelColSum, 22, ConsoleColor.Cyan)
 
         Say("(0:Prn 1:Rdr)", 45, 6, ConsoleColor.DarkGray)
         Say("(0:Sock 1:File 2:Phys 3:Raw)", 45, 7, ConsoleColor.DarkGray)
-        Say("(0-9, 0:MVS 9:GENERIC)", 45, 8, ConsoleColor.DarkGray)
-        Say("(0:Land 1:Port)", 45, 12, ConsoleColor.DarkGray)
-        Say("(0:Green 1:Blue 2:None)", 45, 14, ConsoleColor.DarkGray)
+        Say("(0-10, 0:MVS 9:z/VM73 10:GEN)", 45, 8, ConsoleColor.DarkGray)
+        Say("(0:Land 1:Port)", 45, 11, ConsoleColor.DarkGray)
+        Say("(0:Green 1:Blue 2:None)", 45, 13, ConsoleColor.DarkGray)
+        Say("(comma-separated)", 45, 17, ConsoleColor.DarkGray)
     End Sub
 
     Private Sub ManageUsers()
