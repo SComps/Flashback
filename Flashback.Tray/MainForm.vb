@@ -12,11 +12,13 @@ Public Class MainForm
     
     Private Const EngineServiceName As String = "FlashbackEngine"
     Private Const Config3270ServiceName As String = "FlashbackConfig3270"
+    Private Const JetDirectServiceName As String = "FlashbackJetDirect"
     Private Const ConfigFile As String = "devices.dat"
     Private Const CommandFile As String = "commands.dat"
     
     Private engineController As ServiceController
     Private config3270Controller As ServiceController
+    Private jetDirectController As ServiceController
     Private _deviceMenu As ToolStripMenuItem
     Private _fullConfigPath As String
     Private _fullCmdPath As String
@@ -41,6 +43,11 @@ Public Class MainForm
         trayMenu.Items.Add("Start 3270 Server", Nothing, AddressOf Start3270)
         trayMenu.Items.Add("Stop 3270 Server", Nothing, AddressOf Stop3270)
         trayMenu.Items.Add("-")
+        
+        trayMenu.Items.Add("Raw TCP (9100): Unknown", Nothing, AddressOf DoNothing).Enabled = False
+        trayMenu.Items.Add("Start Raw TCP Server", Nothing, AddressOf StartJetDirect)
+        trayMenu.Items.Add("Stop Raw TCP Server", Nothing, AddressOf StopJetDirect)
+        trayMenu.Items.Add("-")
 
         _deviceMenu = New ToolStripMenuItem("Manage Devices")
         trayMenu.Items.Add(_deviceMenu)
@@ -49,7 +56,11 @@ Public Class MainForm
         trayMenu.Items.Add("License: FREE NON-COMMERCIAL", Nothing, AddressOf DoNothing).Enabled = False
         trayMenu.Items.Add("-")
         
-        trayMenu.Items.Add("Configure (Console Tool)", Nothing, AddressOf OpenConsoleTool)
+        Dim configMenu = New ToolStripMenuItem("Configure Devices")
+        configMenu.DropDownItems.Add("Console Tool", Nothing, AddressOf OpenConsoleTool)
+        configMenu.DropDownItems.Add("WPF Tool", Nothing, AddressOf OpenWPFTool)
+        configMenu.DropDownItems.Add("WinUI Tool", Nothing, AddressOf OpenWinUITool)
+        trayMenu.Items.Add(configMenu)
         trayMenu.Items.Add("View Log File", Nothing, AddressOf OpenLog)
         trayMenu.Items.Add("-")
         trayMenu.Items.Add("Exit Controller", Nothing, AddressOf OnExit)
@@ -101,13 +112,15 @@ Public Class MainForm
     Private Sub CheckStatus(Optional sender As Object = Nothing, Optional e As EventArgs = Nothing)
         UpdateServiceStatus(EngineServiceName, engineController, 0, 1, 2)
         UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
+        UpdateServiceStatus(JetDirectServiceName, jetDirectController, 8, 9, 10)
         UpdateDeviceMenu()
         UpdateLicenseStatus()
         
         Try
             Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
             Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")
-            trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus}"
+            Dim jetDirectStatus = If(jetDirectController IsNot Nothing, jetDirectController.Status.ToString(), "Unknown")
+            trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus} | Raw TCP: {jetDirectStatus}"
         Catch
             trayIcon.Text = "Flashback Controller"
         End Try
@@ -117,11 +130,11 @@ Public Class MainForm
         Try
             Dim l = LicenseManager.GetLicenseInfo()
             If l.IsLicensed Then
-                trayMenu.Items(10).Text = $"License: {l.LicensedTo} ({l.MaxPrinters} Prn)"
-                trayMenu.Items(10).ForeColor = Drawing.Color.Navy
+                trayMenu.Items(14).Text = $"License: {l.LicensedTo} ({l.MaxPrinters} Prn)"
+                trayMenu.Items(14).ForeColor = Drawing.Color.Navy
             Else
-                trayMenu.Items(10).Text = "License: FREE NON-COMMERCIAL"
-                trayMenu.Items(10).ForeColor = Drawing.Color.DarkGray
+                trayMenu.Items(14).Text = "License: FREE NON-COMMERCIAL"
+                trayMenu.Items(14).ForeColor = Drawing.Color.DarkGray
             End If
         Catch
         End Try
@@ -146,12 +159,24 @@ Public Class MainForm
                     Dim displayName = If(isEnabled, dName, dName & " (Disabled)")
                     Dim dItem = New ToolStripMenuItem(displayName)
 
+                    ' Enable/Disable toggle
+                    If isEnabled Then
+                        Dim disableBtn = New ToolStripMenuItem("Disable Device", Nothing, Sub() ToggleDevice(dName, False))
+                        dItem.DropDownItems.Add(disableBtn)
+                    Else
+                        Dim enableBtn = New ToolStripMenuItem("Enable Device", Nothing, Sub() ToggleDevice(dName, True))
+                        dItem.DropDownItems.Add(enableBtn)
+                    End If
                     
-                    Dim connectBtn = New ToolStripMenuItem("Connect", Nothing, Sub() SendCommand("CONNECT", dName))
-                    Dim disconnectBtn = New ToolStripMenuItem("Disconnect", Nothing, Sub() SendCommand("DISCONNECT", dName))
+                    ' Connect/Disconnect commands (only if enabled)
+                    If isEnabled Then
+                        dItem.DropDownItems.Add("-")
+                        Dim connectBtn = New ToolStripMenuItem("Connect", Nothing, Sub() SendCommand("CONNECT", dName))
+                        Dim disconnectBtn = New ToolStripMenuItem("Disconnect", Nothing, Sub() SendCommand("DISCONNECT", dName))
+                        dItem.DropDownItems.Add(connectBtn)
+                        dItem.DropDownItems.Add(disconnectBtn)
+                    End If
                     
-                    dItem.DropDownItems.Add(connectBtn)
-                    dItem.DropDownItems.Add(disconnectBtn)
                     _deviceMenu.DropDownItems.Add(dItem)
                 End If
             Next
@@ -160,11 +185,81 @@ Public Class MainForm
         End Try
     End Sub
 
+    Private Sub ToggleDevice(devName As String, enable As Boolean)
+        Try
+            If Not File.Exists(_fullConfigPath) Then
+                MessageBox.Show("Configuration file not found.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+
+            Dim lines = File.ReadAllLines(_fullConfigPath).ToList()
+            Dim updated = False
+
+            For i = 0 To lines.Count - 1
+                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                Dim parts = lines(i).Split("||")
+                
+                If parts.Length > 0 AndAlso parts(0) = devName Then
+                    ' Update the enabled flag (index 12)
+                    If parts.Length > 12 Then
+                        parts(12) = enable.ToString()
+                    Else
+                        ' Extend array if needed
+                        ReDim Preserve parts(12)
+                        parts(12) = enable.ToString()
+                    End If
+                    
+                    lines(i) = String.Join("||", parts)
+                    updated = True
+                    
+                    ' If disabling, send disconnect command
+                    If Not enable Then
+                        SendCommand("DISCONNECT", devName)
+                    End If
+                    ' If enabling, send connect command
+                    If enable Then
+                        SendCommand("CONNECT", devName)
+                    End If
+                    
+                    Exit For
+                End If
+            Next
+
+            If updated Then
+                File.WriteAllLines(_fullConfigPath, lines)
+                UpdateDeviceMenu()
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show($"Failed to toggle device: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Private Sub SendCommand(cmd As String, devName As String)
         Try
             File.AppendAllText(_fullCmdPath, $"{cmd}||{devName}{vbCrLf}")
         Catch ex As Exception
             MessageBox.Show($"Failed to send command: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub OpenWPFTool()
+        Try
+            Dim path = "Flashback.Config.WPF.exe"
+            If Not File.Exists(path) Then path = "..\Flashback.Config.WPF\bin\Debug\net10.0-windows\Flashback.Config.WPF.exe"
+            Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
+        Catch ex As Exception
+            MessageBox.Show("Could not launch WPF Configuration utility.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
+
+    Private Sub OpenWinUITool()
+        Try
+            Dim path = "Flashback.Config.WinUI.exe"
+            If Not File.Exists(path) Then path = "..\Flashback.Config.WinUI\bin\x64\Debug\net10.0-windows10.0.19041.0\Flashback.Config.WinUI.exe"
+            Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
+        Catch ex As Exception
+            MessageBox.Show("Could not launch WinUI Configuration utility.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try
     End Sub
 
@@ -232,6 +327,24 @@ Public Class MainForm
         End Try
     End Sub
 
+    Private Sub StartJetDirect()
+        Try
+            jetDirectController?.Start()
+            CheckStatus()
+        Catch ex As Exception
+            MessageBox.Show($"Failed to start Raw TCP Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub StopJetDirect()
+        Try
+            jetDirectController?.Stop()
+            CheckStatus()
+        Catch ex As Exception
+            MessageBox.Show($"Failed to stop Raw TCP Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Private Sub OpenConsoleTool()
         Try
             Dim path = "Flashback.Config.Console.exe"
@@ -246,12 +359,11 @@ Public Class MainForm
         Try
             Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
             Dim path = System.IO.Path.Combine(baseDir, "printers.log")
-            If File.Exists(path) Then
-                Process.Start(New ProcessStartInfo("notepad.exe", $"""{path}""") With {.UseShellExecute = True})
-            Else
-                MessageBox.Show("Log file not found.", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            End If
+            
+            Dim logViewer As New LogViewerForm(path)
+            logViewer.Show()
         Catch ex As Exception
+            MessageBox.Show($"Failed to open log viewer: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
