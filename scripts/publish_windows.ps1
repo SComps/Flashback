@@ -17,13 +17,14 @@ if ([string]::IsNullOrWhiteSpace($InputPath)) {
 
 # Stop running processes/services that might lock the publish directory
 Write-Host "Closing running Flashback components..." -ForegroundColor Yellow
-$Services = @("FlashbackEngine", "FlashbackConfig3270")
+$Services = @("FlashbackEngine", "FlashbackConfig3270", "FlashbackSpooler")
 foreach ($svc in $Services) {
     if (Get-Service $svc -ErrorAction SilentlyContinue) {
         Stop-Service $svc -Force -ErrorAction SilentlyContinue
     }
 }
 Stop-Process -Name "Flashback.Tray" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "Flashback.Spooler" -Force -ErrorAction SilentlyContinue
 
 # Selective cleanup: Preserve .dat and .lic files, but purge all binaries/debug symbols
 if (Test-Path $PublishDir) { 

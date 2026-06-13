@@ -1,4 +1,4 @@
-# Flashback Suite - Windows Service Installer
+In # Flashback Suite - Windows Service Installer
 # Run this script as Administrator to register the Engine and 3270 Config services.
 
 $ErrorActionPreference = "Stop"

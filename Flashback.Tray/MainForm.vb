@@ -12,13 +12,13 @@ Public Class MainForm
     
     Private Const EngineServiceName As String = "FlashbackEngine"
     Private Const Config3270ServiceName As String = "FlashbackConfig3270"
-    Private Const JetDirectServiceName As String = "FlashbackJetDirect"
+    Private Const SpoolerServiceName As String = "FlashbackSpooler"
     Private Const ConfigFile As String = "devices.dat"
     Private Const CommandFile As String = "commands.dat"
     
     Private engineController As ServiceController
     Private config3270Controller As ServiceController
-    Private jetDirectController As ServiceController
+    Private spoolerController As ServiceController
     Private _deviceMenu As ToolStripMenuItem
     Private _fullConfigPath As String
     Private _fullCmdPath As String
@@ -44,9 +44,9 @@ Public Class MainForm
         trayMenu.Items.Add("Stop 3270 Server", Nothing, AddressOf Stop3270)
         trayMenu.Items.Add("-")
         
-        trayMenu.Items.Add("Raw TCP (9100): Unknown", Nothing, AddressOf DoNothing).Enabled = False
-        trayMenu.Items.Add("Start Raw TCP Server", Nothing, AddressOf StartJetDirect)
-        trayMenu.Items.Add("Stop Raw TCP Server", Nothing, AddressOf StopJetDirect)
+        trayMenu.Items.Add("Spooler (9100): Unknown", Nothing, AddressOf DoNothing).Enabled = False
+        trayMenu.Items.Add("Start Spooler Service", Nothing, AddressOf StartSpooler)
+        trayMenu.Items.Add("Stop Spooler Service", Nothing, AddressOf StopSpooler)
         trayMenu.Items.Add("-")
 
         _deviceMenu = New ToolStripMenuItem("Manage Devices")
@@ -112,15 +112,15 @@ Public Class MainForm
     Private Sub CheckStatus(Optional sender As Object = Nothing, Optional e As EventArgs = Nothing)
         UpdateServiceStatus(EngineServiceName, engineController, 0, 1, 2)
         UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
-        UpdateServiceStatus(JetDirectServiceName, jetDirectController, 8, 9, 10)
+        UpdateServiceStatus(SpoolerServiceName, spoolerController, 8, 9, 10)
         UpdateDeviceMenu()
         UpdateLicenseStatus()
         
         Try
             Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
             Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")
-            Dim jetDirectStatus = If(jetDirectController IsNot Nothing, jetDirectController.Status.ToString(), "Unknown")
-            trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus} | Raw TCP: {jetDirectStatus}"
+            Dim spoolerStatus = If(spoolerController IsNot Nothing, spoolerController.Status.ToString(), "Unknown")
+            trayIcon.Text = $"Engine: {engineStatus} | 3270: {configStatus} | Spooler: {spoolerStatus}"
         Catch
             trayIcon.Text = "Flashback Controller"
         End Try
@@ -327,21 +327,21 @@ Public Class MainForm
         End Try
     End Sub
 
-    Private Sub StartJetDirect()
+    Private Sub StartSpooler()
         Try
-            jetDirectController?.Start()
+            spoolerController?.Start()
             CheckStatus()
         Catch ex As Exception
-            MessageBox.Show($"Failed to start Raw TCP Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Failed to start Spooler Service: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
-    Private Sub StopJetDirect()
+    Private Sub StopSpooler()
         Try
-            jetDirectController?.Stop()
+            spoolerController?.Stop()
             CheckStatus()
         Catch ex As Exception
-            MessageBox.Show($"Failed to stop Raw TCP Server: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Failed to stop Spooler Service: {ex.Message}", "Flashback", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
