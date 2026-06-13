@@ -38,6 +38,7 @@ Public Class OsProfileFactory
         RegisterProfile(New Nos278Profile())
         RegisterProfile(New VmspProfile())
         RegisterProfile(New TandyXenixProfile())
+        RegisterProfile(New Zvm73Profile())
         RegisterProfile(New GenericProfile())
     End Sub
 
@@ -361,6 +362,91 @@ Public Class TandyXenixProfile
             .JobID = Now.Ticks.ToString(),
             .User = "XENIX"
         }
+        info.ApplyFallbacks(devName)
+        Return info
+    End Function
+End Class
+
+Public Class Zvm73Profile
+    Implements IOsProfile
+
+    Public ReadOnly Property OS As OSType = OSType.OS_ZVM73 Implements IOsProfile.OS
+    Public ReadOnly Property FirstLine As Double = 0 Implements IOsProfile.FirstLine
+    Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
+    Public ReadOnly Property StartLine As Integer = 2 Implements IOsProfile.StartLine
+    Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
+
+    Public Function ExtractJobInformation(lines As List(Of String), devName As String) As JobInformation Implements IOsProfile.ExtractJobInformation
+        Dim info As New JobInformation()
+        Console.WriteLine($"[{devName}] resolving z/VM 7.3 job information.")
+        
+        ' z/VM 7.3 format:
+        ' USERID  USERID  FILE NAME/TYPE=     FILENAME  FILETYPE     ORIGINID= USERID
+        ' USERID  USERID  CREATION DATE/TIME= MM/DD/YY  HH:MM:SS     SYSID=    SYSTEMID
+        ' USERID  USERID  CLASS=  X     SPID= ####
+        
+        For Each line As String In lines
+            Dim trimmedLine = line.Trim()
+            If String.IsNullOrEmpty(trimmedLine) Then Continue For
+            
+            Try
+                ' Split by multiple spaces to get fields
+                Dim parts As String() = trimmedLine.Split(New String() {"  "}, StringSplitOptions.RemoveEmptyEntries)
+                
+                ' Look for lines starting with repeated user ID (e.g., "MAINT730  MAINT730")
+                If parts.Length >= 2 Then
+                    Dim firstPart = parts(0).Trim()
+                    Dim secondPart = parts(1).Trim()
+                    
+                    ' Check if first two parts are the same (user ID pattern)
+                    If firstPart = secondPart AndAlso Not String.IsNullOrEmpty(firstPart) Then
+                        ' This is a z/VM 7.3 header line
+                        Dim restOfLine = String.Join("  ", parts.Skip(2))
+                        
+                        ' Extract FILE NAME/TYPE
+                        If restOfLine.Contains("FILE NAME/TYPE=") Then
+                            Dim fileMatch = System.Text.RegularExpressions.Regex.Match(restOfLine, "FILE NAME/TYPE=\s+(\S+)\s+(\S+)")
+                            If fileMatch.Success Then
+                                Dim fileName = fileMatch.Groups(1).Value.Trim()
+                                Dim fileType = fileMatch.Groups(2).Value.Trim()
+                                info.JobName = $"{fileName}.{fileType}"
+                            End If
+                            
+                            ' Extract ORIGINID
+                            Dim originMatch = System.Text.RegularExpressions.Regex.Match(restOfLine, "ORIGINID=\s+(\S+)")
+                            If originMatch.Success Then
+                                info.User = originMatch.Groups(1).Value.Trim()
+                            End If
+                        End If
+                        
+                        ' Extract SYSID
+                        If restOfLine.Contains("SYSID=") Then
+                            Dim sysidMatch = System.Text.RegularExpressions.Regex.Match(restOfLine, "SYSID=\s+(\S+)")
+                            If sysidMatch.Success Then
+                                Dim sysid = sysidMatch.Groups(1).Value.Trim()
+                                ' Store system ID for potential use
+                            End If
+                        End If
+                        
+                        ' Extract SPID (Spool ID)
+                        If restOfLine.Contains("SPID=") Then
+                            Dim spidMatch = System.Text.RegularExpressions.Regex.Match(restOfLine, "SPID=\s+(\d+)")
+                            If spidMatch.Success Then
+                                info.JobID = spidMatch.Groups(1).Value.Trim()
+                            End If
+                        End If
+                        
+                        ' If we haven't found user yet, use the repeated user ID from the line prefix
+                        If String.IsNullOrEmpty(info.User) OrElse info.User = "UnknownUser" Then
+                            info.User = firstPart
+                        End If
+                    End If
+                End If
+            Catch ex As Exception
+                Console.WriteLine($"[{devName}] ERROR parsing z/VM 7.3 line: {ex.Message}")
+            End Try
+        Next
+        
         info.ApplyFallbacks(devName)
         Return info
     End Function

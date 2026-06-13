@@ -25,6 +25,7 @@
                         <ComboBoxItem Content="VM/SP"/>
                         <ComboBoxItem Content="Tandy Xenix"/>
                         <ComboBoxItem Content="zOS"/>
+                        <ComboBoxItem Content="z/VM 7.3"/>
                         <ComboBoxItem Content="Generic Profile"/>
                     </ComboBox>
                 </StackPanel>

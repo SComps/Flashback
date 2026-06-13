@@ -345,7 +345,7 @@ Public Class SessionStateManager
         _session.WriteText(21, 1, StrDup(78, "-"), TN3270Color.Blue)
         _session.WriteText(22, 2, "ENTER:PROCESS   PF1:HELP   PF3:EXIT   PF7:UP   PF8:DOWN", TN3270Color.White)
         _session.WriteText(22, 60, "CMD: ADD, USERS", TN3270Color.Turquoise)
-        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)GEN", TN3270Color.Turquoise)
+        _session.WriteText(23, 2, "OS:(0)MVS (1)VMS (2)MPE (3)RSTS (4)VM370 (5)NOS (6)VMSP (7)TNDY (8)ZOS (9)ZVM73 (10)GEN", TN3270Color.Turquoise)
         _session.WriteText(24, 2, "CONN:(0)SOCK (1)FILE (2)PHYS (3)RAW", TN3270Color.Turquoise)
         _session.ShowScreen()
     End Sub

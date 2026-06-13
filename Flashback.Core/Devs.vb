@@ -314,7 +314,7 @@ Public Class Devs
             If ignoreChars = 0 Then
                 Select Case c
                     Case vbCr
-                        If OS = OSType.OS_VM370 OrElse OS = OSType.OS_MVS38J OrElse OS = OSType.OS_MPE Then
+                        If OS = OSType.OS_VM370 OrElse OS = OSType.OS_MVS38J OrElse OS = OSType.OS_MPE OrElse OS = OSType.OS_ZVM73 Then
                             currentLine.Append(c)
                         ElseIf OS = OSType.OS_TANDYXENIX Then
                             currentLine.Append(vbCrLf)
