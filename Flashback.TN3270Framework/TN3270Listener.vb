@@ -426,7 +426,7 @@ Public Class TN3270Session
         Fields.Clear()
     End Sub
     
-    Public Function AddField(row As Integer, col As Integer, length As Integer, Optional content As String = "", Optional isProtected As Boolean = True, Optional foreground As Byte = TN3270Color.White, Optional background As Byte = TN3270Color.Neutral, Optional highlighting As Byte = TN3270Highlight.None, Optional name As String = "") As TN3270Field
+    Public Function AddField(row As Integer, col As Integer, length As Integer, Optional content As String = "", Optional isProtected As Boolean = True, Optional foreground As Byte = TN3270Color.White, Optional background As Byte = TN3270Color.Neutral, Optional highlighting As Byte = TN3270Highlight.None, Optional name As String = "", Optional intensity As TN3270Intensity = TN3270Intensity.Normal) As TN3270Field
         Dim f As New TN3270Field(Me)
         f.Row = row
         f.Col = col
@@ -436,6 +436,7 @@ Public Class TN3270Session
         f.ForegroundColor = foreground
         f.BackgroundColor = background
         f.Highlighting = highlighting
+        f.Intensity = intensity
         f.Name = name
         Fields.Add(f)
         Return f
@@ -575,6 +576,107 @@ Public Class TN3270Session
         Dim raw2 = TN3270Utils.ReverseAddressMap(b2)
         Return (raw1 << 6) Or raw2
     End Function
+    ''' <summary>
+    ''' Erase all unprotected fields on the screen
+    ''' </summary>
+    Public Sub EraseAllUnprotected()
+        Dim buffer As New List(Of Byte)
+        buffer.Add(INTERFACE_CMD.ERASE_ALL_UNPROTECTED)
+        buffer.Add(&HC3) ' WCC
+        buffer.Add(IAC)
+        buffer.Add(CMD_EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+    
+    ''' <summary>
+    ''' Read only modified fields from the terminal (most efficient)
+    ''' </summary>
+    Public Sub ReadModified()
+        Dim buffer As New List(Of Byte)
+        buffer.Add(INTERFACE_CMD.READ_MODIFIED)
+        buffer.Add(IAC)
+        buffer.Add(CMD_EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+    
+    ''' <summary>
+    ''' Read all modified fields including those with MDT off
+    ''' </summary>
+    Public Sub ReadModifiedAll()
+        Dim buffer As New List(Of Byte)
+        buffer.Add(INTERFACE_CMD.READ_MODIFIED_ALL)
+        buffer.Add(IAC)
+        buffer.Add(CMD_EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+    
+    ''' <summary>
+    ''' Read entire buffer contents
+    ''' </summary>
+    Public Sub ReadBuffer()
+        Dim buffer As New List(Of Byte)
+        buffer.Add(INTERFACE_CMD.READ_BUFFER)
+        buffer.Add(IAC)
+        buffer.Add(CMD_EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+    
+    ''' <summary>
+    ''' Set character set encoding for this session
+    ''' </summary>
+    Public Sub SetCharacterSet(codePage As String)
+        Ebcdic = TN3270CharacterSets.GetEncoding(codePage)
+        Console.WriteLine($"[Session {_client.Client.RemoteEndPoint}] Character set changed to: {TN3270CharacterSets.GetCodePageName(Ebcdic.CodePage)}")
+    End Sub
+    
+    ''' <summary>
+    ''' Get the name of a field by its screen position
+    ''' </summary>
+    Public Function GetFieldAt(row As Integer, col As Integer) As TN3270Field
+        Dim targetAddr = ((row - 1) * Columns) + (col - 1)
+        Return Fields.FirstOrDefault(Function(f) f.Address <= targetAddr AndAlso (f.Address + f.Length) >= targetAddr)
+    End Function
+    
+    ''' <summary>
+    ''' Tab to next unprotected field (Program Tab functionality)
+    ''' </summary>
+    Public Function GetNextUnprotectedField(currentField As TN3270Field) As TN3270Field
+        If currentField Is Nothing Then
+            Return Fields.FirstOrDefault(Function(f) Not f.IsProtected)
+        End If
+        
+        Dim currentIndex = Fields.IndexOf(currentField)
+        If currentIndex < 0 Then Return Nothing
+        
+        ' Search forward from current field
+        For i = currentIndex + 1 To Fields.Count - 1
+            If Not Fields(i).IsProtected Then Return Fields(i)
+        Next
+        
+        ' Wrap around to beginning
+        For i = 0 To currentIndex
+            If Not Fields(i).IsProtected Then Return Fields(i)
+        Next
+        
+        Return Nothing
+    End Function
+    
+    ''' <summary>
+    ''' Get all modified fields (fields with MDT set)
+    ''' </summary>
+    Public Function GetModifiedFields() As List(Of TN3270Field)
+        Return Fields.Where(Function(f) f.Modified).ToList()
+    End Function
+    
+    ''' <summary>
+    ''' Clear all modified data tags
+    ''' </summary>
+    Public Sub ClearModifiedTags()
+        For Each field In Fields
+            field.Modified = False
+        Next
+    End Sub
+
 
 End Class
 
@@ -713,6 +815,11 @@ Public Class INTERFACE_CMD
     Public Const ERASE_WRITE As Byte = &HF5
     Public Const ERASE_WRITE_ALTERNATE As Byte = &H7E ' Required for Large Screen Models
     Public Const WSF As Byte = &HF3 ' Write Structured Field
+    Public Const READ_BUFFER As Byte = &HF2 ' Read entire buffer
+    Public Const READ_MODIFIED As Byte = &HF6 ' Read only modified fields
+    Public Const READ_MODIFIED_ALL As Byte = &H6E ' Read all modified fields
+    Public Const ERASE_ALL_UNPROTECTED As Byte = &H6F ' Clear unprotected fields
+    Public Const NOP As Byte = &HF0 ' No Operation
 End Class
 
 Public Class StructuredFieldEventArgs
@@ -729,6 +836,11 @@ Public Class ORDER
     Public Const SFE As Byte = &H29 ' Start Field Extended
     Public Const IC As Byte = &H13  ' Insert Cursor
     Public Const SA As Byte = &H28  ' Set Attribute
+    Public Const PT As Byte = &H05  ' Program Tab (tab to next unprotected field)
+    Public Const RA As Byte = &H3C  ' Repeat to Address
+    Public Const EUA As Byte = &H12 ' Erase Unprotected to Address
+    Public Const GE As Byte = &H08  ' Graphic Escape (for APL/special characters)
+    Public Const MF As Byte = &H2C  ' Modify Field
 End Class
 
 Public Class TN3270Color
@@ -743,6 +855,85 @@ Public Class TN3270Color
 End Class
 
 Public Class TN3270Transparency
+Public Class AID_KEYS
+    ' Attention Identifier (AID) Keys - Complete 3270/3278 Set
+    Public Const NONE As Byte = &H60        ' No AID generated
+    Public Const ENTER As Byte = &H7D       ' Enter key
+    Public Const CLEAR As Byte = &H6D       ' Clear key
+    Public Const PA1 As Byte = &H6C         ' Program Attention 1
+    Public Const PA2 As Byte = &H6E         ' Program Attention 2
+    Public Const PA3 As Byte = &H6B         ' Program Attention 3
+    
+    ' PF Keys (Program Function)
+    Public Const PF1 As Byte = &HF1
+    Public Const PF2 As Byte = &HF2
+    Public Const PF3 As Byte = &HF3
+    Public Const PF4 As Byte = &HF4
+    Public Const PF5 As Byte = &HF5
+    Public Const PF6 As Byte = &HF6
+    Public Const PF7 As Byte = &HF7
+    Public Const PF8 As Byte = &HF8
+    Public Const PF9 As Byte = &HF9
+    Public Const PF10 As Byte = &H7A
+    Public Const PF11 As Byte = &H7B
+    Public Const PF12 As Byte = &H7C
+    Public Const PF13 As Byte = &HC1
+    Public Const PF14 As Byte = &HC2
+    Public Const PF15 As Byte = &HC3
+    Public Const PF16 As Byte = &HC4
+    Public Const PF17 As Byte = &HC5
+    Public Const PF18 As Byte = &HC6
+    Public Const PF19 As Byte = &HC7
+    Public Const PF20 As Byte = &HC8
+    Public Const PF21 As Byte = &HC9
+    Public Const PF22 As Byte = &H4A
+    Public Const PF23 As Byte = &H4B
+    Public Const PF24 As Byte = &H4C
+    
+    ' Special Keys
+    Public Const SYSREQ As Byte = &HF0      ' System Request
+    Public Const ATTN As Byte = &H6D        ' Attention (same as CLEAR on some terminals)
+    Public Const STRUCTURED_FIELD As Byte = &H88 ' Structured Field
+    
+    ' Helper function to get AID key name
+    Public Shared Function GetKeyName(aid As Byte) As String
+        Select Case aid
+            Case ENTER : Return "ENTER"
+            Case CLEAR : Return "CLEAR"
+            Case PA1 : Return "PA1"
+            Case PA2 : Return "PA2"
+            Case PA3 : Return "PA3"
+            Case PF1 : Return "PF1"
+            Case PF2 : Return "PF2"
+            Case PF3 : Return "PF3"
+            Case PF4 : Return "PF4"
+            Case PF5 : Return "PF5"
+            Case PF6 : Return "PF6"
+            Case PF7 : Return "PF7"
+            Case PF8 : Return "PF8"
+            Case PF9 : Return "PF9"
+            Case PF10 : Return "PF10"
+            Case PF11 : Return "PF11"
+            Case PF12 : Return "PF12"
+            Case PF13 : Return "PF13"
+            Case PF14 : Return "PF14"
+            Case PF15 : Return "PF15"
+            Case PF16 : Return "PF16"
+            Case PF17 : Return "PF17"
+            Case PF18 : Return "PF18"
+            Case PF19 : Return "PF19"
+            Case PF20 : Return "PF20"
+            Case PF21 : Return "PF21"
+            Case PF22 : Return "PF22"
+            Case PF23 : Return "PF23"
+            Case PF24 : Return "PF24"
+            Case SYSREQ : Return "SYSREQ"
+            Case STRUCTURED_FIELD : Return "STRUCTURED_FIELD"
+            Case Else : Return $"UNKNOWN(0x{aid:X2})"
+        End Select
+    End Function
+End Class
+
     Public Const None As Byte = &H0
     Public Const Transparent As Byte = &HF0
     Public Const Opaque As Byte = &HF1
@@ -755,3 +946,48 @@ Public Class TN3270Highlight
     Public Const Underline As Byte = &HF4
 End Class
 
+
+Public Class TN3270CharacterSets
+    ' Supported EBCDIC Code Pages for International Support
+    Public Shared Function GetEncoding(codePage As String) As Encoding
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
+        
+        Select Case codePage.ToUpper()
+            Case "IBM037", "US"
+                Return Encoding.GetEncoding("IBM037") ' US/Canada
+            Case "IBM273", "GERMAN", "AUSTRIAN"
+                Return Encoding.GetEncoding("IBM273") ' German/Austrian
+            Case "IBM277", "DANISH", "NORWEGIAN"
+                Return Encoding.GetEncoding("IBM277") ' Danish/Norwegian
+            Case "IBM278", "FINNISH", "SWEDISH"
+                Return Encoding.GetEncoding("IBM278") ' Finnish/Swedish
+            Case "IBM280", "ITALIAN"
+                Return Encoding.GetEncoding("IBM280") ' Italian
+            Case "IBM284", "SPANISH"
+                Return Encoding.GetEncoding("IBM284") ' Spanish
+            Case "IBM285", "UK"
+                Return Encoding.GetEncoding("IBM285") ' UK
+            Case "IBM297", "FRENCH"
+                Return Encoding.GetEncoding("IBM297") ' French
+            Case "IBM500", "INTERNATIONAL"
+                Return Encoding.GetEncoding("IBM500") ' International
+            Case Else
+                Return Encoding.GetEncoding("IBM037") ' Default to US
+        End Select
+    End Function
+    
+    Public Shared Function GetCodePageName(codePage As Integer) As String
+        Select Case codePage
+            Case 37 : Return "US/Canada (IBM037)"
+            Case 273 : Return "German/Austrian (IBM273)"
+            Case 277 : Return "Danish/Norwegian (IBM277)"
+            Case 278 : Return "Finnish/Swedish (IBM278)"
+            Case 280 : Return "Italian (IBM280)"
+            Case 284 : Return "Spanish (IBM284)"
+            Case 285 : Return "UK (IBM285)"
+            Case 297 : Return "French (IBM297)"
+            Case 500 : Return "International (IBM500)"
+            Case Else : Return $"Unknown ({codePage})"
+        End Select
+    End Function
+End Class

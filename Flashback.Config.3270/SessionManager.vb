@@ -147,6 +147,7 @@ Public Class SessionStateManager
         ElseIf cmd = "SAVE" Then
             SaveDevices()
             _hasUnsavedChanges = False
+            _session.ClearModifiedTags() ' Clear MDT after save
             _statusMsg = "Devices saved successfully."
             _statusColor = TN3270Color.Green
             ShowMenu()
@@ -207,58 +208,60 @@ Public Class SessionStateManager
         
         Console.WriteLine("[DEBUG] Enter pressed - saving device")
 
+        ' Use optimized field scraping
+        ScrapeEditFields()
+        
         Dim d = _devList(_editingIndex)
-        d.DevName = _session.GetFieldValue("txtName")?.Trim()
-        d.DevDescription = _session.GetFieldValue("txtDesc")?.Trim()
-        d.DevType = Val(_session.GetFieldValue("txtType"))
-        d.ConnType = Val(_session.GetFieldValue("txtConn"))
-        d.OS = CType(Val(_session.GetFieldValue("txtOS")), OSType)
-        d.DevDest = _session.GetFieldValue("txtDest")?.Trim()
-        
-        Dim pdfVal = _session.GetFieldValue("txtPDF")?.Trim().ToUpper()
-        d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
-        
-        d.Orientation = Val(_session.GetFieldValue("txtOrient"))
-        d.OutDest = _session.GetFieldValue("txtOut")?.Trim()
-        
-        d.Shading = CType(Val(_session.GetFieldValue("txtShade")), RenderPDF.ShadingColor)
-        d.JobNumber = Val(_session.GetFieldValue("txtJob"))
-
-        Dim enVal = _session.GetFieldValue("txtEnabled")?.Trim().ToUpper()
-        If Not String.IsNullOrEmpty(enVal) Then
-            d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
-        End If
-
         _statusMsg = $"Device '{d.DevName}' updated."
         _statusColor = TN3270Color.Green
         _hasUnsavedChanges = True
+        _session.ClearModifiedTags() ' Clear MDT after update
         _mode = ScreenMode.Menu
         ShowMenu()
     End Sub
 
     Private Sub ScrapeEditFields()
         If _editingIndex < 0 OrElse _editingIndex >= _devList.Count Then Return
+        
+        ' Use new GetModifiedFields() for efficiency - only process changed fields
+        Dim modifiedFields = _session.GetModifiedFields()
+        If modifiedFields.Count = 0 Then Return
+        
         Dim d = _devList(_editingIndex)
-        d.DevName = _session.GetFieldValue("txtName")?.Trim()
-        d.DevDescription = _session.GetFieldValue("txtDesc")?.Trim()
-        d.DevType = Val(_session.GetFieldValue("txtType"))
-        d.ConnType = Val(_session.GetFieldValue("txtConn"))
-        d.OS = CType(Val(_session.GetFieldValue("txtOS")), OSType)
-        d.DevDest = _session.GetFieldValue("txtDest")?.Trim()
         
-        Dim pdfVal = _session.GetFieldValue("txtPDF")?.Trim().ToUpper()
-        d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
-        
-        d.Orientation = Val(_session.GetFieldValue("txtOrient"))
-        d.OutDest = _session.GetFieldValue("txtOut")?.Trim()
-        
-        d.Shading = CType(Val(_session.GetFieldValue("txtShade")), RenderPDF.ShadingColor)
-        d.JobNumber = Val(_session.GetFieldValue("txtJob"))
-
-        Dim enVal = _session.GetFieldValue("txtEnabled")?.Trim().ToUpper()
-        If Not String.IsNullOrEmpty(enVal) Then
-            d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
-        End If
+        ' Only update fields that were actually modified
+        For Each field In modifiedFields
+            Select Case field.Name
+                Case "txtName"
+                    d.DevName = field.Content?.Trim()
+                Case "txtDesc"
+                    d.DevDescription = field.Content?.Trim()
+                Case "txtType"
+                    d.DevType = Val(field.Content)
+                Case "txtConn"
+                    d.ConnType = Val(field.Content)
+                Case "txtOS"
+                    d.OS = CType(Val(field.Content), OSType)
+                Case "txtDest"
+                    d.DevDest = field.Content?.Trim()
+                Case "txtPDF"
+                    Dim pdfVal = field.Content?.Trim().ToUpper()
+                    d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
+                Case "txtOrient"
+                    d.Orientation = Val(field.Content)
+                Case "txtOut"
+                    d.OutDest = field.Content?.Trim()
+                Case "txtShade"
+                    d.Shading = CType(Val(field.Content), RenderPDF.ShadingColor)
+                Case "txtJob"
+                    d.JobNumber = Val(field.Content)
+                Case "txtEnabled"
+                    Dim enVal = field.Content?.Trim().ToUpper()
+                    If Not String.IsNullOrEmpty(enVal) Then
+                        d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
+                    End If
+            End Select
+        Next
     End Sub
 
     Private Sub ProcessDeleteInput(e As AidKeyEventArgs)
@@ -294,7 +297,7 @@ Public Class SessionStateManager
 
         _session.WriteText(10, 25, "ENTER SYSTEM PASSWORD TO CONTINUE", TN3270Color.Turquoise)
         _session.WriteText(12, 25, "SYSPW ===>", TN3270Color.Yellow)
-        _session.AddField(12, 36, 8, "", False, TN3270Color.Neutral, TN3270Color.Neutral, TN3270Highlight.None, "txtPw")
+        _session.AddField(12, 36, 8, "", False, TN3270Color.Neutral, TN3270Color.Neutral, TN3270Highlight.None, "txtPw", TN3270Intensity.Hidden)
 
         If Not String.IsNullOrEmpty(_statusMsg) Then
             _session.WriteText(15, 25, _statusMsg, _statusColor)
@@ -367,40 +370,40 @@ Public Class SessionStateManager
         Dim fieldCol = 26
 
         _session.WriteText(5, labelCol, "        DEVICE NAME:", TN3270Color.Turquoise)
-        _session.AddField(5, fieldCol, 15, d.DevName, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtName").Modified = True
+        _session.AddField(5, fieldCol, 15, d.DevName, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtName")
 
         _session.WriteText(6, labelCol, " DEVICE DESCRIPTION:", TN3270Color.Turquoise)
-        _session.AddField(6, fieldCol, 30, d.DevDescription, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDesc").Modified = True
+        _session.AddField(6, fieldCol, 30, d.DevDescription, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDesc")
 
         _session.WriteText(8, labelCol, "        DEVICE TYPE:", TN3270Color.Turquoise)
-        _session.AddField(8, fieldCol, 1, d.DevType.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtType").Modified = True
+        _session.AddField(8, fieldCol, 1, d.DevType.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtType")
 
         _session.WriteText(9, labelCol, "    CONNECTION TYPE:", TN3270Color.Turquoise)
-        _session.AddField(9, fieldCol, 1, d.ConnType.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtConn").Modified = True
+        _session.AddField(9, fieldCol, 1, d.ConnType.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtConn")
 
         _session.WriteText(10, labelCol, "   OPERATING SYSTEM:", TN3270Color.Turquoise)
-        _session.AddField(10, fieldCol, 2, CInt(d.OS).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOS").Modified = True
+        _session.AddField(10, fieldCol, 2, CInt(d.OS).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOS")
 
         _session.WriteText(12, labelCol, "        DEVICE SOURCE:", TN3270Color.Turquoise)
-        _session.AddField(12, fieldCol, 50, d.DevDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDest").Modified = True
+        _session.AddField(12, fieldCol, 50, d.DevDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtDest")
 
         _session.WriteText(14, labelCol, "         OUTPUT PDF:", TN3270Color.Turquoise)
-        _session.AddField(14, fieldCol, 10, d.PDF.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtPDF").Modified = True
+        _session.AddField(14, fieldCol, 10, d.PDF.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtPDF")
 
         _session.WriteText(14, 42, "ORIENTATION:", TN3270Color.Turquoise)
-        _session.AddField(14, 55, 1, d.Orientation.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOrient").Modified = True
+        _session.AddField(14, 55, 1, d.Orientation.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOrient")
 
         _session.WriteText(16, labelCol, "   OUTPUT DIRECTORY:", TN3270Color.Turquoise)
-        _session.AddField(16, fieldCol, 50, d.OutDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOut").Modified = True
+        _session.AddField(16, fieldCol, 50, d.OutDest, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtOut")
 
         _session.WriteText(17, labelCol, "   SHADING COLOR   :", TN3270Color.Turquoise)
-        _session.AddField(17, fieldCol, 1, CInt(d.Shading).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtShade").Modified = True
+        _session.AddField(17, fieldCol, 1, CInt(d.Shading).ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtShade")
 
         _session.WriteText(18, labelCol, "   NEXT JOB NUMBER :", TN3270Color.Turquoise)
-        _session.AddField(18, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob").Modified = True
+        _session.AddField(18, fieldCol, 6, d.JobNumber.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtJob")
 
         _session.WriteText(19, labelCol, "   DEVICE ENABLED  :", TN3270Color.Turquoise)
-        _session.AddField(19, fieldCol, 5, d.Enabled.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEnabled").Modified = True
+        _session.AddField(19, fieldCol, 5, d.Enabled.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEnabled")
 
         _session.WriteText(22, 2, "ENTER:SAVE   PF1:HELP   PF3:CANCEL   PF4:EMAIL CONFIG", TN3270Color.White)
         _session.ShowScreen()
@@ -425,37 +428,37 @@ Public Class SessionStateManager
         Dim fieldCol = 25
 
         _session.WriteText(6, labelCol, "   EMAIL ENABLED     :", TN3270Color.Turquoise)
-        _session.AddField(6, fieldCol, 5, d.EmailEnabled.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEmailEnabled").Modified = True
+        _session.AddField(6, fieldCol, 5, d.EmailEnabled.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtEmailEnabled")
 
         _session.WriteText(7, labelCol, "   RECIPIENTS        :", TN3270Color.Turquoise)
-        _session.AddField(7, fieldCol, 50, d.EmailRecipients, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtRecipients").Modified = True
+        _session.AddField(7, fieldCol, 50, d.EmailRecipients, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtRecipients")
 
         _session.WriteText(8, labelCol, "   SMTP SERVER       :", TN3270Color.Turquoise)
-        _session.AddField(8, fieldCol, 40, d.SmtpServer, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpServer").Modified = True
+        _session.AddField(8, fieldCol, 40, d.SmtpServer, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpServer")
 
         _session.WriteText(9, labelCol, "   SMTP PORT         :", TN3270Color.Turquoise)
-        _session.AddField(9, fieldCol, 5, d.SmtpPort.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPort").Modified = True
+        _session.AddField(9, fieldCol, 5, d.SmtpPort.ToString(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPort")
 
         _session.WriteText(10, labelCol, "   SMTP USERNAME     :", TN3270Color.Turquoise)
-        _session.AddField(10, fieldCol, 40, d.SmtpUsername, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpUsername").Modified = True
+        _session.AddField(10, fieldCol, 40, d.SmtpUsername, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpUsername")
 
         _session.WriteText(11, labelCol, "   SMTP PASSWORD     :", TN3270Color.Turquoise)
-        _session.AddField(11, fieldCol, 40, d.SmtpPassword, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPassword").Modified = True
+        _session.AddField(11, fieldCol, 40, d.SmtpPassword, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSmtpPassword", TN3270Intensity.Hidden)
 
         _session.WriteText(12, labelCol, "   USE TLS           :", TN3270Color.Turquoise)
-        _session.AddField(12, fieldCol, 5, d.SmtpUseTLS.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtUseTLS").Modified = True
+        _session.AddField(12, fieldCol, 5, d.SmtpUseTLS.ToString().ToLower(), False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtUseTLS")
 
         _session.WriteText(13, labelCol, "   FROM ADDRESS      :", TN3270Color.Turquoise)
-        _session.AddField(13, fieldCol, 50, d.EmailFromAddress, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromAddress").Modified = True
+        _session.AddField(13, fieldCol, 50, d.EmailFromAddress, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromAddress")
 
         _session.WriteText(14, labelCol, "   FROM NAME         :", TN3270Color.Turquoise)
-        _session.AddField(14, fieldCol, 40, d.EmailFromName, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromName").Modified = True
+        _session.AddField(14, fieldCol, 40, d.EmailFromName, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtFromName")
 
         _session.WriteText(15, labelCol, "   SUBJECT           :", TN3270Color.Turquoise)
-        _session.AddField(15, fieldCol, 50, d.EmailSubject, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSubject").Modified = True
+        _session.AddField(15, fieldCol, 50, d.EmailSubject, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtSubject")
 
         _session.WriteText(16, labelCol, "   BODY              :", TN3270Color.Turquoise)
-        _session.AddField(16, fieldCol, 50, d.EmailBody, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtBody").Modified = True
+        _session.AddField(16, fieldCol, 50, d.EmailBody, False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtBody")
 
         _session.WriteText(18, 2, "VARIABLES: {JobName} {DeviceName} {UserName} {PageCount}", TN3270Color.Green)
         _session.WriteText(19, 2, "           {DateTime} {Date} {Time}", TN3270Color.Green)
@@ -508,6 +511,7 @@ Public Class SessionStateManager
         _statusMsg = "Email configuration saved."
         _statusColor = TN3270Color.Yellow
         _hasUnsavedChanges = True
+        _session.ClearModifiedTags() ' Clear MDT after update
         _mode = ScreenMode.Edit
         ShowEdit()
     End Sub
@@ -646,7 +650,7 @@ Public Class SessionStateManager
         _session.AddField(10, 30, 20, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtNewUser")
         
         _session.WriteText(12, 20, "PASSWORD: ", TN3270Color.Turquoise)
-        _session.AddField(12, 30, 20, "", False, TN3270Color.Neutral, TN3270Color.Neutral, TN3270Highlight.None, "txtNewPass")
+        _session.AddField(12, 30, 20, "", False, TN3270Color.Neutral, TN3270Color.Neutral, TN3270Highlight.None, "txtNewPass", TN3270Intensity.Hidden)
         
         _session.WriteText(14, 20, "HOME DIR: ", TN3270Color.Turquoise)
         _session.AddField(14, 30, 30, "", False, TN3270Color.White, TN3270Color.Neutral, TN3270Highlight.Underline, "txtNewHome")
