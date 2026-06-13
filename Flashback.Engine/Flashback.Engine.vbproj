@@ -25,7 +25,7 @@
     <RootNamespace>Flashback.Engine</RootNamespace>
     <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
     <Deterministic>false</Deterministic>
-    <AssemblyVersion>1.0.*</AssemblyVersion>
+    <AssemblyVersion>2.1.*</AssemblyVersion>
   </PropertyGroup>
 
 </Project>

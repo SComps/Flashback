@@ -5,11 +5,11 @@
 ; Requires: Inno Setup 6.x+
 ; ============================================================================
 
+#define SourceDir        "E:\Flashback-Publish"
 #define MyAppName        "Flashback Printer System"
-#define MyAppVersion     "2.1.Alpha"
+#define MyAppVersion     GetFileVersion(SourceDir + "\Flashback.Engine.exe")
 #define MyAppPublisher   "@ScottJ"
 #define MyAppURL         ""
-#define SourceDir        "E:\Flashback-Publish"
 
 ; Service names (must match the ServiceName values in Program.vb)
 #define EngineServiceName      "FlashbackEngine"
