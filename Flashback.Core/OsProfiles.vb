@@ -371,7 +371,7 @@ Public Class Zvm73Profile
     Implements IOsProfile
 
     Public ReadOnly Property OS As OSType = OSType.OS_ZVM73 Implements IOsProfile.OS
-    Public ReadOnly Property FirstLine As Double = 0 Implements IOsProfile.FirstLine
+    Public ReadOnly Property FirstLine As Double = 24 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 2 Implements IOsProfile.StartLine
     Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
