@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 TOKEN_FILE="/home/scott/github_token"
-REPO_DIR="/home/scott/flashback/flashback"
+REPO_DIR="/home/scott/flashback/"
 
 echo -e "${YELLOW}GitHub Push Script${NC}"
 echo "================================"
