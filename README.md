@@ -427,7 +427,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Community**: Thanks to all vintage computing enthusiasts and contributors especially Mainframe Enthusiasts on Discord
 - @Rudi (just because)
 - @MarXtevens for exellent advice and patience
-- @misterspok1 for testing when he probably shouldn't
+- @misterspock1 for testing when he probably shouldn't
+- Cody for not killing me--or making me kill him.
 - If I've missed recognizing you here, it's because I'm old.  Forgive me.
 
 ---
