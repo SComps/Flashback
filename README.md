@@ -241,8 +241,8 @@ Add printer definitions to your Hercules configuration file:
 
 ```text
 # Device  Type    Destination
-000E      1403    192.168.1.100:9000
-000F      1403    192.168.1.100:9001
+000E      1403    192.168.1.100:9000 sockdev
+000F      1403    192.168.1.100:9001 sockdev
 ```
 
 ### SimH (PDP-11, VAX, MicroVAX)
@@ -251,8 +251,8 @@ Configure DZ11/DZV11 lines to connect to Flashback:
 
 ```text
 SET DZ LINES=8
-ATTACH DZ LINE=0,CONNECT=192.168.1.100:9000
-ATTACH DZ LINE=1,CONNECT=192.168.1.100:9001
+ATTACH DZ LINE=0 8000
+ATTACH DZ LINE=1 8001
 ```
 
 ### Generic TCP/IP
@@ -335,6 +335,7 @@ To activate a PRO license:
 ### Email Delivery Issues
 
 **Problem**: Emails not sending
+- Recognize that gmail and others will not accept SMTP from just anyone.
 - Verify SMTP server, port, and credentials
 - Check if TLS/SSL setting matches server requirements
 - Ensure firewall allows outbound SMTP connections
@@ -351,8 +352,7 @@ To activate a PRO license:
 ## 🛠️ Building from Source
 
 ### Prerequisites
-- .NET 9 SDK
-- Visual Studio 2022 or VS Code with .NET extensions
+- .NET 10 SDK
 - Git
 
 ### Build Commands
@@ -373,7 +373,7 @@ dotnet test
 
 # Publish for production
 # Windows
-.\scripts\publish_windows.ps1
+.\scripts\winpub.ps1
 
 # Linux
 ./scripts/publish_linux.sh
@@ -424,7 +424,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Font Assets**: Chain Printer, Dot Matrix, Line Printer, IBM Plex Mono, OCR-B (included for authentic vintage rendering)
 - **PDF Generation**: iText7 library
 - **TN3270 Protocol**: Custom implementation based on RFC standards (used for Config.3270 tool only)
-- **Community**: Thanks to all vintage computing enthusiasts and contributors
+- **Community**: Thanks to all vintage computing enthusiasts and contributors especially Mainframe Enthusiasts on Discord
+- @Rudi (just because)
+- @MarXtevens for exellent advice and patience
+- @misterspok1 for testing when he probably shouldn't
+- If I've missed recognizing you here, it's because I'm old.  Forgive me.
 
 ---
 
