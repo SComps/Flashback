@@ -91,6 +91,7 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 ### Installation
 
 #### Windows
+You may use the windows installer for painless installation, or build yourself.
 
 ```powershell
 # 1. Clone or download the repository
@@ -98,7 +99,7 @@ git clone https://github.com/scomps/flashback.git
 cd flashback
 
 # 2. Build and publish
-.\scripts\publish_windows.ps1
+.\scripts\winpub.ps1
 
 # 3. Install services (requires Administrator)
 .\scripts\install_services_windows.ps1
