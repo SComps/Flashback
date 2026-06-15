@@ -53,7 +53,7 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 │                    Legacy Host Systems                          │
 │  (MVS, z/OS, VM/CMS, VMS, MPE, Hercules, SimH, etc.)          │
 └────────────────┬────────────────────────────────────────────────┘
-                 │ Port 9100 / Raw TCP
+                 │ TCP/IP connections and port 9100 RAW
                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Flashback.Engine (Core Service)                │
