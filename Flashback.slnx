@@ -2,6 +2,49 @@
   <Folder Name="/Flashback.TN3270Framework/">
     <Project Path="Flashback.TN3270Framework/TN3270Framework.vbproj" />
   </Folder>
+  <Folder Name="/Documentation/">
+    <File Path="README.md" />
+    <File Path="USER_MANUAL.md" />
+    <File Path="Flashback_Manual.txt" />
+  </Folder>
+  <Folder Name="/Working Documents/">
+    <File Path="Working Documents/3270_SAVE_FIX_SUMMARY.md" />
+    <File Path="Working Documents/ENGINE_COMPREHENSIVE_REVIEW.md" />
+    <File Path="Working Documents/ENGINE_CRITICAL_FIXES_IMPLEMENTATION_SUMMARY.md" />
+    <File Path="Working Documents/ENGINE_CRITICAL_FIXES_PLAN.md" />
+    <File Path="Working Documents/ENGINE_FIXES_IMPACT_ANALYSIS.md" />
+    <File Path="Working Documents/ENGINE_RECONNECTION_FIX_SUMMARY.md" />
+    <File Path="Working Documents/ENGINE_RECONNECTION_ISSUE_ANALYSIS.md" />
+    <File Path="Working Documents/ERROR_SCREEN_IMPLEMENTATION_PLAN.md" />
+    <File Path="Working Documents/Flashback.Config.3270_ANALYSIS.md" />
+    <File Path="Working Documents/LICENSE_GENERATOR_CONSOLE_IMPLEMENTATION_SUMMARY.md" />
+    <File Path="Working Documents/LICENSE_GENERATOR_CONSOLE_PLAN.md" />
+    <File Path="Working Documents/PRINTSPOOLER_DESIGN.md" />
+    <File Path="Working Documents/PRINTSPOOLER_IMPLEMENTATION_PLAN.md" />
+    <File Path="Working Documents/SAVE_FIX_IMPLEMENTATION_SUMMARY.md" />
+    <File Path="Working Documents/SAVE_ISSUE_ANALYSIS.md" />
+    <File Path="Working Documents/TN3270Framework_Reference.md" />
+  </Folder>
+  <Folder Name="/Scripts/">
+    <File Path="scripts/FlashbackInstaller.iss" />
+    <File Path="scripts/flashback_setup.iss" />
+    <File Path="scripts/publish_license_generator.sh" />
+    <File Path="scripts/publish_linux.sh" />
+    <File Path="scripts/publish_windows.ps1" />
+    <File Path="scripts/publish_winui.ps1" />
+    <File Path="scripts/publish_wpf.ps1" />
+    <File Path="scripts/winpub.ps1" />
+    <File Path="git_push.sh" />
+  </Folder>
+  <Folder Name="/GitHub Workflows/">
+    <File Path=".github/workflows/build-linux.yml" />
+    <File Path=".github/workflows/build-windows.yml" />
+    <File Path=".github/workflows/release.yml" />
+  </Folder>
+  <Folder Name="/Configuration/">
+    <File Path=".gitignore" />
+    <File Path="NuGet.config" />
+  </Folder>
   <Project Path="Flashback.Config.3270/Flashback.Config.3270.vbproj" />
   <Project Path="Flashback.Config.Console/Flashback.Config.Console.vbproj" />
   <Project Path="Flashback.Config.WinUI/Flashback.Config.WinUI.csproj">
@@ -11,7 +54,10 @@
   <Project Path="Flashback.Core/Flashback.Core.vbproj" />
   <Project Path="Flashback.Engine/Flashback.Engine.vbproj" />
   <Project Path="Flashback.LicenseGenerator/Flashback.LicenseGenerator.vbproj" />
+  <Project Path="Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" />
   <Project Path="Flashback.Spooler/Flashback.Spooler.vbproj" />
   <Project Path="Flashback.TestTool/Flashback.TestTool.vbproj" />
   <Project Path="Flashback.Tray/Flashback.Tray.vbproj" />
 </Solution>
+
+<!-- Made with Bob -->
