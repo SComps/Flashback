@@ -445,13 +445,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [ ] User-selectable font options for PDF generation
 - [ ] Automatic printer detection on Windows networks
-- [ ] Direct network printer support (PCL, PostScript)
 - [ ] Web-based configuration interface
-- [ ] RESTful API for integration
-- [ ] Docker containerization
-- [ ] Additional host OS support (RSTS/E, RT-11, etc.)
-- [ ] Advanced job scheduling and routing
-- [ ] Cloud storage integration (S3, Azure Blob)
+- [ ] Additional host OS support (RT-11, etc.)
 
 ---
 
