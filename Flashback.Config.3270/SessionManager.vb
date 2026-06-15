@@ -11,6 +11,7 @@ Public Enum ScreenMode
     Help
     Users
     AddUser
+    [Error]
 End Enum
 
 Public Class SessionStateManager
@@ -26,6 +27,9 @@ Public Class SessionStateManager
     Private _statusColor As Byte = TN3270Color.White
     Private _hasUnsavedChanges As Boolean = False
     Private _previousMode As ScreenMode = ScreenMode.Menu
+    Private _errorTitle As String = ""
+    Private _errorMessage As String = ""
+    Private _errorDetails As String = ""
 
     Public Sub New(session As TN3270Session, devList As List(Of Devs), configFile As String, Optional syspw As String = "")
         _session = session
@@ -51,8 +55,8 @@ Public Class SessionStateManager
         ' Debug: Log the key code received
         Console.WriteLine($"[DEBUG] Key received: 0x{e.AidKey:X2} in mode {_mode}")
         
-        ' Intercept PF1 for global help (correct key code is 0xF1, not 0x61)
-        If e.AidKey = &HF1 Then ' PF1
+        ' Intercept PF1 for global help (except on error screen)
+        If e.AidKey = &HF1 AndAlso _mode <> ScreenMode.Error Then ' PF1
             Console.WriteLine("[DEBUG] PF1 pressed - showing help")
             If _mode <> ScreenMode.Help Then
                 If _mode = ScreenMode.Edit Then ScrapeEditFields()
@@ -83,6 +87,8 @@ Public Class SessionStateManager
                 ProcessUsersInput(e)
             Case ScreenMode.AddUser
                 ProcessAddUserInput(e)
+            Case ScreenMode.Error
+                ProcessErrorInput(e)
         End Select
     End Sub
 
@@ -119,8 +125,20 @@ Public Class SessionStateManager
             ShowMenu()
             Return
         ElseIf e.AidKey = &HF3 Then ' PF3 Exit
-            If _hasUnsavedChanges Then SaveDevices()
-            _session.WriteText(23, 2, "SESSION TERMINATED. AUTO-SAVE COMPLETE.", TN3270Color.Red)
+            If _hasUnsavedChanges Then
+                Dim errTitle As String = ""
+                Dim errMsg As String = ""
+                Dim errDetails As String = ""
+                
+                If SaveDevices(errTitle, errMsg, errDetails) Then
+                    _session.WriteText(23, 2, "SESSION TERMINATED. AUTO-SAVE COMPLETE.", TN3270Color.Green)
+                Else
+                    _session.WriteText(23, 2, "SESSION TERMINATED. AUTO-SAVE FAILED!", TN3270Color.Red)
+                    Console.WriteLine($"[Config3270] Auto-save failed: {errMsg}")
+                End If
+            Else
+                _session.WriteText(23, 2, "SESSION TERMINATED.", TN3270Color.Yellow)
+            End If
             _session.ShowScreen()
             _session.Close()
             Return
@@ -145,12 +163,25 @@ Public Class SessionStateManager
             _hasUnsavedChanges = True
             ShowEdit()
         ElseIf cmd = "SAVE" Then
-            SaveDevices()
-            _hasUnsavedChanges = False
-            _session.ClearModifiedTags() ' Clear MDT after save
-            _statusMsg = "Devices saved successfully."
-            _statusColor = TN3270Color.Green
-            ShowMenu()
+            Dim errTitle As String = ""
+            Dim errMsg As String = ""
+            Dim errDetails As String = ""
+            
+            If SaveDevices(errTitle, errMsg, errDetails) Then
+                _hasUnsavedChanges = False
+                _session.ClearModifiedTags()
+                _statusMsg = "Devices saved successfully."
+                _statusColor = TN3270Color.Green
+                ShowMenu()
+            Else
+                ' Show error screen
+                _previousMode = ScreenMode.Menu
+                _mode = ScreenMode.Error
+                _errorTitle = errTitle
+                _errorMessage = errMsg
+                _errorDetails = errDetails
+                ShowError()
+            End If
         ElseIf cmd = "EXIT" Then
             _session.Close()
         ElseIf cmd = "USERS" OrElse cmd = "3" Then
@@ -223,45 +254,113 @@ Public Class SessionStateManager
     Private Sub ScrapeEditFields()
         If _editingIndex < 0 OrElse _editingIndex >= _devList.Count Then Return
         
-        ' Use new GetModifiedFields() for efficiency - only process changed fields
-        Dim modifiedFields = _session.GetModifiedFields()
-        If modifiedFields.Count = 0 Then Return
-        
         Dim d = _devList(_editingIndex)
         
-        ' Only update fields that were actually modified
-        For Each field In modifiedFields
-            Select Case field.Name
-                Case "txtName"
-                    d.DevName = field.Content?.Trim()
-                Case "txtDesc"
-                    d.DevDescription = field.Content?.Trim()
-                Case "txtType"
-                    d.DevType = Val(field.Content)
-                Case "txtConn"
-                    d.ConnType = Val(field.Content)
-                Case "txtOS"
-                    d.OS = CType(Val(field.Content), OSType)
-                Case "txtDest"
-                    d.DevDest = field.Content?.Trim()
-                Case "txtPDF"
-                    Dim pdfVal = field.Content?.Trim().ToUpper()
-                    d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
-                Case "txtOrient"
-                    d.Orientation = Val(field.Content)
-                Case "txtOut"
-                    d.OutDest = field.Content?.Trim()
-                Case "txtShade"
-                    d.Shading = CType(Val(field.Content), RenderPDF.ShadingColor)
-                Case "txtJob"
-                    d.JobNumber = Val(field.Content)
-                Case "txtEnabled"
-                    Dim enVal = field.Content?.Trim().ToUpper()
-                    If Not String.IsNullOrEmpty(enVal) Then
-                        d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
-                    End If
-            End Select
-        Next
+        ' Try to use GetModifiedFields() for efficiency first
+        Dim modifiedFields = _session.GetModifiedFields()
+        
+        If modifiedFields.Count > 0 Then
+            ' Only update fields that were actually modified
+            For Each field In modifiedFields
+                Select Case field.Name
+                    Case "txtName"
+                        d.DevName = field.Content?.Trim()
+                    Case "txtDesc"
+                        d.DevDescription = field.Content?.Trim()
+                    Case "txtType"
+                        d.DevType = Val(field.Content)
+                    Case "txtConn"
+                        d.ConnType = Val(field.Content)
+                    Case "txtOS"
+                        d.OS = CType(Val(field.Content), OSType)
+                    Case "txtDest"
+                        d.DevDest = field.Content?.Trim()
+                    Case "txtPDF"
+                        Dim pdfVal = field.Content?.Trim().ToUpper()
+                        d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
+                    Case "txtOrient"
+                        d.Orientation = Val(field.Content)
+                    Case "txtOut"
+                        d.OutDest = field.Content?.Trim()
+                    Case "txtShade"
+                        d.Shading = CType(Val(field.Content), RenderPDF.ShadingColor)
+                    Case "txtJob"
+                        d.JobNumber = Val(field.Content)
+                    Case "txtEnabled"
+                        Dim enVal = field.Content?.Trim().ToUpper()
+                        If Not String.IsNullOrEmpty(enVal) Then
+                            d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
+                        End If
+                End Select
+            Next
+        Else
+            ' Fallback: scrape all fields using GetFieldValue if no modified fields detected
+            Console.WriteLine($"[Config3270] No modified fields detected, scraping all fields for device {_editingIndex + 1}")
+            
+            Dim val As String
+            
+            val = _session.GetFieldValue("txtName")
+            If val IsNot Nothing Then d.DevName = val.Trim()
+            
+            val = _session.GetFieldValue("txtDesc")
+            If val IsNot Nothing Then d.DevDescription = val.Trim()
+            
+            val = _session.GetFieldValue("txtType")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.DevType = tempInt
+            End If
+            
+            val = _session.GetFieldValue("txtConn")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.ConnType = tempInt
+            End If
+            
+            val = _session.GetFieldValue("txtOS")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.OS = CType(tempInt, OSType)
+            End If
+            
+            val = _session.GetFieldValue("txtDest")
+            If val IsNot Nothing Then d.DevDest = val.Trim()
+            
+            val = _session.GetFieldValue("txtPDF")
+            If val IsNot Nothing Then
+                Dim pdfVal = val.Trim().ToUpper()
+                d.PDF = (pdfVal = "TRUE" OrElse pdfVal = "1" OrElse pdfVal = "YES")
+            End If
+            
+            val = _session.GetFieldValue("txtOrient")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.Orientation = tempInt
+            End If
+            
+            val = _session.GetFieldValue("txtOut")
+            If val IsNot Nothing Then d.OutDest = val.Trim()
+            
+            val = _session.GetFieldValue("txtShade")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.Shading = CType(tempInt, RenderPDF.ShadingColor)
+            End If
+            
+            val = _session.GetFieldValue("txtJob")
+            If val IsNot Nothing Then
+                Dim tempInt As Integer
+                If Integer.TryParse(val, tempInt) Then d.JobNumber = tempInt
+            End If
+            
+            val = _session.GetFieldValue("txtEnabled")
+            If val IsNot Nothing Then
+                Dim enVal = val.Trim().ToUpper()
+                If Not String.IsNullOrEmpty(enVal) Then
+                    d.Enabled = (enVal = "TRUE" OrElse enVal = "1" OrElse enVal = "YES" OrElse enVal = "Y")
+                End If
+            End If
+        End If
     End Sub
 
     Private Sub ProcessDeleteInput(e As AidKeyEventArgs)
@@ -566,16 +665,112 @@ Public Class SessionStateManager
         End Select
     End Sub
 
-    Private Sub SaveDevices()
+    Private Function SaveDevices(ByRef errorTitle As String, ByRef errorMessage As String, ByRef errorDetails As String) As Boolean
         Try
+            ' Validate config file path
+            Dim dir = Path.GetDirectoryName(_configFile)
+            If Not String.IsNullOrEmpty(dir) AndAlso Not Directory.Exists(dir) Then
+                errorTitle = "CONFIGURATION SAVE FAILED"
+                errorMessage = $"The configuration directory does not exist:{vbCrLf}{vbCrLf}{dir}{vbCrLf}{vbCrLf}Please ensure the application has proper permissions and the{vbCrLf}directory structure is intact."
+                errorDetails = "Error: Directory not found"
+                Console.WriteLine($"[Config3270] Save failed: Directory not found - {dir}")
+                Return False
+            End If
+
+            ' Attempt to save
             Using writer As New StreamWriter(_configFile, append:=False)
                 For Each d In _devList
                     writer.WriteLine(d.ToConfigLine())
                 Next
             End Using
+            
+            ' Log success
+            Console.WriteLine($"[Config3270] Successfully saved {_devList.Count} devices to {_configFile}")
+            Return True
+            
+        Catch ex As UnauthorizedAccessException
+            errorTitle = "PERMISSION DENIED"
+            errorMessage = $"Unable to write to configuration file:{vbCrLf}{vbCrLf}{_configFile}{vbCrLf}{vbCrLf}The application does not have write permissions to this location.{vbCrLf}Please check file and directory permissions."
+            errorDetails = $"Error: {ex.Message}"
+            Console.WriteLine($"[Config3270] Permission error: {ex.Message}")
+            Return False
+            
+        Catch ex As IOException
+            errorTitle = "FILE ACCESS ERROR"
+            errorMessage = $"Unable to access configuration file:{vbCrLf}{vbCrLf}{_configFile}{vbCrLf}{vbCrLf}The file may be locked by another process or the disk may be full.{vbCrLf}Please close other applications and try again."
+            errorDetails = $"Error: {ex.Message}"
+            Console.WriteLine($"[Config3270] I/O error: {ex.Message}")
+            Return False
+            
         Catch ex As Exception
-            ' Log to console or elsewhere
+            errorTitle = "UNEXPECTED ERROR"
+            errorMessage = $"An unexpected error occurred while saving:{vbCrLf}{vbCrLf}{ex.Message}{vbCrLf}{vbCrLf}Please contact your system administrator if this problem persists."
+            errorDetails = $"Type: {ex.GetType().Name}"
+            Console.WriteLine($"[Config3270] Unexpected error: {ex.Message}")
+            Console.WriteLine($"[Config3270] Stack trace: {ex.StackTrace}")
+            Return False
         End Try
+    End Function
+
+    Private Sub ShowError()
+        _session.ClearFields()
+        Dim dateStr = DateTime.Now.ToString("MM/dd/yy")
+        Dim timeStr = DateTime.Now.ToString("HH:mm:ss")
+
+        _session.WriteText(1, 2, "PROGRAM: FLSHBK99", TN3270Color.Turquoise)
+        _session.WriteText(1, 30, "ERROR DISPLAY", TN3270Color.Red)
+        _session.WriteText(1, 65, $"DATE: {dateStr}", TN3270Color.Turquoise)
+        _session.WriteText(2, 65, $"TIME: {timeStr}", TN3270Color.Turquoise)
+        _session.WriteText(3, 1, StrDup(78, "-"), TN3270Color.Blue)
+
+        ' Display error title
+        If Not String.IsNullOrEmpty(_errorTitle) Then
+            _session.WriteText(5, 2, _errorTitle, TN3270Color.Red)
+            _session.WriteText(6, 1, StrDup(78, "="), TN3270Color.Red)
+        End If
+
+        ' Display main error message
+        If Not String.IsNullOrEmpty(_errorMessage) Then
+            Dim startRow = If(String.IsNullOrEmpty(_errorTitle), 5, 8)
+            Dim lines = _errorMessage.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.None)
+            Dim row = startRow
+            For Each line In lines
+                If row > 18 Then Exit For ' Don't overflow screen
+                _session.WriteText(row, 2, line.PadRight(76).Substring(0, Math.Min(76, line.Length)), TN3270Color.Yellow)
+                row += 1
+            Next
+        End If
+
+        ' Display technical details if available
+        If Not String.IsNullOrEmpty(_errorDetails) Then
+            _session.WriteText(20, 2, "TECHNICAL DETAILS:", TN3270Color.Turquoise)
+            _session.WriteText(21, 2, _errorDetails.PadRight(76).Substring(0, Math.Min(76, _errorDetails.Length)), TN3270Color.White)
+        End If
+
+        _session.WriteText(23, 2, "PRESS ENTER OR PF3 TO CONTINUE", TN3270Color.White)
+        _session.ShowScreen()
+    End Sub
+
+    Private Sub ProcessErrorInput(e As AidKeyEventArgs)
+        ' Any key returns from error screen
+        _mode = _previousMode
+        
+        ' Clear error state
+        _errorTitle = ""
+        _errorMessage = ""
+        _errorDetails = ""
+        
+        ' Return to appropriate screen
+        Select Case _mode
+            Case ScreenMode.Login : ShowLogin()
+            Case ScreenMode.Menu : ShowMenu()
+            Case ScreenMode.Edit : ShowEdit()
+            Case ScreenMode.EditEmail : ShowEditEmail()
+            Case ScreenMode.ConfirmDelete : ShowConfirmDelete()
+            Case ScreenMode.Users : ShowUsers()
+            Case ScreenMode.AddUser : ShowAddUser()
+            Case Else : ShowMenu()
+        End Select
     End Sub
 
     Private Sub ShowUsers()

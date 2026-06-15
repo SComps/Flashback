@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Flashback.LicenseGenerator.Console</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Flashback.Core\Flashback.Core.vbproj" />
+  </ItemGroup>
+
+</Project>
+
+<!-- Made with Bob -->

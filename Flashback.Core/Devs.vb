@@ -51,26 +51,45 @@ Public Class Devs
 #End If
     Private _cancellationTokenSource As CancellationTokenSource
     Private currentDocument As New List(Of String)()
+    Private ReadOnly _documentLock As New Object()
     Private IsConnected As Boolean = False
     Private IsConnecting As Boolean = False
     Private IsClosing As Boolean = False
-    Private Receiving As Boolean = False
+    Private _receivingFlag As Integer = 0  ' 0 = False, 1 = True (for thread-safe access)
+    
+    ' Connection state management
+    Private ReadOnly _connectionLock As New Object()
+    Private _lastConnectAttempt As DateTime = DateTime.MinValue
+    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(5)
+    Private ReadOnly _maxReconnectDelay As TimeSpan = TimeSpan.FromMinutes(5)
 
     Public ReadOnly Property Connected As Boolean
         Get
-            Try
-                If socket IsNot Nothing Then
-                    Return socket.Connected AndAlso Not (socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0)
-                End If
-            Catch
-            End Try
-            Return IsConnected
+            SyncLock _connectionLock
+                Try
+                    If socket IsNot Nothing Then
+                        Return socket.Connected AndAlso Not (socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0)
+                    End If
+                Catch
+                End Try
+                Return IsConnected
+            End SyncLock
         End Get
     End Property
 
     Public ReadOnly Property Connecting As Boolean
         Get
-            Return IsConnecting
+            SyncLock _connectionLock
+                Return IsConnecting
+            End SyncLock
+        End Get
+    End Property
+    
+    Public ReadOnly Property CanConnect As Boolean
+        Get
+            SyncLock _connectionLock
+                Return Not (IsConnected OrElse IsConnecting OrElse IsClosing)
+            End SyncLock
         End Get
     End Property
 
@@ -94,23 +113,63 @@ Public Class Devs
     End Sub
 
     Public Async Sub Connect()
-        Log($"[{DevName}] Connect() called. IsConnected={IsConnected}, IsConnecting={IsConnecting}, IsClosing={IsClosing}", ConsoleColor.Cyan)
-        If IsConnected OrElse IsConnecting OrElse IsClosing Then Exit Sub
-        IsConnecting = True
+        ' Check if we can connect (with backoff)
+        Dim timeSinceLastAttempt As TimeSpan
+        SyncLock _connectionLock
+            timeSinceLastAttempt = DateTime.Now - _lastConnectAttempt
+            If timeSinceLastAttempt < _reconnectDelay Then
+                Log($"[{DevName}] Connect() skipped - backoff active. Retry in {(_reconnectDelay - timeSinceLastAttempt).TotalSeconds:F0}s", ConsoleColor.DarkYellow)
+                Return
+            End If
+            
+            If Not CanConnect Then
+                Log($"[{DevName}] Connect() skipped. State: Connected={IsConnected}, Connecting={IsConnecting}, Closing={IsClosing}", ConsoleColor.DarkYellow)
+                Return
+            End If
+            
+            _lastConnectAttempt = DateTime.Now
+            IsConnecting = True
+        End SyncLock
+        
+        Log($"[{DevName}] Connect() starting. IsConnected={IsConnected}, IsConnecting={IsConnecting}, IsClosing={IsClosing}", ConsoleColor.Cyan)
+        
         Try
             SplitDestination(DevDest)
             If remotePort > 0 Then
                 Await StartAsync()
+                ' Success - reset backoff delay
+                SyncLock _connectionLock
+                    _reconnectDelay = TimeSpan.FromSeconds(5)
+                End SyncLock
+                Log($"[{DevName}] Connection successful. Backoff delay reset.", ConsoleColor.Green)
             Else
                 Log($"[{DevName}] Connect skipped: remotePort is 0.", ConsoleColor.DarkYellow)
             End If
+        Catch ex As Exception
+            ' Connection failed - increase backoff delay (exponential backoff)
+            SyncLock _connectionLock
+                _reconnectDelay = TimeSpan.FromSeconds(Math.Min(_reconnectDelay.TotalSeconds * 2, _maxReconnectDelay.TotalSeconds))
+            End SyncLock
+            Log($"[{DevName}] Connection failed: {ex.Message}. Next retry in {_reconnectDelay.TotalSeconds:F0}s", ConsoleColor.Yellow)
         Finally
-            IsConnecting = False
+            SyncLock _connectionLock
+                IsConnecting = False
+            End SyncLock
             Log($"[{DevName}] Connect() finished. IsConnecting set to False.", ConsoleColor.Cyan)
         End Try
     End Sub
 
     Public Async Function StartAsync() As Task
+        ' Dispose existing CancellationTokenSource if present to prevent leak
+        If _cancellationTokenSource IsNot Nothing Then
+            Try
+                _cancellationTokenSource.Cancel()
+                _cancellationTokenSource.Dispose()
+            Catch ex As Exception
+                Log($"[{DevName}] Error disposing existing CancellationTokenSource: {ex.Message}", ConsoleColor.DarkYellow)
+            End Try
+        End If
+        
         _cancellationTokenSource = New CancellationTokenSource()
 
         Try
@@ -139,11 +198,15 @@ Public Class Devs
                             Dim incomingSocket = Await listener.AcceptSocketAsync()
                             Log($"[{DevName}] Accepted connection from {incomingSocket.RemoteEndPoint}", ConsoleColor.Green)
                             
-                            ' Configure aggressive Keep-Alives on the accepted socket
-                            incomingSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
-                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10)
-                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5)
-                            incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
+                            ' Configure Keep-Alives on the accepted socket with error handling
+                            Try
+                                incomingSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
+                                incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60)
+                                incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)
+                                incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
+                            Catch ex As Exception
+                                Log($"[{DevName}] Warning: Could not configure TCP keep-alive on accepted socket: {ex.Message}", ConsoleColor.DarkYellow)
+                            End Try
                             
                             OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
                             Try
@@ -180,11 +243,17 @@ Public Class Devs
                 Log($"[{DevName}] DIAGNOSTIC: Creating raw Socket.", ConsoleColor.Cyan)
                 socket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
 
-                ' Configure Aggressive OS-level Keep-Alives
-                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
-                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10)
-                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5)
-                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
+                ' Configure OS-level Keep-Alives with error handling
+                Try
+                    socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60)  ' More conservative: 60s
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)  ' 10s interval
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
+                    Log($"[{DevName}] TCP keep-alive configured successfully.", ConsoleColor.Gray)
+                Catch ex As Exception
+                    Log($"[{DevName}] Warning: Could not configure TCP keep-alive: {ex.Message}", ConsoleColor.DarkYellow)
+                    ' Continue anyway - keep-alive is optional
+                End Try
 
                 Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (Socket)...", ConsoleColor.Yellow)
                 Await socket.ConnectAsync(remoteHost, remotePort)
@@ -209,22 +278,29 @@ Public Class Devs
             
         Catch ex As Exception
             Log($"[{DevName}] StartAsync Error: {ex.GetType().Name} (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
-            IsConnected = False
+            SyncLock _connectionLock
+                IsConnected = False
+            End SyncLock
         Finally
             Try
-                Log($"[{DevName}] StartAsync entering Finally. Current IsConnected={IsConnected}. Disconnecting...", ConsoleColor.Cyan)
-                Disconnect()
+                Log($"[{DevName}] StartAsync entering Finally. Current IsConnected={IsConnected}.", ConsoleColor.Cyan)
+                ' Only disconnect if not already disconnecting
+                SyncLock _connectionLock
+                    If Not IsClosing Then
+                        Log($"[{DevName}] Calling Disconnect() from StartAsync Finally.", ConsoleColor.Cyan)
+                        Disconnect()
+                    Else
+                        Log($"[{DevName}] Disconnect already in progress, skipping redundant call.", ConsoleColor.Cyan)
+                    End If
+                End SyncLock
             Catch disconnectEx As Exception
                 Log($"[{DevName}] Disconnection error: {disconnectEx.Message}", ConsoleColor.Red)
             End Try
-            IsConnected = False
-            Log($"[{DevName}] StartAsync Finalized. IsConnected set to False.", ConsoleColor.Cyan)
             
-            If ConnType = 3 Then
-                 Log($"[{DevName}] Port 9100 Listener stopped.", ConsoleColor.Gray)
-                 listener?.Stop()
-                 listener = Nothing
-            End If
+            SyncLock _connectionLock
+                IsConnected = False
+            End SyncLock
+            Log($"[{DevName}] StartAsync Finalized. IsConnected set to False.", ConsoleColor.Cyan)
         End Try
     End Function
 
@@ -269,8 +345,9 @@ Public Class Devs
                         lastReceivedTime = DateTime.Now
                     End If
                 Else
-                    If Not Receiving Then
-                        Receiving = True
+                    ' Use atomic operation to set receiving flag
+                    If Interlocked.CompareExchange(_receivingFlag, 1, 0) = 0 Then
+                        ' Successfully set flag from 0 to 1
                         If ConnType = 3 Then
                             Log($"[{DevName}] receiving raw data from stream.", ConsoleColor.Yellow)
                         ElseIf OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
@@ -359,38 +436,88 @@ Public Class Devs
 
         ' If it's a Raw connection, we process even small documents and don't care about line count minima
         If ConnType = 3 OrElse lines.Count > 9 Then
-            currentDocument.AddRange(lines)
-            Dim docCopy As New List(Of String)(currentDocument)
+            Dim docCopy As List(Of String)
+            SyncLock _documentLock
+                currentDocument.AddRange(lines)
+                docCopy = New List(Of String)(currentDocument)
+                currentDocument.Clear()
+            End SyncLock
+            
             Task.Run(Sub() ProcessDocument(docCopy))
             Log($"[{DevName}] Waiting for next block/session.")
-            currentDocument.Clear()
-            Receiving = False
+            Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
         Else
-            Receiving = False
+            Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
         End If
     End Sub
 
     Public Sub Disconnect()
-        IsClosing = True
+        SyncLock _connectionLock
+            If IsClosing Then
+                Log($"[{DevName}] Disconnect() already in progress, skipping.", ConsoleColor.DarkYellow)
+                Return
+            End If
+            IsClosing = True
+        End SyncLock
+        
+        Log($"[{DevName}] Disconnect() starting cleanup...", ConsoleColor.Cyan)
+        
         Try
-            _cancellationTokenSource?.Cancel()
-            clientStream?.Close()
-            socket?.Close()
-            socket = Nothing
-            listener?.Stop()
+            ' Cancel and dispose CancellationTokenSource
+            If _cancellationTokenSource IsNot Nothing Then
+                Try
+                    _cancellationTokenSource.Cancel()
+                    _cancellationTokenSource.Dispose()
+                Catch ex As Exception
+                    Log($"[{DevName}] Error disposing CancellationTokenSource: {ex.Message}", ConsoleColor.DarkYellow)
+                End Try
+                _cancellationTokenSource = Nothing
+            End If
+            
+            ' Close streams and sockets
+            Try
+                clientStream?.Close()
+                clientStream?.Dispose()
+                clientStream = Nothing
+            Catch ex As Exception
+                Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
+            End Try
+            
+            Try
+                socket?.Close()
+                socket?.Dispose()
+                socket = Nothing
+            Catch ex As Exception
+                Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
+            End Try
+            
+            Try
+                listener?.Stop()
+                listener = Nothing
+            Catch ex As Exception
+                Log($"[{DevName}] Error stopping listener: {ex.Message}", ConsoleColor.DarkYellow)
+            End Try
+            
 #If WINDOWS Then
             If serviceDiscovery IsNot Nothing Then
-                serviceDiscovery.Unadvertise()
-                serviceDiscovery.Dispose()
-                serviceDiscovery = Nothing
+                Try
+                    serviceDiscovery.Unadvertise()
+                    serviceDiscovery.Dispose()
+                    serviceDiscovery = Nothing
+                Catch ex As Exception
+                    Log($"[{DevName}] Error disposing service discovery: {ex.Message}", ConsoleColor.DarkYellow)
+                End Try
             End If
 #End If
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
         Finally
-            ' Reset IsClosing flag to allow reconnection attempts
-            IsClosing = False
-            Log($"[{DevName}] Disconnect() completed. IsClosing reset to False.", ConsoleColor.Cyan)
+            ' Reset flags to allow reconnection attempts
+            SyncLock _connectionLock
+                IsClosing = False
+                IsConnected = False
+            End SyncLock
+            Log($"[{DevName}] Disconnect() completed. Flags reset.", ConsoleColor.Cyan)
         End Try
     End Sub
 
@@ -412,7 +539,7 @@ Public Class Devs
             End If
         End Try
 
-        Receiving = False
+        Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
         Log($"[{DevName}] received {doc.Count} lines.", ConsoleColor.Cyan)
 
         ' Logic for Raw / Listener mode
