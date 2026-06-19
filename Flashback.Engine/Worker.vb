@@ -58,7 +58,7 @@ Public Class Worker
                 End If
             Next
 
-            Await Task.Delay(5000, stoppingToken)
+            Await Task.Delay(10000, stoppingToken)
         End While
 
         _logger.LogInformation("Flashback Engine Service Stopping.")

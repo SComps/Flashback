@@ -60,7 +60,7 @@ Public Class Devs
     ' Connection state management
     Private ReadOnly _connectionLock As New Object()
     Private _lastConnectAttempt As DateTime = DateTime.MinValue
-    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(5)
+    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(10)
     Private ReadOnly _maxReconnectDelay As TimeSpan = TimeSpan.FromMinutes(5)
 
     Public ReadOnly Property Connected As Boolean
@@ -139,7 +139,7 @@ Public Class Devs
                 Await StartAsync()
                 ' Success - reset backoff delay
                 SyncLock _connectionLock
-                    _reconnectDelay = TimeSpan.FromSeconds(5)
+                    _reconnectDelay = TimeSpan.FromSeconds(10)
                 End SyncLock
                 Log($"[{DevName}] Connection successful. Backoff delay reset.", ConsoleColor.Green)
             Else
@@ -246,7 +246,7 @@ Public Class Devs
                 ' Configure OS-level Keep-Alives with error handling
                 Try
                     socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60)  ' More conservative: 60s
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 120)  ' 2 minutes - better for Internet/NAT
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)  ' 10s interval
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
                     Log($"[{DevName}] TCP keep-alive configured successfully.", ConsoleColor.Gray)
@@ -283,24 +283,28 @@ Public Class Devs
             End SyncLock
         Finally
             Try
-                Log($"[{DevName}] StartAsync entering Finally. Current IsConnected={IsConnected}.", ConsoleColor.Cyan)
-                ' Only disconnect if not already disconnecting
-                SyncLock _connectionLock
-                    If Not IsClosing Then
-                        Log($"[{DevName}] Calling Disconnect() from StartAsync Finally.", ConsoleColor.Cyan)
-                        Disconnect()
-                    Else
-                        Log($"[{DevName}] Disconnect already in progress, skipping redundant call.", ConsoleColor.Cyan)
-                    End If
-                End SyncLock
-            Catch disconnectEx As Exception
-                Log($"[{DevName}] Disconnection error: {disconnectEx.Message}", ConsoleColor.Red)
+                Dim wasCancelled = _cancellationTokenSource?.IsCancellationRequested
+                Log($"[{DevName}] StartAsync exiting. Cancelled: {wasCancelled}", ConsoleColor.Cyan)
+                
+                ' Only disconnect if explicitly cancelled (service stopping, device disabled)
+                ' Do NOT disconnect if connection naturally ended
+                If wasCancelled Then
+                    SyncLock _connectionLock
+                        If Not IsClosing Then
+                            Log($"[{DevName}] Disconnecting due to cancellation.", ConsoleColor.Cyan)
+                            Disconnect()
+                        End If
+                    End SyncLock
+                Else
+                    ' Connection ended naturally - just update state
+                    SyncLock _connectionLock
+                        IsConnected = False
+                    End SyncLock
+                    Log($"[{DevName}] Connection ended. Reconnection will be attempted with backoff.", ConsoleColor.Cyan)
+                End If
+            Catch ex As Exception
+                Log($"[{DevName}] Error in Finally block: {ex.Message}", ConsoleColor.Red)
             End Try
-            
-            SyncLock _connectionLock
-                IsConnected = False
-            End SyncLock
-            Log($"[{DevName}] StartAsync Finalized. IsConnected set to False.", ConsoleColor.Cyan)
         End Try
     End Function
 
@@ -308,19 +312,19 @@ Public Class Devs
         Dim buffer(8192) As Byte
         Dim dataBuilder As New StringBuilder()
         Dim lastReceivedTime As DateTime = DateTime.Now
-        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(5)
+        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(30)  ' Accommodate slow/Internet connections
 
         Try
             While Not cancellationToken.IsCancellationRequested
                 If Not clientStream.DataAvailable Then
-                    Await Task.Delay(100, cancellationToken)
+                    Await Task.Delay(5000, cancellationToken)  ' 5 seconds - reasonable for LAN and Internet
                     
-                    ' Keep-alive / check for disconnected
-                    Try
-                        If ConnType <> 3 Then 
-                            clientStream.WriteByte(0)
-                        Else
-                            ' Silent connection check for JetDirect using raw Socket Poll
+                    ' No application-level keep-alive for client mode
+                    ' TCP keep-alive (configured at socket level) handles connection detection
+                    ' Only check for Port 9100 mode
+                    If ConnType = 3 Then
+                        Try
+                            ' Silent connection check for Port 9100 mode only
                             If socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
                                 If dataBuilder.Length > 0 Then
                                     ProcessDocumentData(dataBuilder.ToString())
@@ -328,16 +332,15 @@ Public Class Devs
                                 End If
                                 Exit While
                             End If
-                        End If
-                    Catch ex As Exception
-                        ' Connection closed by peer - this is often how Port 9100 jobs end
-                        If dataBuilder.Length > 0 Then
-                            ProcessDocumentData(dataBuilder.ToString())
-                            dataBuilder.Clear()
-                        End If
-                        Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
-                        Exit While
-                    End Try
+                        Catch ex As Exception
+                            If dataBuilder.Length > 0 Then
+                                ProcessDocumentData(dataBuilder.ToString())
+                                dataBuilder.Clear()
+                            End If
+                            Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
+                            Exit While
+                        End Try
+                    End If
 
                     If (DateTime.Now - lastReceivedTime) > inactivityTimeout AndAlso dataBuilder.Length > 0 Then
                         ProcessDocumentData(dataBuilder.ToString())
@@ -358,11 +361,24 @@ Public Class Devs
                     End If
                     Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
                     If recd = 0 Then
-                        Log($"[{DevName}] ReceiveDataAsync: 0 bytes received (EOF). Exiting loop.", ConsoleColor.DarkYellow)
+                        Log($"[{DevName}] ReceiveDataAsync: 0 bytes received (EOF). Remote closed connection.", ConsoleColor.DarkYellow)
                         If dataBuilder.Length > 0 Then
                             ProcessDocumentData(dataBuilder.ToString())
                             dataBuilder.Clear()
                         End If
+                        
+                        ' Clean up resources before exiting
+                        Try
+                            clientStream?.Close()
+                            clientStream?.Dispose()
+                            clientStream = Nothing
+                            socket?.Close()
+                            socket?.Dispose()
+                            socket = Nothing
+                        Catch
+                            ' Ignore cleanup errors
+                        End Try
+                        
                         Exit While
                     End If
                     dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
