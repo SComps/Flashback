@@ -296,11 +296,43 @@ Public Class Devs
                         End If
                     End SyncLock
                 Else
-                    ' Connection ended naturally - just update state
+                    ' Connection ended naturally - clean up resources to allow reconnection
+                    Log($"[{DevName}] Connection ended naturally. Cleaning up resources...", ConsoleColor.Cyan)
+                    
+                    ' Clean up clientStream
+                    Try
+                        If clientStream IsNot Nothing Then
+                            clientStream.Close()
+                            clientStream.Dispose()
+                            clientStream = Nothing
+                            Log($"[{DevName}] Client stream cleaned up.", ConsoleColor.Gray)
+                        End If
+                    Catch ex As Exception
+                        Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
+                        clientStream = Nothing  ' Force null even if cleanup failed
+                    End Try
+                    
+                    ' Clean up socket (only in client mode)
+                    If ConnType <> 3 Then
+                        Try
+                            If socket IsNot Nothing Then
+                                socket.Close()
+                                socket.Dispose()
+                                socket = Nothing
+                                Log($"[{DevName}] Socket cleaned up.", ConsoleColor.Gray)
+                            End If
+                        Catch ex As Exception
+                            Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
+                            socket = Nothing  ' Force null even if cleanup failed
+                        End Try
+                    End If
+                    
+                    ' Update connection state
                     SyncLock _connectionLock
                         IsConnected = False
                     End SyncLock
-                    Log($"[{DevName}] Connection ended. Reconnection will be attempted with backoff.", ConsoleColor.Cyan)
+                    
+                    Log($"[{DevName}] Resources cleaned up. Reconnection will be attempted with backoff.", ConsoleColor.Cyan)
                 End If
             Catch ex As Exception
                 Log($"[{DevName}] Error in Finally block: {ex.Message}", ConsoleColor.Red)
@@ -369,15 +401,29 @@ Public Class Devs
                         
                         ' Clean up resources before exiting
                         Try
-                            clientStream?.Close()
-                            clientStream?.Dispose()
+                            If clientStream IsNot Nothing Then
+                                clientStream.Close()
+                                clientStream.Dispose()
+                                clientStream = Nothing
+                            End If
+                        Catch ex As Exception
+                            Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
                             clientStream = Nothing
-                            socket?.Close()
-                            socket?.Dispose()
-                            socket = Nothing
-                        Catch
-                            ' Ignore cleanup errors
                         End Try
+                        
+                        ' Only clean up socket in client mode
+                        If ConnType <> 3 Then
+                            Try
+                                If socket IsNot Nothing Then
+                                    socket.Close()
+                                    socket.Dispose()
+                                    socket = Nothing
+                                End If
+                            Catch ex As Exception
+                                Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
+                                socket = Nothing
+                            End Try
+                        End If
                         
                         Exit While
                     End If

@@ -1,325 +1,248 @@
-# Flashback.Engine Client Mode Reconnection Fix
+# Engine Client Mode Critical Bugs Fix Plan
 
-## Problem Statement
+## Date: 2026-06-20
 
-When Flashback.Engine connects to remote hosts (Client Mode, ConnType != 3), it constantly disconnects and reconnects, leaving old connections open and violating the "one connection per printer" rule.
+## Expected Behavior
 
-## Root Cause Analysis - Client Mode Only
+1. **Only create device objects when ENABLED in configuration**
+2. **Remove device objects when disabled or removed from configuration**
+3. **In CLIENT MODE:** Connect, receive multiple jobs, reconnect on disconnect
+4. **All dependent on device being ENABLED**
 
-### The Flow for Client Mode
+## Current Broken Behavior
 
-**File**: [`Flashback.Core/Devs.vb`](Flashback.Core/Devs.vb)
+1. ❌ Device objects created even when disabled (wastes resources)
+2. ❌ After first job, NO MORE jobs are received
+3. ❌ When remote disconnects, Engine does NOT reconnect
+4. ❌ Configuration changes not handled properly
 
-1. **Connect() called** (line 115)
-2. **StartAsync() called** (line 139)
-3. **Socket created and connected** (lines 244-259)
-4. **ReceiveDataAsync() called** (line 276)
-5. **ReceiveDataAsync() loops** waiting for data (lines 314-371)
-6. **When data arrives**: Process it, continue looping
-7. **When ReceiveDataAsync() exits**: Returns to StartAsync()
-8. **StartAsync() Finally block executes** (lines 284-304)
-9. **Finally block calls Disconnect()** - THIS IS THE BUG
-10. **Worker detects Not Connected** (line 50)
-11. **Worker calls Connect()** again
-12. **INFINITE LOOP**
+## The Fixes
 
-### Why ReceiveDataAsync() Exits
+### Fix #1: Proper Device Lifecycle Management
 
-Looking at [`ReceiveDataAsync()`](Flashback.Core/Devs.vb:307-381), it exits when:
+**Location:** [`Worker.vb:LoadDevices()`](Flashback.Engine/Worker.vb:81-237)
 
-1. **Line 321**: `clientStream.WriteByte(0)` throws exception (connection check fails)
-2. **Line 360**: `recd = 0` (remote closed connection - EOF)
-3. **Line 314**: `cancellationToken.IsCancellationRequested` (explicit cancellation)
-4. **Lines 374-377**: Any exception occurs
+**Current Logic Issues:**
+- Creates device objects even when disabled
+- Doesn't properly handle devices removed from config
+- Doesn't properly handle new devices added to config
 
-### The Critical Issue
-
-**Line 321**: `clientStream.WriteByte(0)` is a **keep-alive check**
+**New Logic:**
 
 ```vb
-Try
-    If ConnType <> 3 Then 
-        clientStream.WriteByte(0)  ' ❌ THIS THROWS EXCEPTION IF CONNECTION LOST
+For Each line In lines
+    ' ... parse line ...
+    
+    Dim devName = p(0)
+    Dim newEnabled = If(p.Length >= 13, (p(12) = "True"), True)
+    Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+    
+    ' CASE 1: Device exists and is being disabled
+    If existing IsNot Nothing AndAlso Not newEnabled Then
+        _logger.LogInformation("{Dev} is being disabled. Disconnecting and removing.", devName)
+        existing.Disconnect()
+        _devList.Remove(existing)
+        Continue For
     End If
-Catch ex As Exception
-    ' Connection closed by peer
-    Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
-    Exit While  ' ❌ EXIT THE LOOP
-End Try
-```
-
-**What happens**:
-1. Remote host is idle (no data to send)
-2. ReceiveDataAsync() checks connection with `WriteByte(0)`
-3. If remote closed connection OR network issue: Exception thrown
-4. Catch block exits the While loop
-5. ReceiveDataAsync() returns
-6. StartAsync() Finally block executes
-7. **Finally block calls Disconnect()** even though connection might still be valid
-8. Worker immediately tries to reconnect
-9. **New connection created while old one still exists**
-
-### The Real Problem: Line 321 Keep-Alive Check
-
-The `clientStream.WriteByte(0)` is meant to detect dead connections, but:
-
-1. ❌ It's too aggressive - runs every 100ms when no data available
-2. ❌ It can throw exceptions for transient network issues
-3. ❌ When it throws, ReceiveDataAsync() exits
-4. ❌ StartAsync() Finally then calls Disconnect()
-5. ❌ Worker immediately reconnects
-6. ❌ **Result**: Constant churn
-
-### Why Old Connections Stay Open
-
-**Timing Issue**:
-```
-T+0ms:   WriteByte(0) throws exception
-T+1ms:   Exit While loop in ReceiveDataAsync
-T+2ms:   ReceiveDataAsync returns
-T+3ms:   StartAsync Finally block starts
-T+5ms:   Disconnect() called
-T+10ms:  Socket.Close() called
-T+50ms:  IsConnected = False
-T+100ms: Worker detects Not Connected
-T+101ms: Worker calls Connect()
-T+102ms: New socket created
-T+103ms: New socket.ConnectAsync() called
-T+150ms: Old socket still closing
-T+200ms: New connection established
-```
-
-**Result**: Two connections exist simultaneously - old one closing, new one opening.
-
-## The Fix
-
-### Option 1: Remove WriteByte(0) Keep-Alive (Recommended)
-
-The TCP keep-alive options (lines 248-251) already handle connection detection. The `WriteByte(0)` is redundant and causes problems.
-
-**Change** [`Devs.vb:318-340`](Flashback.Core/Devs.vb:318-340):
-
-```vb
-' Keep-alive / check for disconnected
-Try
-    If ConnType <> 3 Then 
-        ' ❌ REMOVE THIS: clientStream.WriteByte(0)
-        ' TCP keep-alive options handle connection detection
-        ' No need for application-level keep-alive
-    Else
-        ' Silent connection check for JetDirect using raw Socket Poll
-        If socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
-            If dataBuilder.Length > 0 Then
-                ProcessDocumentData(dataBuilder.ToString())
-                dataBuilder.Clear()
-            End If
-            Exit While
+    
+    ' CASE 2: Device doesn't exist and is disabled - skip it
+    If existing Is Nothing AndAlso Not newEnabled Then
+        _logger.LogInformation("{Dev} is disabled in config, skipping creation.", devName)
+        Continue For
+    End If
+    
+    ' CASE 3: Device exists and is enabled - check for config changes
+    If existing IsNot Nothing AndAlso newEnabled Then
+        ' Check if connection-critical settings changed
+        Dim needsReconnect = (existing.DevDest <> newDevDest) OrElse
+                            (existing.OS <> newOS) OrElse
+                            (existing.ConnType <> newConnType)
+        
+        If Not needsReconnect Then
+            ' Update non-critical settings in place
+            ' ... update properties ...
+            activeDevices.Add(existing)
+            _devList.Remove(existing)
+            loadedCount += 1
+            Continue For
+        Else
+            ' Connection settings changed - disconnect and recreate
+            _logger.LogInformation("Connection settings changed for {Dev}. Recreating...", devName)
+            existing.Disconnect()
+            Threading.Thread.Sleep(500)
+            ' Fall through to create new device
         End If
     End If
-Catch ex As Exception
-    ' Connection closed by peer
-    If dataBuilder.Length > 0 Then
-        ProcessDocumentData(dataBuilder.ToString())
-        dataBuilder.Clear()
+    
+    ' CASE 4: Create new device (either new or being recreated) - ONLY IF ENABLED
+    If newEnabled Then
+        _logger.LogInformation("Creating device object for {Dev}.", devName)
+        Dim d As New Devs()
+        ' ... set all properties ...
+        d.Enabled = True  ' We know it's enabled
+        
+        ' ... setup handlers ...
+        d.Connect()  ' Connect immediately since it's enabled
+        activeDevices.Add(d)
+        loadedCount += 1
     End If
-    Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
-    Exit While
-End Try
+Next
+
+' Clean up devices that are no longer in config
+CleanupDevices()
+_devList.AddRange(activeDevices)
 ```
 
-**Better yet, simplify to**:
+**Key Changes:**
+1. Check if device is enabled BEFORE creating it
+2. If device exists but is now disabled → disconnect and remove
+3. If device doesn't exist and is disabled → skip entirely
+4. If device exists and enabled → update or recreate as needed
+5. If device doesn't exist and is enabled → create and connect
+6. Devices not in config anymore are cleaned up by `CleanupDevices()`
+
+### Fix #2: Client Mode Resource Cleanup
+
+**Location:** [`Devs.vb:StartAsync()`](Flashback.Core/Devs.vb:290-304) - Finally block
+
+**Replace lines 298-304 with:**
 
 ```vb
-' No keep-alive check needed for client mode
-' TCP keep-alive options handle connection detection
-' Only check for Port 9100 mode
-If ConnType = 3 Then
+Else
+    ' Connection ended naturally - clean up resources to allow reconnection
+    Log($"[{DevName}] Connection ended naturally. Cleaning up resources...", ConsoleColor.Cyan)
+    
+    ' Clean up clientStream
     Try
-        ' Silent connection check for JetDirect using raw Socket Poll
-        If socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
-            If dataBuilder.Length > 0 Then
-                ProcessDocumentData(dataBuilder.ToString())
-                dataBuilder.Clear()
-            End If
-            Exit While
+        If clientStream IsNot Nothing Then
+            clientStream.Close()
+            clientStream.Dispose()
+            clientStream = Nothing
+            Log($"[{DevName}] Client stream cleaned up.", ConsoleColor.Gray)
         End If
     Catch ex As Exception
-        If dataBuilder.Length > 0 Then
-            ProcessDocumentData(dataBuilder.ToString())
-            dataBuilder.Clear()
+        Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
+        clientStream = Nothing  ' Force null even if cleanup failed
+    End Try
+    
+    ' Clean up socket (only in client mode)
+    If ConnType <> 3 Then
+        Try
+            If socket IsNot Nothing Then
+                socket.Close()
+                socket.Dispose()
+                socket = Nothing
+                Log($"[{DevName}] Socket cleaned up.", ConsoleColor.Gray)
+            End If
+        Catch ex As Exception
+            Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
+            socket = Nothing  ' Force null even if cleanup failed
+        End Try
+    End If
+    
+    ' Update connection state
+    SyncLock _connectionLock
+        IsConnected = False
+    End SyncLock
+    
+    Log($"[{DevName}] Resources cleaned up. Reconnection will be attempted with backoff.", ConsoleColor.Cyan)
+End If
+```
+
+### Fix #3: Better Cleanup in ReceiveDataAsync
+
+**Location:** [`Devs.vb:ReceiveDataAsync()`](Flashback.Core/Devs.vb:371-380)
+
+**Replace lines 371-380 with:**
+
+```vb
+' Clean up resources before exiting
+Try
+    If clientStream IsNot Nothing Then
+        clientStream.Close()
+        clientStream.Dispose()
+        clientStream = Nothing
+    End If
+Catch ex As Exception
+    Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
+    clientStream = Nothing
+End Try
+
+' Only clean up socket in client mode
+If ConnType <> 3 Then
+    Try
+        If socket IsNot Nothing Then
+            socket.Close()
+            socket.Dispose()
+            socket = Nothing
         End If
-        Log($"[{DevName}] {ex.Message}", ConsoleColor.Gray)
-        Exit While
+    Catch ex As Exception
+        Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
+        socket = Nothing
     End Try
 End If
 ```
 
-### Option 2: Fix StartAsync() Finally Block (Also Needed)
+## Implementation Steps
 
-Even with Option 1, the Finally block should only disconnect on cancellation:
+1. **Rewrite LoadDevices() logic** (Worker.vb)
+   - Handle disabled devices properly (don't create)
+   - Handle devices being disabled (disconnect and remove)
+   - Handle devices being enabled (create and connect)
+   - Handle new devices (create if enabled)
+   - Handle removed devices (cleanup via CleanupDevices)
 
-**Change** [`Devs.vb:284-304`](Flashback.Core/Devs.vb:284-304):
+2. **Fix Finally Block** (Devs.vb)
+   - Add proper resource cleanup
+   - Force variables to Nothing on error
+   - Add detailed logging
 
-```vb
-Finally
-    Try
-        Log($"[{DevName}] StartAsync exiting. Cancellation: {_cancellationTokenSource?.IsCancellationRequested}", ConsoleColor.Cyan)
-        
-        ' Only disconnect if explicitly cancelled
-        If _cancellationTokenSource?.IsCancellationRequested Then
-            SyncLock _connectionLock
-                If Not IsClosing Then
-                    Log($"[{DevName}] Disconnecting due to cancellation.", ConsoleColor.Cyan)
-                    Disconnect()
-                End If
-            End SyncLock
-        Else
-            ' Connection lost - just update state, don't call Disconnect()
-            SyncLock _connectionLock
-                IsConnected = False
-            End SyncLock
-            Log($"[{DevName}] Connection lost, state updated.", ConsoleColor.Cyan)
-        End If
-    Catch disconnectEx As Exception
-        Log($"[{DevName}] Error in Finally: {disconnectEx.Message}", ConsoleColor.Red)
-    End Try
-End Try
-```
-
-### Option 3: Increase Worker Retry Delay
-
-**Change** [`Worker.vb:61`](Flashback.Engine/Worker.vb:61):
-
-```vb
-Await Task.Delay(10000, stoppingToken)  ' 10 seconds instead of 5
-```
-
-### Option 4: Increase Initial Backoff
-
-**Change** [`Devs.vb:63`](Flashback.Core/Devs.vb:63):
-
-```vb
-Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(10)  ' 10 instead of 5
-```
-
-**And** [`Devs.vb:142`](Flashback.Core/Devs.vb:142):
-
-```vb
-_reconnectDelay = TimeSpan.FromSeconds(10)  ' 10 instead of 5
-```
-
-## Complete Fix Summary
-
-### Three Changes Required
-
-1. **Remove WriteByte(0) keep-alive** in ReceiveDataAsync() (lines 318-340)
-   - Rely on TCP keep-alive options instead
-   - Prevents premature connection termination
-
-2. **Fix StartAsync() Finally block** (lines 284-304)
-   - Only call Disconnect() on cancellation
-   - Don't call Disconnect() when connection naturally ends
-
-3. **Increase retry delays** to 10 seconds
-   - Worker.vb line 61: Change 5000 to 10000
-   - Devs.vb line 63: Change FromSeconds(5) to FromSeconds(10)
-   - Devs.vb line 142: Change FromSeconds(5) to FromSeconds(10)
-
-## Why This Fixes the Problem
-
-### Before Fix
-```
-[Printer] Attempting to connect to host:9000
-[Printer] Connection successful
-[Printer] receiving data from remote host
-[Printer] received 1024 lines
-[Printer] Waiting for next data...
-[Printer] WriteByte(0) keep-alive check
-[Printer] Exception: Unable to write to stream  ← TRANSIENT ISSUE
-[Printer] ReceiveDataAsync finished
-[Printer] StartAsync entering Finally
-[Printer] Calling Disconnect() from StartAsync Finally
-[Printer] Disconnect() starting cleanup...
-DIAGNOSTIC: Printer appears offline. Attempting connect...
-[Printer] Attempting to connect to host:9000  ← NEW CONNECTION
-[REPEATS EVERY 10 SECONDS]
-```
-
-### After Fix
-```
-[Printer] Attempting to connect to host:9000
-[Printer] Connection successful
-[Printer] receiving data from remote host
-[Printer] received 1024 lines
-[Printer] Waiting for next data...
-[Printer] receiving data from remote host
-[Printer] received 512 lines
-[Printer] Waiting for next data...
-[STAYS CONNECTED - NO RECONNECTION]
-```
+3. **Improve ReceiveDataAsync Cleanup** (Devs.vb)
+   - Better error handling
+   - Separate cleanup operations
+   - Force variables to Nothing on error
 
 ## Testing Plan
 
-### Test 1: Normal Operation
-1. Configure printer in client mode
-2. Start Engine
-3. Send data from remote
-4. Verify data received
-5. Wait 5 minutes
-6. Send more data
-7. Verify no reconnection occurred
+### Test 1: Device Lifecycle
+- Start with device disabled → verify not created
+- Enable device → verify created and connects
+- Disable device → verify disconnects and removed
+- Re-enable → verify recreated and connects
 
-**Expected**: Connection stays stable, no disconnect/reconnect
+### Test 2: Configuration Changes
+- Add new enabled device → verify created
+- Add new disabled device → verify not created
+- Remove device from config → verify cleaned up
+- Change connection settings → verify reconnect
 
-### Test 2: Remote Disconnect
-1. Configure printer in client mode
-2. Start Engine
-3. Establish connection
-4. Remote closes connection
-5. Verify disconnect detected
-6. Verify reconnection with 10s backoff
+### Test 3: Multiple Jobs
+- Connect to remote
+- Send 5 jobs without disconnecting
+- Verify all process correctly
 
-**Expected**: Clean disconnect, reconnection after 10s
+### Test 4: Reconnection
+- Connect and send job
+- Disconnect remote
+- Verify reconnects within ~10 seconds
+- Send another job
+- Verify processes correctly
 
-### Test 3: Network Failure
-1. Configure printer in client mode
-2. Start Engine
-3. Establish connection
-4. Simulate network failure
-5. Verify disconnect detected
-6. Restore network
-7. Verify reconnection with exponential backoff
-
-**Expected**: Reconnection with 10s, 20s, 40s delays
-
-## Files to Modify
-
-1. **Flashback.Core/Devs.vb**
-   - Lines 318-340: Remove WriteByte(0) keep-alive
-   - Lines 284-304: Fix Finally block
-   - Line 63: Change backoff from 5s to 10s
-   - Line 142: Change backoff reset from 5s to 10s
-
-2. **Flashback.Engine/Worker.vb**
-   - Line 61: Change retry delay from 5s to 10s
-
-## Estimated Effort
-
-- Implementation: 20 minutes
-- Testing: 1 hour
-- Total: ~1.5 hours
+### Test 5: Stability
+- Run for hours
+- Send 50+ jobs
+- Include disconnects
+- Include config changes
+- Verify no leaks
 
 ## Success Criteria
 
-- ✅ Connections stay stable for hours
-- ✅ No constant disconnect/reconnect
-- ✅ Only one connection per printer to remote
-- ✅ Clean disconnect when remote closes
-- ✅ Proper reconnection with backoff
-- ✅ No "connection refused" or "address in use" errors
-
-## Conclusion
-
-The root cause is the **aggressive WriteByte(0) keep-alive check** in ReceiveDataAsync() combined with the **unconditional Disconnect() call** in StartAsync() Finally block.
-
-Removing the WriteByte(0) check and fixing the Finally block will eliminate the infinite reconnection loop and maintain stable connections to remote hosts.
+✅ Disabled devices NOT created
+✅ Devices created when enabled
+✅ Devices removed when disabled
+✅ New devices added properly
+✅ Removed devices cleaned up
+✅ Multiple jobs process correctly
+✅ Reconnection works
+✅ No resource leaks
+✅ Proper error logging

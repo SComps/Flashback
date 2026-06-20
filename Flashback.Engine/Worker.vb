@@ -105,14 +105,29 @@ Public Class Worker
                 If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
 
                 Dim devName = p(0)
+                Dim newEnabled = If(p.Length >= 13, (p(12) = "True"), True)
                 Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
                 
-                If existing IsNot Nothing Then
+                ' CASE 1: Device exists and is being disabled
+                If existing IsNot Nothing AndAlso Not newEnabled Then
+                    _logger.LogInformation("{Dev} is being disabled. Disconnecting and removing.", devName)
+                    existing.Disconnect()
+                    _devList.Remove(existing)
+                    Continue For
+                End If
+                
+                ' CASE 2: Device doesn't exist and is disabled - skip it
+                If existing Is Nothing AndAlso Not newEnabled Then
+                    _logger.LogInformation("{Dev} is disabled in config, skipping creation.", devName)
+                    Continue For
+                End If
+                
+                ' CASE 3: Device exists and is enabled - check for config changes
+                If existing IsNot Nothing AndAlso newEnabled Then
                     ' Check if connection-critical settings changed
                     Dim newConnType = Val(p(3))
                     Dim newDevDest = p(4)
                     Dim newOS = CType(Val(p(5)), OSType)
-                    Dim newEnabled = If(p.Length >= 13, (p(12) = "True"), True)
                     
                     Dim needsReconnect = (existing.DevDest <> newDevDest) OrElse
                                         (existing.OS <> newOS) OrElse
@@ -146,18 +161,7 @@ Public Class Worker
                         If p.Length >= 23 Then existing.EmailSubject = p(22)
                         If p.Length >= 24 Then existing.EmailBody = p(23)
                         
-                        ' Handle enabled state change
-                        If existing.Enabled <> newEnabled Then
-                            existing.Enabled = newEnabled
-                            If newEnabled Then
-                                _logger.LogInformation("{Dev} enabled - initiating connection.", devName)
-                                existing.Connect()
-                            Else
-                                _logger.LogInformation("{Dev} disabled - disconnecting.", devName)
-                                existing.Disconnect()
-                            End If
-                        End If
-                        
+                        ' Device is enabled and stays enabled - keep it
                         activeDevices.Add(existing)
                         _devList.Remove(existing)
                         loadedCount += 1
@@ -171,58 +175,60 @@ Public Class Worker
                     existing.Disconnect()
                     ' Give disconnect time to complete
                     Threading.Thread.Sleep(500)
+                    ' Fall through to create new device
                 End If
                 
-                ' Create new device object (either new device or connection settings changed)
-                If existing IsNot Nothing Then
-                    _logger.LogInformation("Recreating device object for {Dev}.", devName)
-                Else
-                    _logger.LogInformation("Creating new device object for {Dev}.", devName)
-                End If
-                
-                Dim d As New Devs()
-                d.DevName = p(0)
-                d.DevDescription = p(1)
-                d.DevType = Val(p(2))
-                d.ConnType = Val(p(3))
-                d.DevDest = p(4)
-                d.OS = CType(Val(p(5)), OSType)
-                d.PDF = (p(7) = "True")
-                d.Orientation = Val(p(8))
-                d.OutDest = p(9)
-                
-                If p.Length >= 12 Then
-                    d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
-                    d.JobNumber = Val(p(11))
-                End If
-                If p.Length >= 13 Then
-                    d.Enabled = (p(12) = "True")
-                End If
-                
-                ' Load email configuration (backward compatible - fields 13-23)
-                If p.Length >= 14 Then d.EmailEnabled = (p(13) = "True")
-                If p.Length >= 15 Then d.EmailRecipients = p(14)
-                If p.Length >= 16 Then d.SmtpServer = p(15)
-                If p.Length >= 17 Then d.SmtpPort = Val(p(16))
-                If p.Length >= 18 Then d.SmtpUsername = p(17)
-                If p.Length >= 19 Then d.SmtpPassword = p(18)
-                If p.Length >= 20 Then d.SmtpUseTLS = (p(19) = "True")
-                If p.Length >= 21 Then d.EmailFromAddress = p(20)
-                If p.Length >= 22 Then d.EmailFromName = p(21)
-                If p.Length >= 23 Then d.EmailSubject = p(22)
-                If p.Length >= 24 Then d.EmailBody = p(23)
+                ' CASE 4: Create new device (either new or being recreated) - ONLY IF ENABLED
+                If newEnabled Then
+                    If existing IsNot Nothing Then
+                        _logger.LogInformation("Recreating device object for {Dev}.", devName)
+                    Else
+                        _logger.LogInformation("Creating new device object for {Dev}.", devName)
+                    End If
+                    
+                    Dim d As New Devs()
+                    d.DevName = p(0)
+                    d.DevDescription = p(1)
+                    d.DevType = Val(p(2))
+                    d.ConnType = Val(p(3))
+                    d.DevDest = p(4)
+                    d.OS = CType(Val(p(5)), OSType)
+                    d.PDF = (p(7) = "True")
+                    d.Orientation = Val(p(8))
+                    d.OutDest = p(9)
+                    
+                    If p.Length >= 12 Then
+                        d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
+                        d.JobNumber = Val(p(11))
+                    End If
+                    
+                    ' Device is enabled (we already checked this)
+                    d.Enabled = True
+                    
+                    ' Load email configuration (backward compatible - fields 13-23)
+                    If p.Length >= 14 Then d.EmailEnabled = (p(13) = "True")
+                    If p.Length >= 15 Then d.EmailRecipients = p(14)
+                    If p.Length >= 16 Then d.SmtpServer = p(15)
+                    If p.Length >= 17 Then d.SmtpPort = Val(p(16))
+                    If p.Length >= 18 Then d.SmtpUsername = p(17)
+                    If p.Length >= 19 Then d.SmtpPassword = p(18)
+                    If p.Length >= 20 Then d.SmtpUseTLS = (p(19) = "True")
+                    If p.Length >= 21 Then d.EmailFromAddress = p(20)
+                    If p.Length >= 22 Then d.EmailFromName = p(21)
+                    If p.Length >= 23 Then d.EmailSubject = p(22)
+                    If p.Length >= 24 Then d.EmailBody = p(23)
 
-                AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
-                AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
-                d.Logger = _logger
-                _logger.LogInformation("Device object created: {Dev}", d.DevName)
-                If d.Enabled Then
+                    AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
+                    AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
+                    d.Logger = _logger
+                    _logger.LogInformation("Device object created: {Dev}", d.DevName)
+                    
+                    ' Connect immediately since device is enabled
                     d.Connect()
-                Else
-                    _logger.LogInformation("Device {Dev} is disabled, will not connect.", d.DevName)
+                    
+                    activeDevices.Add(d)
+                    loadedCount += 1
                 End If
-                activeDevices.Add(d)
-                loadedCount += 1
             Next
 
             ' Anything left in _devList is no longer in the config or was replaced
