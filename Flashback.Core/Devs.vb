@@ -590,10 +590,16 @@ Public Class Devs
                 Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
                 Directory.CreateDirectory(OutDest)
             End If
+            
+            ' Clean up legacy "data" directory if it exists
             Dim dataDir = Path.Combine(OutDest, "data")
-            If Not Directory.Exists(dataDir) Then
-                Log($"[{DevName}] Created data directory {dataDir}", ConsoleColor.Yellow)
-                Directory.CreateDirectory(dataDir)
+            If Directory.Exists(dataDir) Then
+                Try
+                    Directory.Delete(dataDir, True)
+                    Log($"[{DevName}] Removed legacy data directory {dataDir}", ConsoleColor.Gray)
+                Catch ex As Exception
+                    Log($"[{DevName}] Could not remove legacy data directory: {ex.Message}", ConsoleColor.DarkYellow)
+                End Try
             End If
         Catch ex As Exception
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
