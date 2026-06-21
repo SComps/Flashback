@@ -50,8 +50,6 @@ Public Class Devs
     Private serviceDiscovery As ServiceDiscovery
 #End If
     Private _cancellationTokenSource As CancellationTokenSource
-    Private currentDocument As New List(Of String)()
-    Private ReadOnly _documentLock As New Object()
     Private IsConnected As Boolean = False
     Private IsConnecting As Boolean = False
     Private IsClosing As Boolean = False
@@ -498,13 +496,7 @@ Public Class Devs
 
         ' If it's a Raw connection, we process even small documents and don't care about line count minima
         If ConnType = 3 OrElse lines.Count > 9 Then
-            Dim docCopy As List(Of String)
-            SyncLock _documentLock
-                currentDocument.AddRange(lines)
-                docCopy = New List(Of String)(currentDocument)
-                currentDocument.Clear()
-            End SyncLock
-            
+            Dim docCopy = New List(Of String)(lines)
             Task.Run(Sub() ProcessDocument(docCopy))
             Log($"[{DevName}] Waiting for next block/session.")
             Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
