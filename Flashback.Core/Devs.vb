@@ -344,7 +344,7 @@ Public Class Devs
         Dim buffer(8192) As Byte
         Dim dataBuilder As New StringBuilder()
         Dim lastReceivedTime As DateTime = DateTime.Now
-        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(30)  ' Accommodate slow/Internet connections
+        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(1)  ' Quick job completion detection - systems send continuous streams
 
         Try
             While Not cancellationToken.IsCancellationRequested
