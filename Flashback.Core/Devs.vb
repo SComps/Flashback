@@ -347,7 +347,7 @@ Public Class Devs
         Try
             While Not cancellationToken.IsCancellationRequested
                 If Not clientStream.DataAvailable Then
-                    Await Task.Delay(5000, cancellationToken)  ' 5 seconds - reasonable for LAN and Internet
+                    Await Task.Delay(100, cancellationToken)  ' 100ms - fast polling to detect job completion within 1 second
                     
                     ' No application-level keep-alive for client mode
                     ' TCP keep-alive (configured at socket level) handles connection detection
