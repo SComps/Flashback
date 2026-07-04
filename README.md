@@ -81,7 +81,7 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 
 ### Prerequisites
 
-- **Windows**: Windows 10/11 (x64) with .NET 9 Runtime
+- **Windows**: Windows 10/11 (x64) with .NET 10 Runtime
 - **Linux**: Ubuntu 20.04+, Debian 11+, RHEL 8+, or compatible (x64/ARM64)
 - **Network**: TCP/IP connectivity between host and Flashback server
 - **Privileges**: Administrator (Windows) or sudo (Linux) for service installation
