@@ -370,5 +370,3 @@ Module Program
         SetError("Use EXIT command to quit.")
     End Sub
 End Module
-
-' Made with Bob

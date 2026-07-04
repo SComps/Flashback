@@ -72,5 +72,3 @@ else
     echo -e "${RED}✗ Push failed${NC}"
     exit 1
 fi
-
-# Made with Bob

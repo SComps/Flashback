@@ -201,5 +201,3 @@ Public Class LogViewerForm
         MyBase.OnFormClosing(e)
     End Sub
 End Class
-
-' Made with Bob

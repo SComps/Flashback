@@ -58,7 +58,7 @@ Public Class Devs
     ' Connection state management
     Private ReadOnly _connectionLock As New Object()
     Private _lastConnectAttempt As DateTime = DateTime.MinValue
-    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(10)
+    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(5)
     Private ReadOnly _maxReconnectDelay As TimeSpan = TimeSpan.FromMinutes(5)
 
     Public ReadOnly Property Connected As Boolean
@@ -137,7 +137,7 @@ Public Class Devs
                 Await StartAsync()
                 ' Success - reset backoff delay
                 SyncLock _connectionLock
-                    _reconnectDelay = TimeSpan.FromSeconds(10)
+                    _reconnectDelay = TimeSpan.FromSeconds(5)
                 End SyncLock
                 Log($"[{DevName}] Connection successful. Backoff delay reset.", ConsoleColor.Green)
             Else
@@ -238,7 +238,29 @@ Public Class Devs
                     End While
                 End Using
             Else
-                Log($"[{DevName}] DIAGNOSTIC: Creating raw Socket.", ConsoleColor.Cyan)
+                ' Ensure any existing socket is completely disposed before creating new one
+                If socket IsNot Nothing Then
+                    Try
+                        socket.Close()
+                        socket.Dispose()
+                    Catch
+                        ' Ignore errors - we're forcing cleanup
+                    End Try
+                    socket = Nothing
+                End If
+                
+                ' Ensure any existing client stream is disposed
+                If clientStream IsNot Nothing Then
+                    Try
+                        clientStream.Close()
+                        clientStream.Dispose()
+                    Catch
+                        ' Ignore errors - we're forcing cleanup
+                    End Try
+                    clientStream = Nothing
+                End If
+                
+                Log($"[{DevName}] Creating fresh socket for connection attempt.", ConsoleColor.Cyan)
                 socket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
 
                 ' Configure OS-level Keep-Alives with error handling
@@ -253,10 +275,18 @@ Public Class Devs
                     ' Continue anyway - keep-alive is optional
                 End Try
 
-                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (Socket)...", ConsoleColor.Yellow)
-                Await socket.ConnectAsync(remoteHost, remotePort)
-                IsConnected = True
-                Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
+                ' Use explicit 5-second timeout for connection attempt
+                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (5s timeout)...", ConsoleColor.Yellow)
+                Using cts As New CancellationTokenSource(TimeSpan.FromSeconds(5))
+                    Try
+                        Await socket.ConnectAsync(remoteHost, remotePort, cts.Token)
+                        IsConnected = True
+                        Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
+                    Catch ex As OperationCanceledException
+                        ' Connection timed out after 5 seconds
+                        Throw New TimeoutException($"Connection to {remoteHost}:{remotePort} timed out after 5 seconds")
+                    End Try
+                End Using
                 
                 OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
                 Try
