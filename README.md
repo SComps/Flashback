@@ -18,13 +18,11 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 - **Bidirectional Communication** - Client or server mode operation
 
 ### 📄 Advanced PDF Generation
-- **Intelligent Carriage Control** - Proper interpretation of ASA, machine, and VMS carriage control
-- **Vintage Font Rendering** - Authentic period fonts included (chain printer, dot matrix, line printer, IBM Plex Mono, OCR-B)
 - **Configurable Orientation** - Portrait or landscape output
 - **Professional Shading** - Green bar, blue bar, or plain white backgrounds
 - **Automatic Job Numbering** - Sequential tracking of print jobs
 
-### 📧 Email Integration
+### 📧 Email Integration (experimental)
 - **Automatic PDF Delivery** - Send generated PDFs directly to email recipients
 - **Template Variables** - Dynamic subject and body customization
 - **Multiple Recipients** - Semicolon-separated distribution lists
@@ -39,7 +37,7 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 - **Web-based PDF Viewer** - Browser-based viewing of generated PDFs (optional)
 
 ### 🔐 Enterprise Features
-- **Licensing System** - Free tier (2 printers) and professional unlimited licensing
+- **Licensing System** - Free tier (2 printers) No, I'm not charging for licenses; it was an experiment.
 - **Multi-Platform** - Windows (x64) and Linux (x64/ARM64) support
 - **Background Services** - Windows Service and Linux systemd integration
 - **Comprehensive Logging** - Detailed operational history and debugging
@@ -131,7 +129,7 @@ sudo systemctl status flashback-engine
 
 ## 📖 Documentation
 
-### Core Components
+### Core Components (Engine, 3270 config, and spooler can be run in the foreground)
 
 #### Flashback.Engine
 The heart of the system - a background service that:
@@ -160,7 +158,7 @@ Interactive terminal-based configuration utility:
 - Set up email delivery per device
 - Cross-platform (Windows/Linux)
 
-#### Flashback.Config.3270
+#### Flashback.Config.3270 (Optional)
 Remote administration via TN3270 terminal emulator:
 - Connect from any 3270 emulator (x3270, c3270, etc.)
 - Manage device configuration remotely
@@ -205,7 +203,7 @@ Each virtual printer device requires:
 | **Shading** | Green bar, Blue bar, or White | `Green` |
 | **Output Directory** | PDF destination path | `C:\Flashback\Output` |
 
-### Email Configuration (Per Device)
+### Email Configuration (Per Device) **EXPERIMENTAL**
 
 | Field | Description | Example |
 |-------|-------------|---------|
@@ -248,6 +246,7 @@ Add printer definitions to your Hercules configuration file:
 ### SimH (PDP-11, VAX, MicroVAX)
 
 Configure DZ11/DZV11 lines to connect to Flashback:
+In this case, our 'printer' is a hardcopy terminal on DZ line 0.
 
 ```text
 SET DZ LINES=8
@@ -276,9 +275,9 @@ Flashback operates in two tiers:
 | Tier | Capability | Use Case |
 |------|------------|----------|
 | **FREE** | Up to 2 concurrent printers | Personal, educational, non-commercial |
-| **PRO** | Unlimited printers | Commercial, enterprise, production |
 
-To activate a PRO license:
+To get a license, just ask.  This has been a toy I wanted to play with, not a policy.
+To activate a license:
 1. Obtain your `flashback.lic` file
 2. Place it in the Flashback application directory
 3. Restart the Flashback.Engine service
@@ -332,7 +331,10 @@ To activate a PRO license:
 - Verify PDF viewer supports embedded fonts
 - Note: Font selection is not currently configurable; default font is used
 
-### Email Delivery Issues
+### Email Delivery Issues EXPERIMENTAL
+
+**NOTE** GMAIL AND MANY COMMERCIAL EMAIL SERVICES WILL NOT ACCEPT MAIL FROM
+UNREGISTERED SECURE SMTP SERVERS.
 
 **Problem**: Emails not sending
 - Recognize that gmail and others will not accept SMTP from just anyone.
@@ -422,9 +424,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Font Assets**: Chain Printer, Dot Matrix, Line Printer, IBM Plex Mono, OCR-B (included for authentic vintage rendering)
-- **PDF Generation**: iText7 library
-- **TN3270 Protocol**: Custom implementation based on RFC standards (used for Config.3270 tool only)
+- **PDF Generation**: PDFSharp
+- **TN3270 Framework**: Custom implementation based on RFC standards VB.NET source code available.
 - **Community**: Thanks to all vintage computing enthusiasts and contributors especially Mainframe Enthusiasts on Discord
+- MPE Forever! on Discord for all the help with HP3000/MPE and testing when things were really rough!
 - @Rudi (just because)
 - @MarXtevens for exellent advice and patience
 - @misterspock1 for testing when he probably shouldn't
