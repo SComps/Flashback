@@ -1,5 +1,6 @@
 #!/bin/bash
 # Flashback Suite - Linux Publish Script (Native AOT / Multi-Arch)
+# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 set -e
 
 # Detect Architecture
@@ -57,9 +58,5 @@ dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release 
 # 4. Spooler Service
 echo "-> Publishing Flashback.Spooler..."
 dotnet publish ../Flashback.Spooler/Flashback.Spooler.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
-
-# 5. License Generator Console
-echo "-> Publishing Flashback.LicenseGenerator.Console..."
-dotnet publish ../Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
