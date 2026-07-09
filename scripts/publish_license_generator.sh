@@ -51,4 +51,3 @@ dotnet publish Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Con
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
 
-# Made with Bob

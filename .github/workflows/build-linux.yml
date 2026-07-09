@@ -84,4 +84,3 @@ jobs:
           flashback-linux-${{ matrix.arch }}.tar.gz
         retention-days: 30
 
-# Made with Bob
