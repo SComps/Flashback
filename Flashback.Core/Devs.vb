@@ -9,6 +9,7 @@ Imports Makaretu.Dns
 Public Class Devs
     Public Event LogMessage(message As String, color As ConsoleColor)
     Public Event JobNumberChanged(sender As Devs)
+    Public Event Disconnected(sender As Devs)
 
     Public Property DevName As String = "Printer"
     Public Property DevDescription As String = ""
@@ -23,7 +24,7 @@ Public Class Devs
     Public Property JobNumber As Integer = 0
     Public Property Enabled As Boolean = True
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
-    
+
     ' Email Configuration Properties
     Public Property EmailEnabled As Boolean = False
     Public Property EmailRecipients As String = ""
@@ -52,24 +53,13 @@ Public Class Devs
     Private _cancellationTokenSource As CancellationTokenSource
     Private IsConnected As Boolean = False
     Private IsConnecting As Boolean = False
-    Private IsClosing As Boolean = False
     Private _receivingFlag As Integer = 0  ' 0 = False, 1 = True (for thread-safe access)
-    
-    ' Connection state management
+
     Private ReadOnly _connectionLock As New Object()
-    Private _lastConnectAttempt As DateTime = DateTime.MinValue
-    Private _reconnectDelay As TimeSpan = TimeSpan.FromSeconds(5)
-    Private ReadOnly _maxReconnectDelay As TimeSpan = TimeSpan.FromMinutes(5)
 
     Public ReadOnly Property Connected As Boolean
         Get
             SyncLock _connectionLock
-                Try
-                    If socket IsNot Nothing Then
-                        Return socket.Connected AndAlso Not (socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0)
-                    End If
-                Catch
-                End Try
                 Return IsConnected
             End SyncLock
         End Get
@@ -79,14 +69,6 @@ Public Class Devs
         Get
             SyncLock _connectionLock
                 Return IsConnecting
-            End SyncLock
-        End Get
-    End Property
-    
-    Public ReadOnly Property CanConnect As Boolean
-        Get
-            SyncLock _connectionLock
-                Return Not (IsConnected OrElse IsConnecting OrElse IsClosing)
             End SyncLock
         End Get
     End Property
@@ -111,54 +93,34 @@ Public Class Devs
     End Sub
 
     Public Async Sub Connect()
-        ' Check if we can connect (with backoff)
-        Dim timeSinceLastAttempt As TimeSpan
         SyncLock _connectionLock
-            timeSinceLastAttempt = DateTime.Now - _lastConnectAttempt
-            If timeSinceLastAttempt < _reconnectDelay Then
-                Log($"[{DevName}] Connect() skipped - backoff active. Retry in {(_reconnectDelay - timeSinceLastAttempt).TotalSeconds:F0}s", ConsoleColor.DarkYellow)
+            If IsConnected OrElse IsConnecting Then
+                Log($"[{DevName}] Connect() skipped - already connected or connecting.", ConsoleColor.DarkYellow)
                 Return
             End If
-            
-            If Not CanConnect Then
-                Log($"[{DevName}] Connect() skipped. State: Connected={IsConnected}, Connecting={IsConnecting}, Closing={IsClosing}", ConsoleColor.DarkYellow)
-                Return
-            End If
-            
-            _lastConnectAttempt = DateTime.Now
             IsConnecting = True
         End SyncLock
-        
-        Log($"[{DevName}] Connect() starting. IsConnected={IsConnected}, IsConnecting={IsConnecting}, IsClosing={IsClosing}", ConsoleColor.Cyan)
-        
+
+        Log($"[{DevName}] Connecting to {DevDest}...", ConsoleColor.Cyan)
+
         Try
             SplitDestination(DevDest)
             If remotePort > 0 Then
                 Await StartAsync()
-                ' Success - reset backoff delay
-                SyncLock _connectionLock
-                    _reconnectDelay = TimeSpan.FromSeconds(5)
-                End SyncLock
-                Log($"[{DevName}] Connection successful. Backoff delay reset.", ConsoleColor.Green)
             Else
-                Log($"[{DevName}] Connect skipped: remotePort is 0.", ConsoleColor.DarkYellow)
+                Log($"[{DevName}] Connect skipped: invalid port in destination '{DevDest}'.", ConsoleColor.DarkYellow)
             End If
         Catch ex As Exception
-            ' Connection failed - increase backoff delay (exponential backoff)
-            SyncLock _connectionLock
-                _reconnectDelay = TimeSpan.FromSeconds(Math.Min(_reconnectDelay.TotalSeconds * 2, _maxReconnectDelay.TotalSeconds))
-            End SyncLock
-            Log($"[{DevName}] Connection failed: {ex.Message}. Next retry in {_reconnectDelay.TotalSeconds:F0}s", ConsoleColor.Yellow)
+            Log($"[{DevName}] Connection failed: {ex.Message}", ConsoleColor.Yellow)
         Finally
             SyncLock _connectionLock
                 IsConnecting = False
             End SyncLock
-            Log($"[{DevName}] Connect() finished. IsConnecting set to False.", ConsoleColor.Cyan)
         End Try
     End Sub
 
     Public Async Function StartAsync() As Task
-        ' Dispose existing CancellationTokenSource if present to prevent leak
+        ' Dispose existing CancellationTokenSource if present
         If _cancellationTokenSource IsNot Nothing Then
             Try
                 _cancellationTokenSource.Cancel()
@@ -167,17 +129,17 @@ Public Class Devs
                 Log($"[{DevName}] Error disposing existing CancellationTokenSource: {ex.Message}", ConsoleColor.DarkYellow)
             End Try
         End If
-        
+
         _cancellationTokenSource = New CancellationTokenSource()
 
         Try
             If ConnType = 3 Then
+                ' Port 9100 listener mode - passively accept incoming connections
                 Log($"[{DevName}] Starting Port 9100 Listener on port {remotePort}...", ConsoleColor.Yellow)
                 listener = New TcpListener(System.Net.IPAddress.Any, remotePort)
                 listener.Start()
-                
+
 #If WINDOWS Then
-                ' Advertise the service on the network as "Flashback Printer"
                 Try
                     serviceDiscovery = New ServiceDiscovery()
                     Dim profile = New ServiceProfile("Flashback Printer", "_pdl-datastream._tcp", CUShort(remotePort))
@@ -188,15 +150,16 @@ Public Class Devs
                 End Try
 #End If
 
-                ' Wait for incoming connections continuously
-                IsConnected = True
+                SyncLock _connectionLock
+                    IsConnected = True
+                End SyncLock
+
                 Using registration = _cancellationTokenSource.Token.Register(Sub() listener.Stop())
                     While Not _cancellationTokenSource.IsCancellationRequested
                         Try
                             Dim incomingSocket = Await listener.AcceptSocketAsync()
                             Log($"[{DevName}] Accepted connection from {incomingSocket.RemoteEndPoint}", ConsoleColor.Green)
-                            
-                            ' Configure Keep-Alives on the accepted socket with error handling
+
                             Try
                                 incomingSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
                                 incomingSocket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60)
@@ -205,7 +168,7 @@ Public Class Devs
                             Catch ex As Exception
                                 Log($"[{DevName}] Warning: Could not configure TCP keep-alive on accepted socket: {ex.Message}", ConsoleColor.DarkYellow)
                             End Try
-                            
+
                             OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
                             Try
                                 If Not Directory.Exists(OutDest) Then
@@ -217,10 +180,10 @@ Public Class Devs
                                     Log($"[{DevName}] ERROR creating directory: {ex.Message}", ConsoleColor.Red)
                                 End If
                             End Try
-                            
+
                             clientStream = New NetworkStream(incomingSocket, True)
                             Await ReceiveDataAsync(_cancellationTokenSource.Token)
-                            
+
                             Try
                                 clientStream?.Close()
                                 incomingSocket?.Close()
@@ -237,57 +200,37 @@ Public Class Devs
                         End Try
                     End While
                 End Using
+
             Else
-                ' Ensure any existing socket is completely disposed before creating new one
-                If socket IsNot Nothing Then
-                    Try
-                        socket.Close()
-                        socket.Dispose()
-                    Catch
-                        ' Ignore errors - we're forcing cleanup
-                    End Try
-                    socket = Nothing
-                End If
-                
-                ' Ensure any existing client stream is disposed
-                If clientStream IsNot Nothing Then
-                    Try
-                        clientStream.Close()
-                        clientStream.Dispose()
-                    Catch
-                        ' Ignore errors - we're forcing cleanup
-                    End Try
-                    clientStream = Nothing
-                End If
-                
-                Log($"[{DevName}] Creating fresh socket for connection attempt.", ConsoleColor.Cyan)
+                ' Client mode - connect to remote system
+                Log($"[{DevName}] Creating socket for connection attempt.", ConsoleColor.Cyan)
                 socket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
 
-                ' Configure OS-level Keep-Alives with error handling
                 Try
                     socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, True)
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 120)  ' 2 minutes - better for Internet/NAT
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)  ' 10s interval
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 120)
+                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
                     Log($"[{DevName}] TCP keep-alive configured successfully.", ConsoleColor.Gray)
                 Catch ex As Exception
                     Log($"[{DevName}] Warning: Could not configure TCP keep-alive: {ex.Message}", ConsoleColor.DarkYellow)
-                    ' Continue anyway - keep-alive is optional
                 End Try
 
-                ' Use explicit 5-second timeout for connection attempt
                 Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (5s timeout)...", ConsoleColor.Yellow)
                 Using cts As New CancellationTokenSource(TimeSpan.FromSeconds(5))
                     Try
                         Await socket.ConnectAsync(remoteHost, remotePort, cts.Token)
-                        IsConnected = True
-                        Log($"[{DevName}] Connection successful.", ConsoleColor.Green)
                     Catch ex As OperationCanceledException
-                        ' Connection timed out after 5 seconds
                         Throw New TimeoutException($"Connection to {remoteHost}:{remotePort} timed out after 5 seconds")
                     End Try
                 End Using
-                
+
+                ' Only set IsConnected = True here - after a real successful TCP connect
+                SyncLock _connectionLock
+                    IsConnected = True
+                End SyncLock
+                Log($"[{DevName}] Connected to {remoteHost}:{remotePort}.", ConsoleColor.Green)
+
                 OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
                 Try
                     If Not Directory.Exists(OutDest) Then
@@ -299,72 +242,43 @@ Public Class Devs
                         Log($"[{DevName}] ERROR creating directory: {ex.Message}", ConsoleColor.Red)
                     End If
                 End Try
-                
+
                 clientStream = New NetworkStream(socket, True)
                 Await ReceiveDataAsync(_cancellationTokenSource.Token)
             End If
-            
-        Catch ex As Exception
-            Log($"[{DevName}] StartAsync Error: {ex.GetType().Name} (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
+
+        Finally
+            ' Always clean up resources when StartAsync exits for any reason
+            Try
+                If clientStream IsNot Nothing Then
+                    clientStream.Close()
+                    clientStream.Dispose()
+                    clientStream = Nothing
+                End If
+            Catch
+                clientStream = Nothing
+            End Try
+
+            If ConnType <> 3 Then
+                Try
+                    If socket IsNot Nothing Then
+                        socket.Close()
+                        socket.Dispose()
+                        socket = Nothing
+                    End If
+                Catch
+                    socket = Nothing
+                End Try
+            End If
+
             SyncLock _connectionLock
                 IsConnected = False
             End SyncLock
-        Finally
-            Try
-                Dim wasCancelled = _cancellationTokenSource?.IsCancellationRequested
-                Log($"[{DevName}] StartAsync exiting. Cancelled: {wasCancelled}", ConsoleColor.Cyan)
-                
-                ' Only disconnect if explicitly cancelled (service stopping, device disabled)
-                ' Do NOT disconnect if connection naturally ended
-                If wasCancelled Then
-                    SyncLock _connectionLock
-                        If Not IsClosing Then
-                            Log($"[{DevName}] Disconnecting due to cancellation.", ConsoleColor.Cyan)
-                            Disconnect()
-                        End If
-                    End SyncLock
-                Else
-                    ' Connection ended naturally - clean up resources to allow reconnection
-                    Log($"[{DevName}] Connection ended naturally. Cleaning up resources...", ConsoleColor.Cyan)
-                    
-                    ' Clean up clientStream
-                    Try
-                        If clientStream IsNot Nothing Then
-                            clientStream.Close()
-                            clientStream.Dispose()
-                            clientStream = Nothing
-                            Log($"[{DevName}] Client stream cleaned up.", ConsoleColor.Gray)
-                        End If
-                    Catch ex As Exception
-                        Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
-                        clientStream = Nothing  ' Force null even if cleanup failed
-                    End Try
-                    
-                    ' Clean up socket (only in client mode)
-                    If ConnType <> 3 Then
-                        Try
-                            If socket IsNot Nothing Then
-                                socket.Close()
-                                socket.Dispose()
-                                socket = Nothing
-                                Log($"[{DevName}] Socket cleaned up.", ConsoleColor.Gray)
-                            End If
-                        Catch ex As Exception
-                            Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
-                            socket = Nothing  ' Force null even if cleanup failed
-                        End Try
-                    End If
-                    
-                    ' Update connection state
-                    SyncLock _connectionLock
-                        IsConnected = False
-                    End SyncLock
-                    
-                    Log($"[{DevName}] Resources cleaned up. Reconnection will be attempted with backoff.", ConsoleColor.Cyan)
-                End If
-            Catch ex As Exception
-                Log($"[{DevName}] Error in Finally block: {ex.Message}", ConsoleColor.Red)
-            End Try
+
+            Log($"[{DevName}] Disconnected.", ConsoleColor.Cyan)
+
+            ' Notify the Worker so it can remove and recreate this device
+            RaiseEvent Disconnected(Me)
         End Try
     End Function
 
@@ -372,20 +286,17 @@ Public Class Devs
         Dim buffer(8192) As Byte
         Dim dataBuilder As New StringBuilder()
         Dim lastReceivedTime As DateTime = DateTime.Now
-        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(1)  ' Quick job completion detection - systems send continuous streams
+        Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(1)
 
         Try
             While Not cancellationToken.IsCancellationRequested
                 If Not clientStream.DataAvailable Then
-                    Await Task.Delay(100, cancellationToken)  ' 100ms - fast polling to detect job completion within 1 second
-                    
-                    ' No application-level keep-alive for client mode
-                    ' TCP keep-alive (configured at socket level) handles connection detection
-                    ' Only check for Port 9100 mode
+                    Await Task.Delay(100, cancellationToken)
+
+                    ' Port 9100 mode: check if the accepted socket closed
                     If ConnType = 3 Then
                         Try
-                            ' Silent connection check for Port 9100 mode only
-                            If socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
+                            If socket IsNot Nothing AndAlso socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
                                 If dataBuilder.Length > 0 Then
                                     ProcessDocumentData(dataBuilder.ToString())
                                     dataBuilder.Clear()
@@ -408,9 +319,7 @@ Public Class Devs
                         lastReceivedTime = DateTime.Now
                     End If
                 Else
-                    ' Use atomic operation to set receiving flag
                     If Interlocked.CompareExchange(_receivingFlag, 1, 0) = 0 Then
-                        ' Successfully set flag from 0 to 1
                         If ConnType = 3 Then
                             Log($"[{DevName}] receiving raw data from stream.", ConsoleColor.Yellow)
                         ElseIf OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
@@ -421,38 +330,11 @@ Public Class Devs
                     End If
                     Dim recd As Integer = Await clientStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
                     If recd = 0 Then
-                        Log($"[{DevName}] ReceiveDataAsync: 0 bytes received (EOF). Remote closed connection.", ConsoleColor.DarkYellow)
+                        Log($"[{DevName}] Remote closed connection (EOF).", ConsoleColor.DarkYellow)
                         If dataBuilder.Length > 0 Then
                             ProcessDocumentData(dataBuilder.ToString())
                             dataBuilder.Clear()
                         End If
-                        
-                        ' Clean up resources before exiting
-                        Try
-                            If clientStream IsNot Nothing Then
-                                clientStream.Close()
-                                clientStream.Dispose()
-                                clientStream = Nothing
-                            End If
-                        Catch ex As Exception
-                            Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
-                            clientStream = Nothing
-                        End Try
-                        
-                        ' Only clean up socket in client mode
-                        If ConnType <> 3 Then
-                            Try
-                                If socket IsNot Nothing Then
-                                    socket.Close()
-                                    socket.Dispose()
-                                    socket = Nothing
-                                End If
-                            Catch ex As Exception
-                                Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
-                                socket = Nothing
-                            End Try
-                        End If
-                        
                         Exit While
                     End If
                     dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
@@ -462,9 +344,9 @@ Public Class Devs
         Catch ex As OperationCanceledException
             Log($"[{DevName}] ReceiveDataAsync: Session canceled.", ConsoleColor.Gray)
         Catch ex As IO.IOException
-            Log($"[{DevName}] ReceiveDataAsync: IO Error (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] ReceiveDataAsync: IO Error: {ex.Message}", ConsoleColor.Red)
         Catch ex As Exception
-            Log($"[{DevName}] ReceiveDataAsync: Error (HResult={ex.HResult}): {ex.Message}", ConsoleColor.Red)
+            Log($"[{DevName}] ReceiveDataAsync: Error: {ex.Message}", ConsoleColor.Red)
         Finally
             Log($"[{DevName}] ReceiveDataAsync finished.", ConsoleColor.Cyan)
         End Try
@@ -524,30 +406,20 @@ Public Class Devs
             lines.RemoveAt(lines.Count - 1)
         End If
 
-        ' If it's a Raw connection, we process even small documents and don't care about line count minima
         If ConnType = 3 OrElse lines.Count > 9 Then
             Dim docCopy = New List(Of String)(lines)
             Task.Run(Sub() ProcessDocument(docCopy))
             Log($"[{DevName}] Waiting for next block/session.")
-            Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
+            Interlocked.Exchange(_receivingFlag, 0)
         Else
-            Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
+            Interlocked.Exchange(_receivingFlag, 0)
         End If
     End Sub
 
     Public Sub Disconnect()
-        SyncLock _connectionLock
-            If IsClosing Then
-                Log($"[{DevName}] Disconnect() already in progress, skipping.", ConsoleColor.DarkYellow)
-                Return
-            End If
-            IsClosing = True
-        End SyncLock
-        
-        Log($"[{DevName}] Disconnect() starting cleanup...", ConsoleColor.Cyan)
-        
+        Log($"[{DevName}] Disconnect() requested.", ConsoleColor.Cyan)
+
         Try
-            ' Cancel and dispose CancellationTokenSource
             If _cancellationTokenSource IsNot Nothing Then
                 Try
                     _cancellationTokenSource.Cancel()
@@ -557,8 +429,7 @@ Public Class Devs
                 End Try
                 _cancellationTokenSource = Nothing
             End If
-            
-            ' Close streams and sockets
+
             Try
                 clientStream?.Close()
                 clientStream?.Dispose()
@@ -566,7 +437,7 @@ Public Class Devs
             Catch ex As Exception
                 Log($"[{DevName}] Error closing client stream: {ex.Message}", ConsoleColor.DarkYellow)
             End Try
-            
+
             Try
                 socket?.Close()
                 socket?.Dispose()
@@ -574,14 +445,14 @@ Public Class Devs
             Catch ex As Exception
                 Log($"[{DevName}] Error closing socket: {ex.Message}", ConsoleColor.DarkYellow)
             End Try
-            
+
             Try
                 listener?.Stop()
                 listener = Nothing
             Catch ex As Exception
                 Log($"[{DevName}] Error stopping listener: {ex.Message}", ConsoleColor.DarkYellow)
             End Try
-            
+
 #If WINDOWS Then
             If serviceDiscovery IsNot Nothing Then
                 Try
@@ -596,12 +467,11 @@ Public Class Devs
         Catch ex As Exception
             Log($"[{DevName}] Error during disconnection: {ex.Message}", ConsoleColor.Red)
         Finally
-            ' Reset flags to allow reconnection attempts
             SyncLock _connectionLock
-                IsClosing = False
                 IsConnected = False
+                IsConnecting = False
             End SyncLock
-            Log($"[{DevName}] Disconnect() completed. Flags reset.", ConsoleColor.Cyan)
+            Log($"[{DevName}] Disconnect() completed.", ConsoleColor.Cyan)
         End Try
     End Sub
 
@@ -612,8 +482,7 @@ Public Class Devs
                 Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
                 Directory.CreateDirectory(OutDest)
             End If
-            
-            ' Clean up legacy "data" directory if it exists
+
             Dim dataDir = Path.Combine(OutDest, "data")
             If Directory.Exists(dataDir) Then
                 Try
@@ -629,16 +498,14 @@ Public Class Devs
             End If
         End Try
 
-        Interlocked.Exchange(_receivingFlag, 0)  ' Set to False atomically
+        Interlocked.Exchange(_receivingFlag, 0)
         Log($"[{DevName}] received {doc.Count} lines.", ConsoleColor.Cyan)
 
-        ' Logic for Raw / Listener mode
         Dim JobID As String
         Dim JobName As String
         Dim UserID As String
 
         If ConnType = 3 Then
-            ' Bypass OS Profile extraction
             JobID = DateTime.Now.ToString("HHmmss")
             JobName = "RAW_JOB"
             UserID = "GUEST"
@@ -695,18 +562,16 @@ Public Class Devs
         Dim renderer As New RenderPDF()
         renderer.Logger = Logger
         renderer.DevName = DevName
-        renderer.OS = If(ConnType = 3, OSType.OS_GENERIC, OS) ' Use Generic profile for raw/listener jobs
+        renderer.OS = If(ConnType = 3, OSType.OS_GENERIC, OS)
         renderer.Orientation = Orientation
         renderer.TargetFileName = pdfName
         renderer.Shading = Shading
 
         Dim pdfPath = renderer.CreatePDF(JobName, doc)
-        
-        ' Send email if enabled and PDF was created successfully
+
         If EmailEnabled AndAlso Not String.IsNullOrWhiteSpace(pdfPath) AndAlso System.IO.File.Exists(pdfPath) Then
             Task.Run(Async Function()
                 Try
-                    ' Create email configuration from device properties
                     Dim emailConfig As New EmailConfig()
                     emailConfig.Enabled = EmailEnabled
                     emailConfig.SetRecipientsFromString(EmailRecipients)
@@ -719,21 +584,18 @@ Public Class Devs
                     emailConfig.FromName = EmailFromName
                     emailConfig.Subject = EmailSubject
                     emailConfig.Body = EmailBody
-                    
-                    ' Get page count from PDF
+
                     Dim pageCount As Integer = 0
                     Try
                         Using pdfDoc = PdfSharp.Pdf.IO.PdfReader.Open(pdfPath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import)
                             pageCount = pdfDoc.PageCount
                         End Using
                     Catch
-                        ' If we can't read page count, just use 0
                     End Try
-                    
-                    ' Send email
+
                     Dim emailService As New EmailService(Logger)
                     Dim success = Await emailService.SendPdfEmailAsync(emailConfig, pdfPath, JobName, DevName, UserID, pageCount)
-                    
+
                     If success Then
                         Log($"[{DevName}] Email sent successfully for job {JobName}", ConsoleColor.Green)
                     Else
@@ -745,9 +607,8 @@ Public Class Devs
             End Function)
         End If
     End Sub
+
     Public Function ToConfigLine() As String
-        ' Extended format with email configuration (backward compatible)
         Return $"{DevName}||{DevDescription}||{DevType}||{ConnType}||{DevDest}||{CInt(OS)}||False||{PDF}||{Orientation}||{OutDest}||{CInt(Shading)}||{JobNumber}||{Enabled}||{EmailEnabled}||{EmailRecipients}||{SmtpServer}||{SmtpPort}||{SmtpUsername}||{SmtpPassword}||{SmtpUseTLS}||{EmailFromAddress}||{EmailFromName}||{EmailSubject}||{EmailBody}"
     End Function
 End Class
-
