@@ -8,3 +8,4 @@ dist/
 AOT-Test/
 AOT-Test-New/
 AOT-Test-Windows/
+*.log
