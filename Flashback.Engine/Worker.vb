@@ -148,6 +148,7 @@ Public Class Worker
 
         Try
             Dim activeDevices As New List(Of Devs)
+            Dim newDevices As New List(Of Devs)
             Dim loadedCount As Integer = 0
             Dim lines = File.ReadAllLines(_configFile)
 
@@ -160,13 +161,19 @@ Public Class Worker
 
                 Dim devName = p(0)
                 Dim newEnabled = If(p.Length >= 13, (p(12) = "True"), True)
-                Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+
+                Dim existing As Devs = Nothing
+                SyncLock _devList
+                    existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                End SyncLock
 
                 ' Device exists and is being disabled - disconnect and remove
                 If existing IsNot Nothing AndAlso Not newEnabled Then
                     _logger.LogInformation("{Dev} is being disabled. Disconnecting and removing.", devName)
                     existing.Disconnect()
-                    _devList.Remove(existing)
+                    SyncLock _devList
+                        _devList.Remove(existing)
+                    End SyncLock
                     Continue For
                 End If
 
@@ -186,7 +193,7 @@ Public Class Worker
                                         (existing.ConnType <> newConnType)
 
                     If Not needsReconnect Then
-                        ' Non-critical settings changed - update in place
+                        ' Non-critical settings changed - update in place, no reconnect needed
                         existing.DevDescription = p(1)
                         existing.DevType = Val(p(2))
                         existing.PDF = (p(7) = "True")
@@ -210,8 +217,8 @@ Public Class Worker
                         If p.Length >= 23 Then existing.EmailSubject = p(22)
                         If p.Length >= 24 Then existing.EmailBody = p(23)
 
+                        ' Device stays in _devList - just track it as still active
                         activeDevices.Add(existing)
-                        _devList.Remove(existing)
                         loadedCount += 1
                         Continue For
                     End If
@@ -219,6 +226,9 @@ Public Class Worker
                     ' Connection-critical settings changed - disconnect and recreate
                     _logger.LogInformation("Connection settings changed for {Dev}. Disconnecting before recreating.", devName)
                     existing.Disconnect()
+                    SyncLock _devList
+                        _devList.Remove(existing)
+                    End SyncLock
                     Threading.Thread.Sleep(500)
                     ' Fall through to create new device
                 End If
@@ -228,18 +238,33 @@ Public Class Worker
                     Dim d = CreateDevice(p)
                     If d IsNot Nothing Then
                         activeDevices.Add(d)
+                        newDevices.Add(d)
                         loadedCount += 1
                     End If
                 End If
             Next
 
-            ' Anything left in _devList is no longer in the config or was replaced
-            CleanupDevices()
-            _devList.AddRange(activeDevices)
+            ' Remove from _devList anything no longer in the config (not in activeDevices)
+            Dim activeNames = New HashSet(Of String)(activeDevices.Select(Function(d) d.DevName), StringComparer.OrdinalIgnoreCase)
+            Dim staleDevices As New List(Of Devs)
+            SyncLock _devList
+                staleDevices.AddRange(_devList.Where(Function(d) Not activeNames.Contains(d.DevName)))
+                For Each d In staleDevices
+                    _devList.Remove(d)
+                Next
+                ' Add the newly created devices to _devList
+                _devList.AddRange(newDevices)
+            End SyncLock
             _configDate = File.GetLastWriteTime(_configFile)
 
-            ' Connect all newly added devices
-            For Each d In activeDevices
+            ' Disconnect stale devices outside the lock
+            For Each d In staleDevices
+                _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
+                d.Disconnect()
+            Next
+
+            ' Connect only the newly created devices
+            For Each d In newDevices
                 d.Connect()
             Next
         Catch ex As Exception

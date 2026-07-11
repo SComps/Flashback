@@ -438,6 +438,18 @@ Public Class TN3270Session
         f.Highlighting = highlighting
         f.Intensity = intensity
         f.Name = name
+
+        ' 3270 Protocol: Hidden (non-display) fields are "non-detectable" — the terminal
+        ' operator CANNOT set the MDT bit by typing into them. Only the host can pre-arm
+        ' MDT=1 in the field attribute. If MDT stays 0, the terminal's Read Modified
+        ' response skips the field entirely, so the host never receives the typed content
+        ' (e.g. a password). Pre-setting Modified=True here causes GetAttributeByte() to
+        ' include MDT=1 in the attribute written by ShowScreen(), ensuring the field IS
+        ' returned in the Read Modified response even though it is non-detectable.
+        If intensity = TN3270Intensity.Hidden Then
+            f.Modified = True
+        End If
+
         Fields.Add(f)
         Return f
     End Function
@@ -479,9 +491,17 @@ Public Class TN3270Session
         Console.WriteLine($"[Session {_client.Client.RemoteEndPoint}] Sending command: {cmd:X2} (clearScreen={clearScreen}, {Columns}x{Rows})")
         
         ' WCC (Write Control Character)
-        ' &HC3 = 11000011 (Binary)
-        ' Bits: 11 (Wait) 00 (NoPrint) 0 (NoNL) 0 (NoAlarm) 1 (Restore Keyboard) 1 (Reset MDT)
-        buffer.Add(&HC3) 
+        ' &HC2 = 11000010 (Binary)
+        ' Bits: 11 (Wait) 00 (NoPrint) 0 (NoNL) 0 (NoAlarm) 1 (Restore Keyboard) 0 (Preserve MDT)
+        '
+        ' IMPORTANT: We use &HC2 (Preserve MDT) instead of &HC3 (Reset MDT) because
+        ' Hidden/non-detectable fields have their MDT pre-armed to 1 by AddField().
+        ' If we used Reset MDT (&HC3), the WCC would clear that pre-armed MDT=1 before
+        ' the field attribute bytes are written — but since the field attribute IS written
+        ' right after with MDT=1, this actually still works. However, using Preserve MDT
+        ' (&HC2) is the safer and more correct choice: it ensures any MDT bits the host
+        ' intentionally set are not disrupted, and avoids relying on write-order side-effects.
+        buffer.Add(&HC2)
         
         For Each f In Fields
             ' SBA (Set Buffer Address)
@@ -854,7 +874,6 @@ Public Class TN3270Color
     Public Const White As Byte = &HF7
 End Class
 
-Public Class TN3270Transparency
 Public Class AID_KEYS
     ' Attention Identifier (AID) Keys - Complete 3270/3278 Set
     Public Const NONE As Byte = &H60        ' No AID generated
@@ -934,6 +953,7 @@ Public Class AID_KEYS
     End Function
 End Class
 
+Public Class TN3270Transparency
     Public Const None As Byte = &H0
     Public Const Transparent As Byte = &HF0
     Public Const Opaque As Byte = &HF1

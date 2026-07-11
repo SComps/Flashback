@@ -1,5 +1,6 @@
 Imports System.IO
 Imports System.Text.RegularExpressions
+Imports System.Threading
 Imports PdfSharp.Drawing
 Imports PdfSharp.Fonts
 Imports PdfSharp.Pdf
@@ -46,6 +47,9 @@ Public Class DynamicFontResolver
 End Class
 
 Public Class RenderPDF
+    ' Lock object used to serialise the one-time FontResolver initialisation across threads
+    Private Shared ReadOnly _fontResolverLock As New Object()
+
     Public Enum ShadingColor
         Green
         Blue
@@ -69,9 +73,13 @@ Public Class RenderPDF
             Dim StartLine = 0
             Dim doc As New PdfDocument()
             
-            ' Ensure font resolver is set only once
+            ' Ensure font resolver is set only once — guard against concurrent PDF threads
             If GlobalFontSettings.FontResolver Is Nothing Then
-                GlobalFontSettings.FontResolver = New DynamicFontResolver()
+                SyncLock _fontResolverLock
+                    If GlobalFontSettings.FontResolver Is Nothing Then
+                        GlobalFontSettings.FontResolver = New DynamicFontResolver()
+                    End If
+                End SyncLock
             End If
 
             If TypeOf GlobalFontSettings.FontResolver Is DynamicFontResolver Then
@@ -177,17 +185,13 @@ Public Class RenderPDF
                         End If
 
                         If line.Contains(Chr(13)) Then
+                            ' Overprint: each CR-separated segment is drawn at the same Y position,
+                            ' compositing them on top of each other — exactly once each.
                             Dim segments As List(Of String) = line.Split(Chr(13)).ToList()
-                            Dim currentX As Double = leftMargin
-                            If (segments.Count > 1) And (segments(1).Trim <> "") Then
-                                Dim segIdx As Integer = 0
+                            If segments.Count > 1 AndAlso segments(1).Trim <> "" Then
                                 For Each segment As String In segments
                                     If Not String.IsNullOrEmpty(segment) Then
-                                        gfx.DrawString(segment, font, XBrushes.Black, New XRect(currentX, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
-                                        If segIdx > 0 Then
-                                            gfx.DrawString(segment, font, XBrushes.Black, New XRect(currentX, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
-                                        End If
-                                        segIdx += 1
+                                        gfx.DrawString(segment, font, XBrushes.Black, New XRect(leftMargin, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
                                     End If
                                 Next
                             Else

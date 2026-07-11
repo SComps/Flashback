@@ -92,31 +92,38 @@ Public Class Devs
         End Try
     End Sub
 
-    Public Async Sub Connect()
+    Public Function ConnectAsync() As Task
         SyncLock _connectionLock
             If IsConnected OrElse IsConnecting Then
                 Log($"[{DevName}] Connect() skipped - already connected or connecting.", ConsoleColor.DarkYellow)
-                Return
+                Return Task.CompletedTask
             End If
             IsConnecting = True
         End SyncLock
 
         Log($"[{DevName}] Connecting to {DevDest}...", ConsoleColor.Cyan)
 
-        Try
-            SplitDestination(DevDest)
-            If remotePort > 0 Then
-                Await StartAsync()
-            Else
-                Log($"[{DevName}] Connect skipped: invalid port in destination '{DevDest}'.", ConsoleColor.DarkYellow)
-            End If
-        Catch ex As Exception
-            Log($"[{DevName}] Connection failed: {ex.Message}", ConsoleColor.Yellow)
-        Finally
-            SyncLock _connectionLock
-                IsConnecting = False
-            End SyncLock
-        End Try
+        Return Task.Run(Async Function()
+            Try
+                SplitDestination(DevDest)
+                If remotePort > 0 Then
+                    Await StartAsync()
+                Else
+                    Log($"[{DevName}] Connect skipped: invalid port in destination '{DevDest}'.", ConsoleColor.DarkYellow)
+                End If
+            Catch ex As Exception
+                Log($"[{DevName}] Connection failed: {ex.Message}", ConsoleColor.Yellow)
+            Finally
+                SyncLock _connectionLock
+                    IsConnecting = False
+                End SyncLock
+            End Try
+        End Function)
+    End Function
+
+    ''' <summary>Fire-and-forget shim kept for callers that do not Await.</summary>
+    Public Sub Connect()
+        ConnectAsync()
     End Sub
 
     Public Async Function StartAsync() As Task
@@ -293,10 +300,12 @@ Public Class Devs
                 If Not clientStream.DataAvailable Then
                     Await Task.Delay(100, cancellationToken)
 
-                    ' Port 9100 mode: check if the accepted socket closed
+                    ' Port 9100 mode: check if the accepted (incoming) socket closed
                     If ConnType = 3 Then
                         Try
-                            If socket IsNot Nothing AndAlso socket.Poll(0, SelectMode.SelectRead) AndAlso socket.Available = 0 Then
+                            ' clientStream wraps the accepted incomingSocket; poll it directly
+                            Dim inSock As Socket = If(clientStream IsNot Nothing, clientStream.Socket, Nothing)
+                            If inSock IsNot Nothing AndAlso inSock.Poll(0, SelectMode.SelectRead) AndAlso inSock.Available = 0 Then
                                 If dataBuilder.Length > 0 Then
                                     ProcessDocumentData(dataBuilder.ToString())
                                     dataBuilder.Clear()
@@ -406,13 +415,11 @@ Public Class Devs
             lines.RemoveAt(lines.Count - 1)
         End If
 
+        Interlocked.Exchange(_receivingFlag, 0)
         If ConnType = 3 OrElse lines.Count > 9 Then
             Dim docCopy = New List(Of String)(lines)
             Task.Run(Sub() ProcessDocument(docCopy))
             Log($"[{DevName}] Waiting for next block/session.")
-            Interlocked.Exchange(_receivingFlag, 0)
-        Else
-            Interlocked.Exchange(_receivingFlag, 0)
         End If
     End Sub
 
@@ -476,14 +483,15 @@ Public Class Devs
     End Sub
 
     Private Sub ProcessDocument(doc As List(Of String))
-        OutDest = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
+        ' Snapshot OutDest locally so concurrent calls on the same device don't race
+        Dim localOutDest As String = OutDest.Replace("\"c, Path.DirectorySeparatorChar).Replace("/"c, Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar)
         Try
-            If Not Directory.Exists(OutDest) Then
-                Log($"[{DevName}] Created output directory {OutDest}", ConsoleColor.Yellow)
-                Directory.CreateDirectory(OutDest)
+            If Not Directory.Exists(localOutDest) Then
+                Log($"[{DevName}] Created output directory {localOutDest}", ConsoleColor.Yellow)
+                Directory.CreateDirectory(localOutDest)
             End If
 
-            Dim dataDir = Path.Combine(OutDest, "data")
+            Dim dataDir = Path.Combine(localOutDest, "data")
             If Directory.Exists(dataDir) Then
                 Try
                     Directory.Delete(dataDir, True)
@@ -498,7 +506,6 @@ Public Class Devs
             End If
         End Try
 
-        Interlocked.Exchange(_receivingFlag, 0)
         Log($"[{DevName}] received {doc.Count} lines.", ConsoleColor.Cyan)
 
         Dim JobID As String
@@ -543,7 +550,7 @@ Public Class Devs
             End If
         End If
 
-        Dim userDir = Path.Combine(OutDest, UserID)
+        Dim userDir = Path.Combine(localOutDest, UserID)
         Try
             If Not Directory.Exists(userDir) Then
                 Log($"[{DevName}] creating user directory {userDir}", ConsoleColor.Yellow)
@@ -566,7 +573,6 @@ Public Class Devs
         renderer.Orientation = Orientation
         renderer.TargetFileName = pdfName
         renderer.Shading = Shading
-
         Dim pdfPath = renderer.CreatePDF(JobName, doc)
 
         If EmailEnabled AndAlso Not String.IsNullOrWhiteSpace(pdfPath) AndAlso System.IO.File.Exists(pdfPath) Then

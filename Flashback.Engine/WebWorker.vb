@@ -75,7 +75,7 @@ Public Class WebWorker
     End Function
 
     Private Sub ProcessRequest(context As HttpListenerContext)
-        Task.Run(Sub()
+        Task.Run(Async Function()
             Try
                 Dim url = context.Request.Url.LocalPath
                 Dim parts = url.Split("/"c, StringSplitOptions.RemoveEmptyEntries)
@@ -161,21 +161,24 @@ Public Class WebWorker
                     If context.Request.HttpMethod = "GET" Then
                         ServeEmailForm(context, printerFilter, userFilter, fileParam)
                     ElseIf context.Request.HttpMethod = "POST" Then
-                        HandleEmailSubmit(context, printerFilter, userFilter, fileParam)
+                        Await HandleEmailSubmit(context, printerFilter, userFilter, fileParam)
                     Else
                         context.Response.StatusCode = 405
                         context.Response.Close()
                     End If
                 ElseIf isDirectDownload Then
+                    ' Direct PDF download — auth was already enforced above via requiresAuth/user checks
+                    ' because printerFilter/userFilter were populated from the URL parts (lines 89-96).
+                    ' Pass the authenticated user so GetAllowedDevices can apply folder restrictions.
                     Dim printerName = WebUtility.UrlDecode(parts(0))
                     Dim subFolder = WebUtility.UrlDecode(parts(1))
                     Dim fileName = WebUtility.UrlDecode(String.Join("/", parts.Skip(2)))
-                    
-                    Dim allowedDevices = GetAllowedDevices(Nothing)
+
+                    Dim allowedDevices = GetAllowedDevices(user)
                     If allowedDevices.ContainsKey(printerName) Then
                         Dim root = allowedDevices(printerName)
                         Dim filePath = Path.Combine(root, subFolder, fileName)
-                        ServeFile(context, filePath)
+                        ServeFile(context, filePath, user)
                     Else
                         _logger.LogWarning("Download rejected - printer not allowed or not found: {Printer}", printerName)
                         context.Response.StatusCode = 404
@@ -193,7 +196,7 @@ Public Class WebWorker
                 Catch
                 End Try
             End Try
-        End Sub)
+        End Function)
     End Sub
 
     Private Sub ServeDashboard(context As HttpListenerContext, user As UserInfo, printerFilter As String, userFilter As String)
@@ -205,12 +208,13 @@ Public Class WebWorker
         context.Response.Close()
     End Sub
 
-    Private Sub ServeFile(context As HttpListenerContext, filePath As String)
+    Private Sub ServeFile(context As HttpListenerContext, filePath As String, Optional user As UserInfo = Nothing)
         Try
             filePath = Path.GetFullPath(filePath)
-            
-            ' Security: verify the file is within an allowed device output directory
-            Dim allowedDevices = GetAllowedDevices(Nothing)
+
+            ' Security: verify the file is within an allowed device output directory.
+            ' Pass user so that folder restrictions are applied consistently.
+            Dim allowedDevices = GetAllowedDevices(user)
             Dim isAllowed = allowedDevices.Values.Any(Function(root)
                 Dim fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar)
                 Return filePath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)
@@ -455,44 +459,44 @@ Public Class WebWorker
         context.Response.Close()
     End Sub
 
-    Private Sub HandleEmailSubmit(context As HttpListenerContext, printerFilter As String, userFilter As String, fileName As String)
+    Private Async Function HandleEmailSubmit(context As HttpListenerContext, printerFilter As String, userFilter As String, fileName As String) As Task
         Try
             ' Read POST data
             Dim body As String
             Using reader As New StreamReader(context.Request.InputStream, context.Request.ContentEncoding)
                 body = reader.ReadToEnd()
             End Using
-            
+
             ' Parse form data
             Dim formData = System.Web.HttpUtility.ParseQueryString(body)
             Dim recipientEmail = formData("email")
             Dim subject = formData("subject")
             Dim message = formData("message")
-            
+
             If String.IsNullOrWhiteSpace(recipientEmail) Then
                 ServeErrorPage(context, "Email address is required")
                 Return
             End If
-            
+
             ' Find the file
             Dim allowedDevices = GetAllowedDevices(Nothing)
             If Not allowedDevices.ContainsKey(printerFilter) Then
                 ServeErrorPage(context, "Printer not found")
                 Return
             End If
-            
+
             Dim root = allowedDevices(printerFilter)
             Dim filePath = Path.Combine(root, userFilter, fileName)
-            
+
             If Not File.Exists(filePath) Then
                 ServeErrorPage(context, "File not found")
                 Return
             End If
-            
+
             ' Load device configuration to get email settings
             Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
             Dim device As Devs = Nothing
-            
+
             If File.Exists(configFile) Then
                 For Each line In File.ReadAllLines(configFile)
                     Dim p = line.Split("||")
@@ -511,12 +515,12 @@ Public Class WebWorker
                     End If
                 Next
             End If
-            
+
             If device Is Nothing OrElse String.IsNullOrEmpty(device.SmtpServer) Then
                 ServeErrorPage(context, "Email is not configured for this printer. Please contact your administrator.")
                 Return
             End If
-            
+
             ' Send email
             Dim emailConfig As New Flashback.Core.EmailConfig With {
                 .SmtpServer = device.SmtpServer,
@@ -530,21 +534,21 @@ Public Class WebWorker
                 .Body = If(String.IsNullOrWhiteSpace(message), "Please find the attached PDF document.", message)
             }
             emailConfig.SetRecipientsFromString(recipientEmail)
-            
+
             Dim emailService As New Flashback.Core.EmailService(New Flashback.Core.FileLogger(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "printers.log")))
-            Dim success = emailService.SendPdfEmailAsync(emailConfig, filePath, fileName, device.DevName, userFilter, 0).Result
-            
+            Dim success = Await emailService.SendPdfEmailAsync(emailConfig, filePath, fileName, device.DevName, userFilter, 0)
+
             If success Then
                 ServeSuccessPage(context, recipientEmail, printerFilter, userFilter)
             Else
                 ServeErrorPage(context, "Failed to send email. Please check the logs for details.")
             End If
-            
+
         Catch ex As Exception
             _logger.LogError("Error sending email: {Error}", ex.Message)
             ServeErrorPage(context, $"Error: {ex.Message}")
         End Try
-    End Sub
+    End Function
 
     Private Sub ServeSuccessPage(context As HttpListenerContext, email As String, printerFilter As String, userFilter As String)
         Dim sb As New StringBuilder()
