@@ -9,3 +9,5 @@ AOT-Test/
 AOT-Test-New/
 AOT-Test-Windows/
 *.log
+/LOGIC_FLOW_ANALYSIS.md
+*.txt
