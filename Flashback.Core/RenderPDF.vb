@@ -61,16 +61,16 @@ Public Class RenderPDF
     Public Property DevName As String = "Printer"
     Public Property TargetFileName As String = "out.pdf"
     Public Property Shading As ShadingColor = ShadingColor.Green
-    Public Property TypeFaceName As String = "OCR-B"
-    Public Property CustomFontPath As String = "OCR-B.ttf"
+    Public Property TypeFaceName As String = "IBM Plex Mono"
+    Public Property CustomFontPath As String = "ibmplexmono.ttf"
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Public Function CreatePDF(title As String, outList As List(Of String)) As String
-        Dim ofile As New StreamWriter($"{title}.output", False)
-        For Each l As String In outList
-            ofile.Write(l)
-        Next
-        ofile.Close()
+        'Dim ofile As New StreamWriter($"{title}.output", False)
+        'For Each l As String In outList
+        ' ofile.Write(l)
+        ' Next
+        'ofile.Close()
         Try
             Logger?.LogInformation("{Dev}: beginning PDF generation.", DevName)
             Dim firstline As Double = 0
@@ -170,10 +170,10 @@ Public Class RenderPDF
             For Each line As String In outList
                 Try
                     If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE) And (OS <> OSType.OS_VM370)) Then
-                        RenderLogger($"REGEX CHANGING: {line}")
+                        'RenderLogger($"REGEX CHANGING: {line}")
                         line = regex.Replace(line, String.Empty)
                         line = If(String.IsNullOrEmpty(line), " ", line)
-                        RenderLogger($"REGEX RESULT  : {line}")
+                        'RenderLogger($"REGEX RESULT  : {line}")
                     End If
 
                     If line.StartsWith(vbFormFeed) Then
@@ -195,7 +195,7 @@ Public Class RenderPDF
                         Dim segments As String() = line.Split(New Char() {Chr(13)})
 
                         For i As Integer = 0 To segments.Length - 1
-                            RenderLogger($"SEGMENT: {segments(i)}")
+                            'RenderLogger($"SEGMENT: {segments(i)}")
                             If Not String.IsNullOrWhiteSpace(segments(i)) Then
                                 ' Offset the X position by 0.5 to 1.0 points for segments after the first
                                 Dim xOffset As Double = If(i > 0, 0.5, 0)
