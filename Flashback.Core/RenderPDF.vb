@@ -188,6 +188,7 @@ Public Class RenderPDF
                         Dim segments As String() = line.Split(New Char() {Chr(13)})
 
                         For i As Integer = 0 To segments.Length - 1
+                            RenderLogger($"SEGMENT: {segments(i)}")
                             If Not String.IsNullOrWhiteSpace(segments(i)) Then
                                 ' Offset the X position by 0.5 to 1.0 points for segments after the first
                                 Dim xOffset As Double = If(i > 0, 0.5, 0)
@@ -288,6 +289,16 @@ Public Class RenderPDF
             New XPoint(markX, markY + sz), New XPoint(markX - sz, markY)
         }
         gfx.DrawPolygon(linePen, dia)
+    End Sub
+
+    Private Sub RenderLogger(txt As String)
+        txt = txt.Replace(Chr(13), "<CR>")
+        txt = txt.Replace(Chr(10), "<LF>")
+
+        Dim rl As New StreamWriter("renderlog.txt", True)
+        rl.WriteLine(txt)
+        rl.Flush()
+        rl.Close()
     End Sub
 
 End Class
