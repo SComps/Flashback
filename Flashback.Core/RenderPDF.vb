@@ -73,7 +73,6 @@ Public Class RenderPDF
             Dim StartLine = 0
             Dim doc As New PdfDocument()
 
-            ' Ensure font resolver is set only once
             If GlobalFontSettings.FontResolver Is Nothing Then
                 SyncLock _fontResolverLock
                     If GlobalFontSettings.FontResolver Is Nothing Then
@@ -110,6 +109,7 @@ Public Class RenderPDF
             ' Virtual Print Head State
             Dim currentX As Double = leftMargin
             Dim currentY As Double = firstline
+            Dim overprintOffset As Double = 0
 
             Dim InitializeNewPage = Sub()
                                         page = doc.AddPage()
@@ -122,42 +122,61 @@ Public Class RenderPDF
                                             page.Width = XUnit.FromInch(8.5)
                                             page.Height = XUnit.FromInch(11)
                                         End If
-
                                         gfx = XGraphics.FromPdfPage(page)
                                         If (Orientation = 0) Or (Orientation = 2) Then
                                             DrawGreenBarBackground(gfx, page.Width.Point, page.Height.Point)
                                         End If
-
                                         availableWidth = page.Width.Point - leftMargin - rightMargin
                                         Dim targetCharsPerLine As Integer = If(Orientation <= 1, 132, 80)
                                         Dim testFont As XFont = New XFont(TypeFaceName, 12, XFontStyleEx.Regular)
                                         Dim testWidth As Double = gfx.MeasureString(New String("M"c, targetCharsPerLine), testFont).Width
                                         Dim fontSize As Double = (availableWidth / testWidth) * 12
                                         font = New XFont(TypeFaceName, fontSize, XFontStyleEx.Regular)
-
                                         currentX = leftMargin
                                         currentY = firstline
+                                        overprintOffset = 0
                                     End Sub
 
             InitializeNewPage()
 
-            ' Process every character in the stream
+            Dim regex As New Regex("[^\x20-\x7E\x0C\x0D\u00A0]", RegexOptions.Compiled)
+            If outList.Count > 0 AndAlso outList(0).Trim = "" Then outList.RemoveAt(0)
+
             For Each line As String In outList
-                For Each c As Char In line
-                    Select Case c
-                        Case ControlChars.FormFeed
-                            InitializeNewPage()
-                        Case ControlChars.Cr
-                            currentX = leftMargin
-                        Case ControlChars.Lf
-                            currentY += lineHeight
-                        Case Else
-                            gfx.DrawString(c.ToString(), font, XBrushes.Black,
-                                           New XRect(currentX, currentY, availableWidth, page.Height.Point),
-                                           XStringFormats.TopLeft)
-                            currentX += gfx.MeasureString(c.ToString(), font).Width
-                    End Select
-                Next
+                Try
+                    ' OS-Specific Sanitization
+                    If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE)) Then
+                        line = regex.Replace(line, String.Empty)
+                        line = If(String.IsNullOrEmpty(line), " ", line)
+                    End If
+
+                    ' Truncation Logic
+                    Dim maxChars As Integer = If(Orientation > 1, 80, 132)
+                    Dim processedLine As String = If(line.Length > maxChars, line.Substring(0, maxChars), line)
+
+                    ' Stream processing
+                    For Each c As Char In processedLine
+                        Select Case c
+                            Case vbFormFeed
+                                InitializeNewPage()
+                            Case Chr(13)
+                                currentX = leftMargin
+                                overprintOffset = 0.5 ' Trigger overprint offset
+                            Case Chr(10)
+                                currentY += lineHeight
+                                overprintOffset = 0
+                            Case Else
+                                gfx.DrawString(c.ToString(), font, XBrushes.Black,
+                                               New XRect(currentX + overprintOffset, currentY, availableWidth, page.Height.Point),
+                                               XStringFormats.TopLeft)
+                                currentX += gfx.MeasureString(c.ToString(), font).Width
+                        End Select
+                    Next
+                Catch ex As Exception
+                    If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
+                        Logger?.LogError("{Dev}: Error processing line: {Error}", DevName, ex.Message)
+                    End If
+                End Try
             Next
 
             Dim outputFile As String = TargetFileName
@@ -172,7 +191,6 @@ Public Class RenderPDF
         End Try
         Return ""
     End Function
-
     Public Sub DrawGreenBarBackground(ByVal gfx As XGraphics, ByVal pageWidth As Double, ByVal pageHeight As Double)
         Dim paperWhite As XColor = XColors.White
         Dim bandColor As XColor = XColor.FromArgb(215, 240, 215)
