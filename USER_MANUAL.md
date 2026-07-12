@@ -1,6 +1,6 @@
 # Flashback Suite: User Manual
 **Modern Cross-Platform Printer Services for Legacy Host Systems**
-
+**THIS DOCUMENT IS A WORK IN PROGRESS AND MAY NOT REFLECT THE CURRENT CODEBASE **
 ---
 
 ## Introduction
@@ -12,7 +12,7 @@ Flashback is a robust, high-performance suite designed to modernize print servic
 ---
 
 ## 1. System Requirements
-- **Runtime**: Windows (x64) with .NET 9 or Linux (x64/ARM64).
+- **Runtime**: Windows (x64) with .NET 10 or Linux (x64/ARM64).
 - **Network**: TCP/IP connectivity between the host (Source) and the Flashback Service.
 - **Privileges**: Administrative or Sudo rights for service/daemon installation.
 
@@ -21,10 +21,8 @@ Flashback is a robust, high-performance suite designed to modernize print servic
 ## 2. Installation & Setup
 
 ### Windows Installation
-1.  **Publish**: Build the binaries using `scripts/publish_windows.ps1`.
-2.  **Install**: Open PowerShell as **Administrator** and run:
-    ```powershell
-    .\scripts\install_services_windows.ps1
+1.  **Publish**: Build the binaries using `scripts/winpub.ps1`.
+2.  **Install**: Run the Windows installer
     ```
 3.  **Verify**: Open the **Flashback Tray Controller** from your taskbar to monitor service status.
 
