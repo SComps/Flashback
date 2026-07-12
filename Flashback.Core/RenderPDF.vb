@@ -72,8 +72,8 @@ Public Class RenderPDF
             Dim linesPerPage As Integer = 66
             Dim StartLine = 0
             Dim doc As New PdfDocument()
-            
-            ' Ensure font resolver is set only once — guard against concurrent PDF threads
+
+            ' Ensure font resolver is set only once
             If GlobalFontSettings.FontResolver Is Nothing Then
                 SyncLock _fontResolverLock
                     If GlobalFontSettings.FontResolver Is Nothing Then
@@ -86,7 +86,7 @@ Public Class RenderPDF
                 Dim resolver = DirectCast(GlobalFontSettings.FontResolver, DynamicFontResolver)
                 resolver.RegisterFont(TypeFaceName, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CustomFontPath))
             End If
-            
+
             doc.Info.Title = title
 
             Dim profile As IOsProfile = OsProfileFactory.GetProfile(OS)
@@ -102,113 +102,62 @@ Public Class RenderPDF
             Dim leftMargin As Double = 40
             Dim rightMargin As Double = 40
             Dim availableWidth As Double
-            Dim fontSize As Double
             Dim font As XFont = Nothing
             Dim page As PdfPage = Nothing
             Dim gfx As XGraphics = Nothing
-            Dim y As Double = firstline
-            Dim currentLine As Integer = StartLine
-            Dim lineHeight As Double
+            Dim lineHeight As Double = 12
+
+            ' Virtual Print Head State
+            Dim currentX As Double = leftMargin
+            Dim currentY As Double = firstline
 
             Dim InitializeNewPage = Sub()
                                         page = doc.AddPage()
-                                        
                                         If Orientation <= 1 Then
-                                            ' Landscape: 132 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Landscape
                                             page.Width = XUnit.FromInch(14.875)
                                             page.Height = XUnit.FromInch(11)
                                         Else
-                                            ' Portrait: 80 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Portrait
                                             page.Width = XUnit.FromInch(8.5)
                                             page.Height = XUnit.FromInch(11)
                                         End If
 
                                         gfx = XGraphics.FromPdfPage(page)
-
                                         If (Orientation = 0) Or (Orientation = 2) Then
                                             DrawGreenBarBackground(gfx, page.Width.Point, page.Height.Point)
                                         End If
 
                                         availableWidth = page.Width.Point - leftMargin - rightMargin
-                                        
-                                        ' Calculate font size to fit exact character count per line
                                         Dim targetCharsPerLine As Integer = If(Orientation <= 1, 132, 80)
-                                        
-                                        ' Start with a base font size and measure
                                         Dim testFont As XFont = New XFont(TypeFaceName, 12, XFontStyleEx.Regular)
-                                        Dim testString As String = New String("M"c, targetCharsPerLine)
-                                        Dim testWidth As Double = gfx.MeasureString(testString, testFont).Width
-                                        
-                                        ' Calculate the font size needed to fit the target width
-                                        fontSize = (availableWidth / testWidth) * 12
-                                        
-                                        ' Create the final font with calculated size
+                                        Dim testWidth As Double = gfx.MeasureString(New String("M"c, targetCharsPerLine), testFont).Width
+                                        Dim fontSize As Double = (availableWidth / testWidth) * 12
                                         font = New XFont(TypeFaceName, fontSize, XFontStyleEx.Regular)
-                                        
-                                        ' Fixed line height: 6 lines per inch = 72 points / 6 = 12 points per line
-                                        lineHeight = 12
-                                        
-                                        y = firstline
-                                        currentLine = 0
+
+                                        currentX = leftMargin
+                                        currentY = firstline
                                     End Sub
 
             InitializeNewPage()
 
-            Dim regex As New Regex("[^\x20-\x7E\x0C\x0D\u00A0]", RegexOptions.Compiled)
-            Dim mperegex As New Regex("[^\x20-\x7E\x0C]", RegexOptions.Compiled)
-            If outList.Count > 0 AndAlso outList(0).Trim = "" Then
-                outList.RemoveAt(0)
-            End If
-
+            ' Process every character in the stream
             For Each line As String In outList
-                Try
-                    If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE)) Then
-                        line = regex.Replace(line, String.Empty)
-                        line = If(String.IsNullOrEmpty(line), " ", line)
-                    End If
-
-                    If line.StartsWith(vbFormFeed) Then
-                        InitializeNewPage()
-                    End If
-
-                    If (currentLine >= linesPerPage) Then
-                        InitializeNewPage()
-                    End If
-
-                    If line <> vbFormFeed Then
-                        If Orientation > 1 Then
-                            If line.Length > 80 Then line = line.Substring(0, 80)
-                        Else
-                            If line.Length > 132 Then line = line.Substring(0, 132)
-                        End If
-
-                        If line.Contains(Chr(13)) Then
-                            ' Overprint: each CR-separated segment is drawn at the same Y position,
-                            ' compositing them on top of each other — exactly once each.
-                            Dim segments As List(Of String) = line.Split(Chr(13)).ToList()
-                            If segments.Count > 1 AndAlso segments(1).Trim <> "" Then
-                                For Each segment As String In segments
-                                    If Not String.IsNullOrEmpty(segment) Then
-                                        gfx.DrawString(segment, font, XBrushes.Black, New XRect(leftMargin, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
-                                    End If
-                                Next
-                            Else
-                                gfx.DrawString(line, font, XBrushes.Black, New XRect(leftMargin, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
-                            End If
-                        Else
-                            gfx.DrawString(line, font, XBrushes.Black, New XRect(leftMargin, y, availableWidth, page.Height.Point), XStringFormats.TopLeft)
-                        End If
-
-                        y += lineHeight
-                        currentLine += 1
-                    End If
-                Catch ex As Exception
-                    If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
-                        Logger?.LogError("{Dev}: Error processing line: {Error}", DevName, ex.Message)
-                    End If
-                End Try
+                For Each c As Char In line
+                    Select Case c
+                        Case ControlChars.FormFeed
+                            InitializeNewPage()
+                        Case ControlChars.Cr
+                            currentX = leftMargin
+                        Case ControlChars.Lf
+                            currentY += lineHeight
+                        Case Else
+                            gfx.DrawString(c.ToString(), font, XBrushes.Black,
+                                           New XRect(currentX, currentY, availableWidth, page.Height.Point),
+                                           XStringFormats.TopLeft)
+                            currentX += gfx.MeasureString(c.ToString(), font).Width
+                    End Select
+                Next
             Next
 
             Dim outputFile As String = TargetFileName
