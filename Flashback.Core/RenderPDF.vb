@@ -164,7 +164,7 @@ Public Class RenderPDF
 
             For Each line As String In outList
                 Try
-                    If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE)) Then
+                    If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE) And (OS <> OSType.OS_VM370)) Then
                         RenderLogger($"REGEX CHANGING: {line}")
                         line = regex.Replace(line, String.Empty)
                         line = If(String.IsNullOrEmpty(line), " ", line)
