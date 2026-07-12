@@ -184,15 +184,15 @@ Public Class RenderPDF
                         InitializeNewPage()
                     End If
 
-                    If line <> vbFormFeed Then
-                        If Orientation > 1 Then
-                            If line.Length > 80 Then line = line.Substring(0, 80)
-                        Else
-                            If line.Length > 132 Then line = line.Substring(0, 132)
-                        End If
-                        '=================================
-                        ' Always split, regardless of whether a CR exists
-                        Dim segments As String() = line.Split(New Char() {Chr(13)})
+                    'If line <> vbFormFeed Then
+                    'If Orientation > 1 Then
+                    'If line.Length > 80 Then line = line.Substring(0, 80)
+                    'Else
+                    'If line.Length > 132 Then line = line.Substring(0, 132)
+                    'End If
+                    '=================================
+                    ' Always split, regardless of whether a CR exists
+                    Dim segments As String() = line.Split(New Char() {Chr(13)})
 
                         For i As Integer = 0 To segments.Length - 1
                             RenderLogger($"SEGMENT: {segments(i)}")
