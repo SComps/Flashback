@@ -165,8 +165,10 @@ Public Class RenderPDF
             For Each line As String In outList
                 Try
                     If ((OS <> OSType.OS_RSTS) And (OS <> OSType.OS_MPE)) Then
+                        RenderLogger($"REGEX CHANGING: {line}")
                         line = regex.Replace(line, String.Empty)
                         line = If(String.IsNullOrEmpty(line), " ", line)
+                        RenderLogger($"REGEX RESULT  : {line}")
                     End If
 
                     If line.StartsWith(vbFormFeed) Then
