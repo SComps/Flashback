@@ -66,13 +66,18 @@ Public Class RenderPDF
     Public Property Logger As Microsoft.Extensions.Logging.ILogger
 
     Public Function CreatePDF(title As String, outList As List(Of String)) As String
+        Dim ofile As New StreamWriter($"{title}.output", False)
+        For Each l As String In outList
+            ofile.Write(l)
+        Next
+        ofile.Close()
         Try
             Logger?.LogInformation("{Dev}: beginning PDF generation.", DevName)
             Dim firstline As Double = 0
             Dim linesPerPage As Integer = 66
             Dim StartLine = 0
             Dim doc As New PdfDocument()
-            
+
             ' Ensure font resolver is set only once — guard against concurrent PDF threads
             If GlobalFontSettings.FontResolver Is Nothing Then
                 SyncLock _fontResolverLock
@@ -86,7 +91,7 @@ Public Class RenderPDF
                 Dim resolver = DirectCast(GlobalFontSettings.FontResolver, DynamicFontResolver)
                 resolver.RegisterFont(TypeFaceName, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CustomFontPath))
             End If
-            
+
             doc.Info.Title = title
 
             Dim profile As IOsProfile = OsProfileFactory.GetProfile(OS)
@@ -112,7 +117,7 @@ Public Class RenderPDF
 
             Dim InitializeNewPage = Sub()
                                         page = doc.AddPage()
-                                        
+
                                         If Orientation <= 1 Then
                                             ' Landscape: 132 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Landscape
@@ -132,24 +137,24 @@ Public Class RenderPDF
                                         End If
 
                                         availableWidth = page.Width.Point - leftMargin - rightMargin
-                                        
+
                                         ' Calculate font size to fit exact character count per line
                                         Dim targetCharsPerLine As Integer = If(Orientation <= 1, 132, 80)
-                                        
+
                                         ' Start with a base font size and measure
                                         Dim testFont As XFont = New XFont(TypeFaceName, 12, XFontStyleEx.Regular)
                                         Dim testString As String = New String("M"c, targetCharsPerLine)
                                         Dim testWidth As Double = gfx.MeasureString(testString, testFont).Width
-                                        
+
                                         ' Calculate the font size needed to fit the target width
                                         fontSize = (availableWidth / testWidth) * 12
-                                        
+
                                         ' Create the final font with calculated size
                                         font = New XFont(TypeFaceName, fontSize, XFontStyleEx.Regular)
-                                        
+
                                         ' Fixed line height: 6 lines per inch = 72 points / 6 = 12 points per line
                                         lineHeight = 12
-                                        
+
                                         y = firstline
                                         currentLine = 0
                                     End Sub
