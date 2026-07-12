@@ -1,4 +1,4 @@
-# Flashback Suite: Professional User Manual
+# Flashback Suite: User Manual
 **Modern Cross-Platform Printer Services for Legacy Host Systems**
 
 ---
