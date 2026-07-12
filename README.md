@@ -431,6 +431,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - @Rudi (just because)
 - @MarXtevens for exellent advice and patience
 - @misterspock1 for testing when he probably shouldn't
+- @Sgeo for being so patient working on overprinting and VM/370 issues.
 - Cody for not killing me--or making me kill him.
 - If I've missed recognizing you here, it's because I'm old.  Forgive me.
 
