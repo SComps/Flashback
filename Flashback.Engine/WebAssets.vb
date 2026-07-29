@@ -312,11 +312,10 @@ button[type='submit']:not(.btn):hover {
     background-color: #0043ce;
 }
 
-/* Ensure .btn resets browser button defaults when applied to <button> elements */
+/* Reset browser chrome on button.btn - do NOT reset colour properties */
 button.btn {
     appearance: none;
     -webkit-appearance: none;
-    background: none;
     border-radius: 0;
     font-family: inherit;
 }
@@ -362,7 +361,7 @@ button.btn {
     color: #6f6f6f;
 }
 
-/* Admin engine-control buttons */
+/* Danger button — white bg / red border+text at rest, inverts to solid red on hover */
 .btn-danger {
     display: inline-block;
     padding: 8px 16px;
@@ -371,17 +370,31 @@ button.btn {
     cursor: pointer;
     text-decoration: none;
     border: 1px solid #da1e28;
-    background-color: #da1e28;
-    color: #ffffff;
-    transition: background-color 0.1s;
+    background-color: #ffffff;
+    color: #da1e28;
+    transition: background-color 0.1s, color 0.1s;
 }
 
 .btn-danger:hover {
+    background-color: #da1e28;
+    border-color: #da1e28;
+    color: #ffffff;
+}
+
+/* Darker danger variant for Stop — white bg / dark-red border+text, inverts on hover */
+.btn-danger-dark {
+    border-color: #a91a21;
+    background-color: #ffffff;
+    color: #a91a21;
+}
+
+.btn-danger-dark:hover {
     background-color: #a91a21;
     border-color: #a91a21;
     color: #ffffff;
 }
 
+/* Warning button (unused by engine controls now but kept for completeness) */
 .btn-warning {
     display: inline-block;
     padding: 8px 16px;
@@ -392,22 +405,13 @@ button.btn {
     border: 1px solid #d97706;
     background-color: #ffffff;
     color: #d97706;
-    transition: background-color 0.1s;
+    transition: background-color 0.1s, color 0.1s;
 }
 
 .btn-warning:hover {
-    background-color: #fef3c7;
-}
-
-/* Darker danger variant for Stop (vs Restart) */
-.btn-danger-dark {
-    background-color: #a91a21;
-    border-color: #a91a21;
-}
-
-.btn-danger-dark:hover {
-    background-color: #7d1319;
-    border-color: #7d1319;
+    background-color: #d97706;
+    border-color: #d97706;
+    color: #ffffff;
 }
 
 /* Log tail viewer */
@@ -429,7 +433,6 @@ button.btn {
 }
 
 .log-line {
-    display: block;
     color: #f4f4f4;
 }
 
