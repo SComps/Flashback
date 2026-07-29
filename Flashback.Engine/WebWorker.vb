@@ -67,7 +67,6 @@ Public Class WebWorker
                 Try
                     ' Wait for a request
                     Dim context = Await _listener.GetContextAsync()
-                    _logger.LogDebug("Incoming request: {Method} {Url}", context.Request.HttpMethod, context.Request.Url)
                     ProcessRequest(context)
                 Catch ex As Exception
                     If stoppingToken.IsCancellationRequested Then Exit While
@@ -122,8 +121,6 @@ Public Class WebWorker
                         requiresAuth = True
                     End If
                 End If
-
-                _logger.LogInformation("Request: {Method} {Url} (Printer: {Printer}, SubUser: {SubUser}) -> RequiresAuth: {Req}", context.Request.HttpMethod, url, printerFilter, userFilter, requiresAuth)
 
                 If requiresAuth Then
                     Dim authHeader = context.Request.Headers("Authorization")
