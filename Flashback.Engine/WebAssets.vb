@@ -296,7 +296,8 @@ label {
     letter-spacing: 0.5px;
 }
 
-button[type='submit'] {
+/* Only style bare submit buttons (email form) — .btn class overrides take precedence */
+button[type='submit']:not(.btn) {
     background-color: #0f62fe;
     color: #ffffff;
     border: none;
@@ -307,8 +308,17 @@ button[type='submit'] {
     transition: background-color 0.1s;
 }
 
-button[type='submit']:hover {
+button[type='submit']:not(.btn):hover {
     background-color: #0043ce;
+}
+
+/* Ensure .btn resets browser button defaults when applied to <button> elements */
+button.btn {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border-radius: 0;
+    font-family: inherit;
 }
 
 /* Admin panel status badges */
