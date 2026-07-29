@@ -309,7 +309,7 @@ Public Class WebWorker
         ' Header
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href=""."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Spool Management</h1>")
         sb.AppendLine("</div>")
         
@@ -451,7 +451,7 @@ Public Class WebWorker
         ' Header
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href=""."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Email Document</h1>")
         sb.AppendLine("</div>")
         
@@ -468,7 +468,7 @@ Public Class WebWorker
         sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
         sb.AppendLine($"<p style=""margin-bottom: 24px; color: #525252;"">File: <strong>{WebUtility.HtmlEncode(fileName)}</strong></p>")
         
-        sb.AppendLine($"<form method=""POST"" action=""/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fileName)}"">")
+        sb.AppendLine($"<form method=""POST"" action=""email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fileName)}"">")
         
         sb.AppendLine("<label for=""email"">Recipient Email Address</label>")
         sb.AppendLine("<input type=""email"" id=""email"" name=""email"" required placeholder=""user@example.com"" />")
@@ -481,7 +481,7 @@ Public Class WebWorker
         
         sb.AppendLine("<div style=""display: flex; gap: 12px; margin-top: 24px;"">")
         sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Send Email</button>")
-        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-secondary"">Cancel</a>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-secondary"">Cancel</a>")
         sb.AppendLine("</div>")
         sb.AppendLine("</form>")
         
@@ -598,7 +598,7 @@ Public Class WebWorker
         ' Header
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href=""."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Email Sent</h1>")
         sb.AppendLine("</div>")
         
@@ -615,7 +615,7 @@ Public Class WebWorker
         sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
         sb.AppendLine($"<p style=""color: #24a148; font-size: 1rem; margin-bottom: 16px; font-weight: 600;"">✓ Email sent successfully</p>")
         sb.AppendLine($"<p style=""color: #525252; margin-bottom: 24px;"">The PDF document has been sent to <strong>{WebUtility.HtmlEncode(email)}</strong></p>")
-        sb.AppendLine($"<a href=""/?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-primary"">Return to Documents</a>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-primary"">Return to Documents</a>")
         sb.AppendLine("</div></div>")
         sb.AppendLine("</main>")
         sb.AppendLine("<div class=""status-bar"">Flashback Spool Management System v1.0</div>")
@@ -638,7 +638,7 @@ Public Class WebWorker
         ' Header
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href=""."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Error</h1>")
         sb.AppendLine("</div>")
         
@@ -740,7 +740,7 @@ Public Class WebWorker
         ' Header
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href="".."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Administration</h1>")
         sb.AppendLine("</div>")
         sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | Admin</div>")
@@ -760,7 +760,7 @@ Public Class WebWorker
         sb.AppendLine("<div style=""display: flex; gap: 12px; flex-wrap: wrap;"">")
 
         ' Restart button
-        sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline;"">")
+        sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""restart"" />")
         sb.AppendLine("<button type=""submit"" class=""btn btn-warning"" onclick=""return confirm('Restart the Flashback Engine? All printer connections will be briefly interrupted.')"">")
         sb.AppendLine("Restart Engine")
@@ -768,7 +768,7 @@ Public Class WebWorker
         sb.AppendLine("</form>")
 
         ' Stop button
-        sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline;"">")
+        sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""stop"" />")
         sb.AppendLine("<button type=""submit"" class=""btn btn-danger"" onclick=""return confirm('Stop the Flashback Engine? The service will terminate.')"">")
         sb.AppendLine("Stop Engine")
@@ -871,7 +871,7 @@ Public Class WebWorker
                 sb.AppendLine(statusBadge)
 
                 If canStart Then
-                    sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;"">")
                     sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""connect"" />")
                     sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
                     sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Start</button>")
@@ -879,7 +879,7 @@ Public Class WebWorker
                 End If
 
                 If canStop Then
-                    sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;"">")
                     sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""disconnect"" />")
                     sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
                     sb.AppendLine("<button type=""submit"" class=""btn btn-secondary"">Stop</button>")
@@ -896,7 +896,7 @@ Public Class WebWorker
 
         sb.AppendLine("</div></div>")
         sb.AppendLine("</main>")
-        sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel &nbsp;&bull;&nbsp; <a href=""/"" style=""color:#525252;"">Spool Management</a></div>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel &nbsp;&bull;&nbsp; <a href="".."" style=""color:#525252;"">Spool Management</a></div>")
         sb.AppendLine("</body></html>")
         Return sb.ToString()
     End Function
@@ -914,6 +914,19 @@ Public Class WebWorker
                 body = Await reader.ReadToEndAsync()
             End Using
 
+            ' Derive the admin panel base URL from the incoming request path.
+            ' The form POSTs to .../admin/action; strip "action" to get .../admin.
+            ' This preserves any reverse-proxy prefix (e.g. /printer/admin).
+            Dim requestPath = context.Request.Url.AbsolutePath.TrimEnd("/"c)
+            Dim adminBase As String
+            If requestPath.EndsWith("/action", StringComparison.OrdinalIgnoreCase) Then
+                adminBase = requestPath.Substring(0, requestPath.Length - "/action".Length)
+            Else
+                adminBase = requestPath
+            End If
+            ' Reconstruct the full public-facing admin URL for redirects / meta-refresh
+            Dim adminUrl = $"{context.Request.Url.Scheme}://{context.Request.Url.Authority}{adminBase}"
+
             Dim formData = System.Web.HttpUtility.ParseQueryString(body)
             Dim cmd = If(formData("cmd"), "").Trim().ToLower()
             Dim dev = If(formData("dev"), "").Trim()
@@ -929,14 +942,14 @@ Public Class WebWorker
                     _logger.LogInformation("Admin panel: queued {Cmd} for device {Dev}", cmd.ToUpper(), dev)
                     ' Redirect back to admin panel so the user sees the updated status
                     context.Response.StatusCode = 302
-                    context.Response.Headers.Add("Location", "/admin")
+                    context.Response.Headers.Add("Location", adminUrl)
                     context.Response.Close()
 
                 Case "stop"
                     _logger.LogInformation("Admin panel: engine stop requested.")
                     ServeAdminMessage(context, "Engine Stopping",
                         "The Flashback Engine is shutting down. All printer connections will be closed.",
-                        "#da1e28", False)
+                        "#da1e28", False, adminUrl)
                     ' Brief delay so the HTTP response is fully flushed before the host stops
                     Await Task.Delay(500)
                     _lifetime.StopApplication()
@@ -948,7 +961,7 @@ Public Class WebWorker
                     File.WriteAllText(restartFile, DateTime.Now.ToString("o"))
                     ServeAdminMessage(context, "Engine Restarting",
                         "The Flashback Engine is restarting. All printer connections will be re-established shortly. Refresh this page in a few seconds.",
-                        "#d97706", True)
+                        "#d97706", True, adminUrl)
                     ' Brief delay so the HTTP response is fully flushed before the host stops
                     Await Task.Delay(500)
                     _lifetime.StopApplication()
@@ -970,7 +983,7 @@ Public Class WebWorker
     ''' <summary>
     ''' Serves a simple styled confirmation/information page for admin actions.
     ''' </summary>
-    Private Sub ServeAdminMessage(context As HttpListenerContext, title As String, message As String, accentColor As String, showRefresh As Boolean)
+    Private Sub ServeAdminMessage(context As HttpListenerContext, title As String, message As String, accentColor As String, showRefresh As Boolean, Optional adminUrl As String = "/admin")
         Dim sb As New StringBuilder()
         Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
         Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
@@ -979,13 +992,13 @@ Public Class WebWorker
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
         sb.AppendLine($"<title>{WebUtility.HtmlEncode(title)} - Flashback</title>")
         If showRefresh Then
-            sb.AppendLine("<meta http-equiv=""refresh"" content=""8;url=/admin"" />")
+            sb.AppendLine($"<meta http-equiv=""refresh"" content=""8;url={WebUtility.HtmlEncode(adminUrl)}"" />")
         End If
         sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
 
         sb.AppendLine("<header><div class=""container"">")
         sb.AppendLine("<div class=""header-left"">")
-        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<a href="".."" class=""logo"">Flashback</a>")
         sb.AppendLine($"<h1>{WebUtility.HtmlEncode(title)}</h1>")
         sb.AppendLine("</div>")
         sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | Admin</div>")
@@ -1001,7 +1014,7 @@ Public Class WebWorker
         sb.AppendLine("</p>")
         If showRefresh Then
             sb.AppendLine("<p style=""color: #525252; font-size: 0.875rem;"">This page will automatically refresh in a few seconds.</p>")
-            sb.AppendLine("<a href=""/admin"" class=""btn btn-primary"" style=""margin-top:16px;"">Return to Administration</a>")
+            sb.AppendLine($"<a href=""{WebUtility.HtmlEncode(adminUrl)}"" class=""btn btn-primary"" style=""margin-top:16px;"">Return to Administration</a>")
         End If
         sb.AppendLine("</div></div></main>")
         sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel</div>")
