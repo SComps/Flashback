@@ -937,8 +937,9 @@ Public Class WebWorker
                     ServeAdminMessage(context, "Engine Stopping",
                         "The Flashback Engine is shutting down. All printer connections will be closed.",
                         "#da1e28", False)
-                    ' Trigger graceful shutdown after the response is sent
-                    Task.Delay(500).ContinueWith(Sub(t) _lifetime.StopApplication())
+                    ' Brief delay so the HTTP response is fully flushed before the host stops
+                    Await Task.Delay(500)
+                    _lifetime.StopApplication()
 
                 Case "restart"
                     _logger.LogInformation("Admin panel: engine restart requested.")
@@ -948,7 +949,9 @@ Public Class WebWorker
                     ServeAdminMessage(context, "Engine Restarting",
                         "The Flashback Engine is restarting. All printer connections will be re-established shortly. Refresh this page in a few seconds.",
                         "#d97706", True)
-                    Task.Delay(500).ContinueWith(Sub(t) _lifetime.StopApplication())
+                    ' Brief delay so the HTTP response is fully flushed before the host stops
+                    Await Task.Delay(500)
+                    _lifetime.StopApplication()
 
                 Case Else
                     context.Response.StatusCode = 400
