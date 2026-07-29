@@ -161,7 +161,18 @@ Public Class WebWorker
                     End If
                 End If
 
-                If url = "/admin" Then
+                ' Normalise the path so routes work whether accessed directly (/admin)
+                ' or via a reverse-proxy prefix (e.g. /printer/admin, /flashback/admin).
+                ' We match on the final path segment(s) so a proxy can add any prefix it likes.
+                Dim urlPath = url.TrimEnd("/"c).ToLower()
+                Dim isAdminAction = urlPath.EndsWith("/admin/action") OrElse urlPath = "/admin/action"
+                Dim isAdmin = (urlPath.EndsWith("/admin") OrElse urlPath = "/admin") AndAlso Not isAdminAction
+                Dim isEmail = urlPath.EndsWith("/email") OrElse urlPath = "/email"
+                Dim isRoot = urlPath = "" OrElse urlPath = "/index.html" OrElse
+                             (Not isAdmin AndAlso Not isAdminAction AndAlso Not isEmail AndAlso
+                              Not isDirectDownload AndAlso parts.Length <= 1 AndAlso Not urlPath.EndsWith(".pdf"))
+
+                If isAdmin Then
                     If Not IsAdminAuthorized(context) Then
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
@@ -169,7 +180,7 @@ Public Class WebWorker
                         Return
                     End If
                     ServeAdminPanel(context)
-                ElseIf url = "/admin/action" Then
+                ElseIf isAdminAction Then
                     If Not IsAdminAuthorized(context) Then
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
@@ -182,9 +193,9 @@ Public Class WebWorker
                         context.Response.StatusCode = 405
                         context.Response.Close()
                     End If
-                ElseIf url = "/" OrElse url = "/index.html" Then
+                ElseIf url = "/" OrElse url = "/index.html" OrElse isRoot Then
                     ServeDashboard(context, user, printerFilter, userFilter)
-                ElseIf url = "/email" Then
+                ElseIf isEmail Then
                     If context.Request.HttpMethod = "GET" Then
                         ServeEmailForm(context, printerFilter, userFilter, fileParam)
                     ElseIf context.Request.HttpMethod = "POST" Then
