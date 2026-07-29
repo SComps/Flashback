@@ -262,6 +262,9 @@ Public Class TN3270Session
                     If currentField IsNot Nothing AndAlso Not seenFields.Contains(currentField) Then
                         ' Reset field content the first time we see data for it in this packet
                         currentField.Content = ""
+                        ' Mark the field as modified so GetModifiedFields() correctly reports
+                        ' which fields the terminal actually sent back in this response.
+                        currentField.Modified = True
                         seenFields.Add(currentField)
                     End If
                     
@@ -555,14 +558,19 @@ Public Class TN3270Session
             End If
 
             ' NEW: Add a "Terminator" attribute immediately after the field
-            ' This prevents high-intensity, colors, or underlining from leaking 
+            ' This prevents high-intensity, colors, or underlining from leaking
             ' into the rest of the screen.
             Dim termAddr = (f.Address + f.Length + 1) Mod ScreenSize
-            
-            ' Check if there's already a field starting at the terminator address
-            ' If so, we don't need to add a terminator as the next field's attribute will handle it.
-            Dim fieldAtTerm = Fields.FirstOrDefault(Function(other) other.Address = termAddr)
-            
+
+            ' Suppress the terminator if:
+            '  (a) another field's attribute byte is at exactly termAddr, OR
+            '  (b) termAddr falls inside another field's data range
+            '      (attribute at other.Address, data occupies other.Address+1 .. other.Address+other.Length)
+            ' Without check (b), the terminator SF byte can overwrite the attribute byte of a
+            ' tightly-packed field, making that field invisible to the terminal.
+            Dim fieldAtTerm = Fields.FirstOrDefault(Function(other) other.Address = termAddr OrElse
+                                                    (termAddr > other.Address AndAlso termAddr <= other.Address + other.Length))
+
             If fieldAtTerm Is Nothing Then
                 buffer.Add(ORDER.SBA)
                 buffer.AddRange(EncodeAddress(termAddr))
@@ -689,11 +697,19 @@ Public Class TN3270Session
     End Function
     
     ''' <summary>
-    ''' Clear all modified data tags
+    ''' Clear all modified data tags.
+    ''' Hidden/password fields have their MDT pre-armed to 1 by AddField() so the terminal
+    ''' always returns their content even though the operator cannot set MDT by typing.
+    ''' Re-arm those fields here so that a ClearModifiedTags() call between screen refreshes
+    ''' does not inadvertently break hidden-field tracking.
     ''' </summary>
     Public Sub ClearModifiedTags()
         For Each field In Fields
-            field.Modified = False
+            If field.Intensity = TN3270Intensity.Hidden Then
+                field.Modified = True   ' Keep pre-armed; terminal needs MDT=1 to return content
+            Else
+                field.Modified = False
+            End If
         Next
     End Sub
 

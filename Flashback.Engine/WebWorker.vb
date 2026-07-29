@@ -10,11 +10,17 @@ Public Class WebWorker
     Inherits BackgroundService
 
     Private ReadOnly _logger As ILogger(Of WebWorker)
+    Private ReadOnly _registry As PrinterRegistry
+    Private ReadOnly _lifetime As IHostApplicationLifetime
     Private ReadOnly _port As Integer
+    Private ReadOnly _cmdFile As String
     Private _listener As HttpListener
 
-    Public Sub New(logger As ILogger(Of WebWorker))
+    Public Sub New(logger As ILogger(Of WebWorker), registry As PrinterRegistry, lifetime As IHostApplicationLifetime)
         _logger = logger
+        _registry = registry
+        _lifetime = lifetime
+        _cmdFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "commands.dat")
         Dim portStr = Environment.GetEnvironmentVariable("FLASHBACK_WEB_PORT")
         If Not Integer.TryParse(portStr, _port) Then
             _port = 8080 ' Default if somehow reached
@@ -155,7 +161,28 @@ Public Class WebWorker
                     End If
                 End If
 
-                If url = "/" OrElse url = "/index.html" Then
+                If url = "/admin" Then
+                    If Not IsAdminAuthorized(context) Then
+                        context.Response.StatusCode = 401
+                        context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
+                        context.Response.Close()
+                        Return
+                    End If
+                    ServeAdminPanel(context)
+                ElseIf url = "/admin/action" Then
+                    If Not IsAdminAuthorized(context) Then
+                        context.Response.StatusCode = 401
+                        context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
+                        context.Response.Close()
+                        Return
+                    End If
+                    If context.Request.HttpMethod = "POST" Then
+                        Await HandleAdminAction(context)
+                    Else
+                        context.Response.StatusCode = 405
+                        context.Response.Close()
+                    End If
+                ElseIf url = "/" OrElse url = "/index.html" Then
                     ServeDashboard(context, user, printerFilter, userFilter)
                 ElseIf url = "/email" Then
                     If context.Request.HttpMethod = "GET" Then
@@ -629,4 +656,327 @@ Public Class WebWorker
         context.Response.OutputStream.Write(buffer, 0, buffer.Length)
         context.Response.Close()
     End Sub
+    ' ---------------------------------------------------------------------------
+    ' Admin Panel — helpers, HTML, action handler
+    ' ---------------------------------------------------------------------------
+
+    ''' <summary>
+    ''' Reads syspw.txt from the application base directory.
+    ''' Returns String.Empty if the file does not exist (open access mode).
+    ''' </summary>
+    Private Function ReadSyspw() As String
+        Dim pwFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")
+        If File.Exists(pwFile) Then
+            Return File.ReadAllText(pwFile).Trim()
+        End If
+        Return String.Empty
+    End Function
+
+    ''' <summary>
+    ''' Returns True if the request is authorized to access the admin panel.
+    ''' If no syspw is configured, all requests are allowed.
+    ''' If a syspw is configured, requires HTTP Basic Auth with username "admin"
+    ''' and the syspw as the password.
+    ''' </summary>
+    Private Function IsAdminAuthorized(context As HttpListenerContext) As Boolean
+        Dim syspw = ReadSyspw()
+        If String.IsNullOrEmpty(syspw) Then Return True  ' No password configured — open access
+
+        Dim authHeader = context.Request.Headers("Authorization")
+        If String.IsNullOrEmpty(authHeader) OrElse Not authHeader.StartsWith("Basic ") Then
+            Return False
+        End If
+
+        Try
+            Dim decoded = Encoding.UTF8.GetString(Convert.FromBase64String(authHeader.Substring(6)))
+            Dim colon = decoded.IndexOf(":"c)
+            If colon < 0 Then Return False
+            Dim inputUser = decoded.Substring(0, colon)
+            Dim inputPass = decoded.Substring(colon + 1)
+            Return inputUser.Equals("admin", StringComparison.OrdinalIgnoreCase) AndAlso inputPass = syspw
+        Catch
+            Return False
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Serves the /admin GET page.
+    ''' </summary>
+    Private Sub ServeAdminPanel(context As HttpListenerContext)
+        Dim html = GenerateAdminHtml()
+        Dim buffer = Encoding.UTF8.GetBytes(html)
+        context.Response.ContentLength64 = buffer.Length
+        context.Response.ContentType = "text/html; charset=utf-8"
+        context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
+
+    ''' <summary>
+    ''' Generates the full admin panel HTML page.
+    ''' Lists all printers from devices.dat with live status from PrinterRegistry.
+    ''' Includes Engine Controls (Stop / Restart) at the top.
+    ''' </summary>
+    Private Function GenerateAdminHtml() As String
+        Dim sb As New StringBuilder()
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+
+        sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
+        sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
+        sb.AppendLine("<title>Flashback Administration</title>")
+        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+
+        ' Header
+        sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine("<h1>Administration</h1>")
+        sb.AppendLine("</div>")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | Admin</div>")
+        sb.AppendLine("</div></header>")
+
+        sb.AppendLine("<main>")
+
+        ' --- Engine Controls section ---
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine("<h2 class=""section-title"">Engine Controls</h2>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding: 20px 24px;"">")
+        sb.AppendLine("<p style=""color: #525252; font-size: 0.875rem; margin-bottom: 16px;"">")
+        sb.AppendLine("Use these controls to restart all printer connections or stop the engine process.")
+        sb.AppendLine("</p>")
+        sb.AppendLine("<div style=""display: flex; gap: 12px; flex-wrap: wrap;"">")
+
+        ' Restart button
+        sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline;"">")
+        sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""restart"" />")
+        sb.AppendLine("<button type=""submit"" class=""btn btn-warning"" onclick=""return confirm('Restart the Flashback Engine? All printer connections will be briefly interrupted.')"">")
+        sb.AppendLine("Restart Engine")
+        sb.AppendLine("</button>")
+        sb.AppendLine("</form>")
+
+        ' Stop button
+        sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline;"">")
+        sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""stop"" />")
+        sb.AppendLine("<button type=""submit"" class=""btn btn-danger"" onclick=""return confirm('Stop the Flashback Engine? The service will terminate.')"">")
+        sb.AppendLine("Stop Engine")
+        sb.AppendLine("</button>")
+        sb.AppendLine("</form>")
+
+        sb.AppendLine("</div>")
+        sb.AppendLine("</div></div>")
+
+        ' --- Printer List section ---
+        ' Load all configured printers from devices.dat
+        Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
+        Dim configuredPrinters As New List(Of (Name As String, Description As String, ConnType As Integer, Dest As String, Enabled As Boolean))
+
+        If File.Exists(configFile) Then
+            For Each line In File.ReadAllLines(configFile)
+                If String.IsNullOrWhiteSpace(line) Then Continue For
+                Dim p = line.Split("||", StringSplitOptions.None)
+                If p.Length < 10 Then Continue For
+                Dim isEnabled = If(p.Length >= 13, p(12) = "True", True)
+                Dim connType As Integer
+                Integer.TryParse(p(3), connType)
+                configuredPrinters.Add((p(0), p(1), connType, p(4), isEnabled))
+            Next
+        End If
+
+        ' Build a lookup of live devices by name
+        Dim liveDevices = _registry.GetSnapshot().ToDictionary(Function(d) d.DevName, StringComparer.OrdinalIgnoreCase)
+
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine($"<h2 class=""section-title"">Printers ({configuredPrinters.Count} configured, {liveDevices.Count} active)</h2>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"">")
+
+        If configuredPrinters.Any() Then
+            sb.AppendLine("<div class=""file-list"">")
+            For Each pr In configuredPrinters
+                ' Determine live status
+                Dim statusBadge As String
+                Dim canStart As Boolean
+                Dim canStop As Boolean
+
+                If Not pr.Enabled Then
+                    statusBadge = "<span class=""badge-disabled"">Disabled</span>"
+                    canStart = False
+                    canStop = False
+                ElseIf liveDevices.ContainsKey(pr.Name) Then
+                    Dim dev = liveDevices(pr.Name)
+                    If dev.Connected Then
+                        statusBadge = "<span class=""badge-connected"">Connected</span>"
+                        canStart = False
+                        canStop = True
+                    ElseIf dev.Connecting Then
+                        statusBadge = "<span class=""badge-connecting"">Connecting...</span>"
+                        canStart = False
+                        canStop = True
+                    Else
+                        statusBadge = "<span class=""badge-disconnected"">Disconnected</span>"
+                        canStart = True
+                        canStop = False
+                    End If
+                Else
+                    statusBadge = "<span class=""badge-disconnected"">Stopped</span>"
+                    canStart = True
+                    canStop = False
+                End If
+
+                Dim connTypeName = If(pr.ConnType = 3, "Listener", "Client")
+                Dim encodedName = WebUtility.HtmlEncode(pr.Name)
+                Dim encodedNameUrl = WebUtility.UrlEncode(pr.Name)
+
+                sb.AppendLine("<div class=""file-card"">")
+                sb.AppendLine("<div class=""file-info"">")
+                sb.AppendLine($"<span class=""file-name"">{encodedName}</span>")
+                sb.AppendLine($"<span class=""file-meta"">{WebUtility.HtmlEncode(pr.Description)} &nbsp;&bull;&nbsp; {connTypeName}: {WebUtility.HtmlEncode(pr.Dest)}</span>")
+                sb.AppendLine("</div>")
+                sb.AppendLine("<div class=""file-actions"">")
+                sb.AppendLine(statusBadge)
+
+                If canStart Then
+                    sb.AppendLine($"<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine($"<input type=""hidden"" name=""cmd"" value=""connect"" />")
+                    sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
+                    sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Start</button>")
+                    sb.AppendLine("</form>")
+                End If
+
+                If canStop Then
+                    sb.AppendLine($"<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine($"<input type=""hidden"" name=""cmd"" value=""disconnect"" />")
+                    sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
+                    sb.AppendLine("<button type=""submit"" class=""btn btn-secondary"">Stop</button>")
+                    sb.AppendLine("</form>")
+                End If
+
+                sb.AppendLine("</div>")
+                sb.AppendLine("</div>")
+            Next
+            sb.AppendLine("</div>")
+        Else
+            sb.AppendLine("<div class=""empty-state"">No printers configured. Add printers via the configuration tools.</div>")
+        End If
+
+        sb.AppendLine("</div></div>")
+        sb.AppendLine("</main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel &nbsp;&bull;&nbsp; <a href=""/"" style=""color:#525252;"">Spool Management</a></div>")
+        sb.AppendLine("</body></html>")
+        Return sb.ToString()
+    End Function
+
+    ''' <summary>
+    ''' Handles POST /admin/action.
+    ''' cmd=connect|disconnect  → writes to commands.dat, redirects back to /admin
+    ''' cmd=stop                → graceful shutdown, serves confirmation page
+    ''' cmd=restart             → writes restart.req, graceful shutdown, serves confirmation page
+    ''' </summary>
+    Private Async Function HandleAdminAction(context As HttpListenerContext) As Task
+        Try
+            Dim body As String
+            Using reader As New StreamReader(context.Request.InputStream, context.Request.ContentEncoding)
+                body = Await reader.ReadToEndAsync()
+            End Using
+
+            Dim formData = System.Web.HttpUtility.ParseQueryString(body)
+            Dim cmd = If(formData("cmd"), "").Trim().ToLower()
+            Dim dev = If(formData("dev"), "").Trim()
+
+            Select Case cmd
+                Case "connect", "disconnect"
+                    If String.IsNullOrEmpty(dev) Then
+                        ServeAdminMessage(context, "Error", "No device name specified.", "#da1e28", False)
+                        Return
+                    End If
+                    Dim cmdLine = $"{cmd.ToUpper()}||{dev}"
+                    File.AppendAllText(_cmdFile, cmdLine & Environment.NewLine)
+                    _logger.LogInformation("Admin panel: queued {Cmd} for device {Dev}", cmd.ToUpper(), dev)
+                    ' Redirect back to admin panel so the user sees the updated status
+                    context.Response.StatusCode = 302
+                    context.Response.Headers.Add("Location", "/admin")
+                    context.Response.Close()
+
+                Case "stop"
+                    _logger.LogInformation("Admin panel: engine stop requested.")
+                    ServeAdminMessage(context, "Engine Stopping",
+                        "The Flashback Engine is shutting down. All printer connections will be closed.",
+                        "#da1e28", False)
+                    ' Trigger graceful shutdown after the response is sent
+                    Task.Delay(500).ContinueWith(Sub(t) _lifetime.StopApplication())
+
+                Case "restart"
+                    _logger.LogInformation("Admin panel: engine restart requested.")
+                    ' Write the sentinel file so Program.vb re-launches after shutdown
+                    Dim restartFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "restart.req")
+                    File.WriteAllText(restartFile, DateTime.Now.ToString("o"))
+                    ServeAdminMessage(context, "Engine Restarting",
+                        "The Flashback Engine is restarting. All printer connections will be re-established shortly. Refresh this page in a few seconds.",
+                        "#d97706", True)
+                    Task.Delay(500).ContinueWith(Sub(t) _lifetime.StopApplication())
+
+                Case Else
+                    context.Response.StatusCode = 400
+                    context.Response.Close()
+            End Select
+        Catch ex As Exception
+            _logger.LogError("Error in HandleAdminAction: {Error}", ex.Message)
+            Try
+                context.Response.StatusCode = 500
+                context.Response.Close()
+            Catch
+            End Try
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Serves a simple styled confirmation/information page for admin actions.
+    ''' </summary>
+    Private Sub ServeAdminMessage(context As HttpListenerContext, title As String, message As String, accentColor As String, showRefresh As Boolean)
+        Dim sb As New StringBuilder()
+        Dim currentTime = DateTime.Now.ToString("HH:mm:ss")
+        Dim currentDate = DateTime.Now.ToString("yyyy-MM-dd")
+
+        sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
+        sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
+        sb.AppendLine($"<title>{WebUtility.HtmlEncode(title)} - Flashback</title>")
+        If showRefresh Then
+            sb.AppendLine("<meta http-equiv=""refresh"" content=""8;url=/admin"" />")
+        End If
+        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+
+        sb.AppendLine("<header><div class=""container"">")
+        sb.AppendLine("<div class=""header-left"">")
+        sb.AppendLine("<a href=""/"" class=""logo"">Flashback</a>")
+        sb.AppendLine($"<h1>{WebUtility.HtmlEncode(title)}</h1>")
+        sb.AppendLine("</div>")
+        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | Admin</div>")
+        sb.AppendLine("</div></header>")
+
+        sb.AppendLine("<main><div class=""section"">")
+        sb.AppendLine("<div class=""section-header"">")
+        sb.AppendLine($"<h2 class=""section-title"">{WebUtility.HtmlEncode(title)}</h2>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
+        sb.AppendLine($"<p style=""color: {accentColor}; font-size: 1rem; margin-bottom: 16px; font-weight: 600;"">")
+        sb.AppendLine(WebUtility.HtmlEncode(message))
+        sb.AppendLine("</p>")
+        If showRefresh Then
+            sb.AppendLine("<p style=""color: #525252; font-size: 0.875rem;"">This page will automatically refresh in a few seconds.</p>")
+            sb.AppendLine("<a href=""/admin"" class=""btn btn-primary"" style=""margin-top:16px;"">Return to Administration</a>")
+        End If
+        sb.AppendLine("</div></div></main>")
+        sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel</div>")
+        sb.AppendLine("</body></html>")
+
+        Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
+        context.Response.ContentLength64 = buffer.Length
+        context.Response.ContentType = "text/html; charset=utf-8"
+        context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
+
 End Class

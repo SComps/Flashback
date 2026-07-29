@@ -1,4 +1,5 @@
 Imports System.Diagnostics
+Imports System.IO
 Imports System.Linq
 Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
@@ -73,6 +74,9 @@ Module Program
             builder.Services.AddSystemd()
         End If
 
+        ' Register shared printer registry (singleton bridging Worker <-> WebWorker)
+        builder.Services.AddSingleton(Of PrinterRegistry)()
+
         ' Register the core worker
         builder.Services.AddHostedService(Of Worker)()
 
@@ -84,6 +88,30 @@ Module Program
 
         Dim engineHost = builder.Build()
         engineHost.Run()
+
+        ' After the host has fully stopped, check whether a restart was requested.
+        ' The admin panel writes restart.req before calling StopApplication().
+        ' We must release the mutex BEFORE starting the new process so the new
+        ' instance can acquire it immediately.
+        Dim restartFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "restart.req")
+        If File.Exists(restartFile) Then
+            Try
+                File.Delete(restartFile)
+            Catch
+                ' Non-fatal — the new process will fail the mutex check, which is acceptable.
+            End Try
+            Console.WriteLine("Flashback Engine: Restart requested. Relaunching...")
+            Dim psi As New ProcessStartInfo(Environment.ProcessPath)
+            psi.Arguments = String.Join(" ", args)
+            psi.UseShellExecute = False
+            mutex.ReleaseMutex()
+            mutex.Dispose()
+            Process.Start(psi)
+            Environment.Exit(0)
+        End If
+
+        mutex.ReleaseMutex()
+        mutex.Dispose()
     End Sub
 
     Private Sub ShowHelp()

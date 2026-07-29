@@ -8,16 +8,20 @@ Public Class Worker
     Inherits BackgroundService
 
     Private ReadOnly _logger As ILogger(Of Worker)
+    Private ReadOnly _registry As PrinterRegistry
     Private ReadOnly _devList As New List(Of Devs)
     Private _configFile As String
     Private _cmdFile As String
     Private _configDate As DateTime
     Private WithEvents _statTimer As System.Timers.Timer
     Private WithEvents _cmdTimer As System.Timers.Timer
+    Private WithEvents _retryTimer As System.Timers.Timer
     Private _timersDisposed As Boolean = False
+    Private _lastDisconnectTime As DateTime = DateTime.MinValue
 
-    Public Sub New(logger As ILogger(Of Worker))
+    Public Sub New(logger As ILogger(Of Worker), registry As PrinterRegistry)
         _logger = logger
+        _registry = registry
         Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
         _configFile = Path.Combine(baseDir, "devices.dat")
         _cmdFile = Path.Combine(baseDir, "commands.dat")
@@ -30,6 +34,7 @@ Public Class Worker
         ' Initialize timers
         _statTimer = New System.Timers.Timer()
         _cmdTimer = New System.Timers.Timer()
+        _retryTimer = New System.Timers.Timer()
 
         LoadDevices()
 
@@ -38,6 +43,11 @@ Public Class Worker
 
         _cmdTimer.Interval = 500
         _cmdTimer.Enabled = True
+
+        ' Retry timer: 5-second interval, only enabled after a disconnection event.
+        ' Drives aggressive reconnect attempts for the first 2 minutes after any disconnect.
+        _retryTimer.Interval = 5000
+        _retryTimer.Enabled = False
 
         While Not stoppingToken.IsCancellationRequested
             Await Task.Delay(30000, stoppingToken)
@@ -97,6 +107,7 @@ Public Class Worker
                         _devList.Add(d)
                         loadedCount = _devList.Count
                     End SyncLock
+                    _registry.Register(d)
                     d.Connect()
                 End If
             Next
@@ -116,7 +127,13 @@ Public Class Worker
         SyncLock _devList
             _devList.Remove(dev)
         End SyncLock
-        _logger.LogInformation("{Dev} disconnected and removed from device list. Will reconnect on next cycle.", devName)
+        _registry.Unregister(dev)
+        _lastDisconnectTime = DateTime.Now
+        ' Kick off aggressive retry phase: attempt reconnect every 5 seconds for 2 minutes.
+        If Not _timersDisposed Then
+            _retryTimer.Enabled = True
+        End If
+        _logger.LogInformation("{Dev} disconnected. Aggressive retry phase started (5s interval for 2 min).", devName)
     End Sub
 
     Private Sub SaveDevices()
@@ -259,12 +276,14 @@ Public Class Worker
 
             ' Disconnect stale devices outside the lock
             For Each d In staleDevices
+                _registry.Unregister(d)
                 _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
                 d.Disconnect()
             Next
 
             ' Connect only the newly created devices
             For Each d In newDevices
+                _registry.Register(d)
                 d.Connect()
             Next
         Catch ex As Exception
@@ -332,6 +351,7 @@ Public Class Worker
         End SyncLock
 
         For Each d In devicesSnapshot
+            _registry.Unregister(d)
             _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
             d.Disconnect()
         Next
@@ -359,6 +379,15 @@ Public Class Worker
             _logger.LogWarning("Error disposing cmd timer: {Error}", ex.Message)
         End Try
 
+        Try
+            If _retryTimer IsNot Nothing Then
+                _retryTimer.Enabled = False
+                _retryTimer.Dispose()
+            End If
+        Catch ex As Exception
+            _logger.LogWarning("Error disposing retry timer: {Error}", ex.Message)
+        End Try
+
         Threading.Thread.Sleep(100)
 
         _logger.LogInformation("Stopping all printer connection tasks...")
@@ -370,6 +399,7 @@ Public Class Worker
         End SyncLock
 
         For Each d In devicesSnapshot
+            _registry.Unregister(d)
             _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
             d.Disconnect()
         Next
@@ -432,5 +462,19 @@ Public Class Worker
                 _logger.LogError("ERROR processing command file: {Error}", ex.Message)
             End If
         End Try
+    End Sub
+
+    Private Sub RetryTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _retryTimer.Elapsed
+        If _timersDisposed Then Return
+
+        ' If we are still within the 2-minute aggressive window, run a reconnect cycle.
+        ' Otherwise, disable this timer and let the 30-second main loop handle it.
+        If DateTime.Now - _lastDisconnectTime < TimeSpan.FromMinutes(2) Then
+            _logger.LogInformation("Retry timer: checking for disconnected devices (aggressive phase).")
+            RecreateDisconnectedDevices()
+        Else
+            _retryTimer.Enabled = False
+            _logger.LogInformation("Retry timer: aggressive phase ended, returning to 30s steady-state cycle.")
+        End If
     End Sub
 End Class

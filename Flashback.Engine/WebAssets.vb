@@ -311,6 +311,84 @@ button[type='submit']:hover {
     background-color: #0043ce;
 }
 
+/* Admin panel status badges */
+.badge-connected {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 2px;
+    background-color: #defbe6;
+    color: #0e6027;
+}
+
+.badge-connecting {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 2px;
+    background-color: #fdf6dd;
+    color: #8a4500;
+}
+
+.badge-disconnected {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 2px;
+    background-color: #fff1f1;
+    color: #da1e28;
+}
+
+.badge-disabled {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 2px;
+    background-color: #f4f4f4;
+    color: #6f6f6f;
+}
+
+/* Admin engine-control buttons */
+.btn-danger {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid #da1e28;
+    background-color: #da1e28;
+    color: #ffffff;
+    transition: background-color 0.1s;
+}
+
+.btn-danger:hover {
+    background-color: #a91a21;
+    border-color: #a91a21;
+    color: #ffffff;
+}
+
+.btn-warning {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid #d97706;
+    background-color: #ffffff;
+    color: #d97706;
+    transition: background-color 0.1s;
+}
+
+.btn-warning:hover {
+    background-color: #fef3c7;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     main { padding: 16px; }
