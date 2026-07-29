@@ -24,8 +24,10 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Engine</RootNamespace>
     <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
-    <Deterministic>false</Deterministic>
-    <AssemblyVersion>2.1.*</AssemblyVersion>
+    <Deterministic>true</Deterministic>
+    <Version>2.1.0.0</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
   </PropertyGroup>
 
 </Project>
