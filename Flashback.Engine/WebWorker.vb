@@ -768,19 +768,29 @@ Public Class WebWorker
         sb.AppendLine("</div></div>")
 
         ' --- Printer List section ---
-        ' Load all configured printers from devices.dat
+        ' Load all configured printers from devices.dat into simple parallel lists
+        ' (avoids VB.NET named-tuple runtime issues)
         Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
-        Dim configuredPrinters As New List(Of (Name As String, Description As String, ConnType As Integer, Dest As String, Enabled As Boolean))
+        Dim prNames As New List(Of String)
+        Dim prDescs As New List(Of String)
+        Dim prConnTypes As New List(Of Integer)
+        Dim prDests As New List(Of String)
+        Dim prEnabled As New List(Of Boolean)
+        Dim separator() As String = {"||"}
 
         If File.Exists(configFile) Then
             For Each line In File.ReadAllLines(configFile)
                 If String.IsNullOrWhiteSpace(line) Then Continue For
-                Dim p = line.Split("||", StringSplitOptions.None)
+                Dim p = line.Split(separator, StringSplitOptions.None)
                 If p.Length < 10 Then Continue For
                 Dim isEnabled = If(p.Length >= 13, p(12) = "True", True)
                 Dim connType As Integer
                 Integer.TryParse(p(3), connType)
-                configuredPrinters.Add((p(0), p(1), connType, p(4), isEnabled))
+                prNames.Add(p(0))
+                prDescs.Add(p(1))
+                prConnTypes.Add(connType)
+                prDests.Add(p(4))
+                prEnabled.Add(isEnabled)
             Next
         End If
 
@@ -789,24 +799,30 @@ Public Class WebWorker
 
         sb.AppendLine("<div class=""section"">")
         sb.AppendLine("<div class=""section-header"">")
-        sb.AppendLine($"<h2 class=""section-title"">Printers ({configuredPrinters.Count} configured, {liveDevices.Count} active)</h2>")
+        sb.AppendLine($"<h2 class=""section-title"">Printers ({prNames.Count} configured, {liveDevices.Count} active)</h2>")
         sb.AppendLine("</div>")
         sb.AppendLine("<div class=""section-content"">")
 
-        If configuredPrinters.Any() Then
+        If prNames.Count > 0 Then
             sb.AppendLine("<div class=""file-list"">")
-            For Each pr In configuredPrinters
+            For i As Integer = 0 To prNames.Count - 1
+                Dim prName = prNames(i)
+                Dim prDesc = prDescs(i)
+                Dim prConnType = prConnTypes(i)
+                Dim prDest = prDests(i)
+                Dim prIsEnabled = prEnabled(i)
+
                 ' Determine live status
                 Dim statusBadge As String
                 Dim canStart As Boolean
                 Dim canStop As Boolean
 
-                If Not pr.Enabled Then
+                If Not prIsEnabled Then
                     statusBadge = "<span class=""badge-disabled"">Disabled</span>"
                     canStart = False
                     canStop = False
-                ElseIf liveDevices.ContainsKey(pr.Name) Then
-                    Dim dev = liveDevices(pr.Name)
+                ElseIf liveDevices.ContainsKey(prName) Then
+                    Dim dev = liveDevices(prName)
                     If dev.Connected Then
                         statusBadge = "<span class=""badge-connected"">Connected</span>"
                         canStart = False
@@ -826,29 +842,28 @@ Public Class WebWorker
                     canStop = False
                 End If
 
-                Dim connTypeName = If(pr.ConnType = 3, "Listener", "Client")
-                Dim encodedName = WebUtility.HtmlEncode(pr.Name)
-                Dim encodedNameUrl = WebUtility.UrlEncode(pr.Name)
+                Dim connTypeName = If(prConnType = 3, "Listener", "Client")
+                Dim encodedName = WebUtility.HtmlEncode(prName)
 
                 sb.AppendLine("<div class=""file-card"">")
                 sb.AppendLine("<div class=""file-info"">")
                 sb.AppendLine($"<span class=""file-name"">{encodedName}</span>")
-                sb.AppendLine($"<span class=""file-meta"">{WebUtility.HtmlEncode(pr.Description)} &nbsp;&bull;&nbsp; {connTypeName}: {WebUtility.HtmlEncode(pr.Dest)}</span>")
+                sb.AppendLine($"<span class=""file-meta"">{WebUtility.HtmlEncode(prDesc)} &nbsp;&bull;&nbsp; {connTypeName}: {WebUtility.HtmlEncode(prDest)}</span>")
                 sb.AppendLine("</div>")
                 sb.AppendLine("<div class=""file-actions"">")
                 sb.AppendLine(statusBadge)
 
                 If canStart Then
-                    sb.AppendLine($"<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
-                    sb.AppendLine($"<input type=""hidden"" name=""cmd"" value=""connect"" />")
+                    sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""connect"" />")
                     sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
                     sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Start</button>")
                     sb.AppendLine("</form>")
                 End If
 
                 If canStop Then
-                    sb.AppendLine($"<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
-                    sb.AppendLine($"<input type=""hidden"" name=""cmd"" value=""disconnect"" />")
+                    sb.AppendLine("<form method=""POST"" action=""/admin/action"" style=""display:inline; margin-left:8px;"">")
+                    sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""disconnect"" />")
                     sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
                     sb.AppendLine("<button type=""submit"" class=""btn btn-secondary"">Stop</button>")
                     sb.AppendLine("</form>")
