@@ -166,10 +166,14 @@ Public Class WebWorker
                 ' We match on the final path segment(s) so a proxy can add any prefix it likes.
                 Dim urlPath = url.TrimEnd("/"c).ToLower()
                 Dim isAdminAction = urlPath.EndsWith("/admin/action") OrElse urlPath = "/admin/action"
-                Dim isAdmin = (urlPath.EndsWith("/admin") OrElse urlPath = "/admin") AndAlso Not isAdminAction
+                Dim isAdminStatus = urlPath.EndsWith("/admin/status") OrElse urlPath = "/admin/status"
+                Dim isAdminLog = urlPath.EndsWith("/admin/log") OrElse urlPath = "/admin/log"
+                Dim isAdmin = (urlPath.EndsWith("/admin") OrElse urlPath = "/admin") AndAlso
+                              Not isAdminAction AndAlso Not isAdminStatus AndAlso Not isAdminLog
                 Dim isEmail = urlPath.EndsWith("/email") OrElse urlPath = "/email"
                 Dim isRoot = urlPath = "" OrElse urlPath = "/index.html" OrElse
-                             (Not isAdmin AndAlso Not isAdminAction AndAlso Not isEmail AndAlso
+                             (Not isAdmin AndAlso Not isAdminAction AndAlso Not isAdminStatus AndAlso
+                              Not isAdminLog AndAlso Not isEmail AndAlso
                               Not isDirectDownload AndAlso parts.Length <= 1 AndAlso Not urlPath.EndsWith(".pdf"))
 
                 If isAdmin Then
@@ -180,6 +184,22 @@ Public Class WebWorker
                         Return
                     End If
                     ServeAdminPanel(context)
+                ElseIf isAdminStatus Then
+                    If Not IsAdminAuthorized(context) Then
+                        context.Response.StatusCode = 401
+                        context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
+                        context.Response.Close()
+                        Return
+                    End If
+                    ServeAdminStatus(context)
+                ElseIf isAdminLog Then
+                    If Not IsAdminAuthorized(context) Then
+                        context.Response.StatusCode = 401
+                        context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
+                        context.Response.Close()
+                        Return
+                    End If
+                    ServeAdminLog(context)
                 ElseIf isAdminAction Then
                     If Not IsAdminAuthorized(context) Then
                         context.Response.StatusCode = 401
@@ -735,7 +755,78 @@ Public Class WebWorker
         sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")
         sb.AppendLine("<title>Flashback Administration</title>")
-        sb.AppendLine($"<style>{WebAssets.Css}</style></head><body>")
+        sb.AppendLine($"<style>{WebAssets.Css}</style>")
+        sb.AppendLine("<script>")
+        sb.AppendLine("(function() {")
+        sb.AppendLine("  'use strict';")
+        sb.AppendLine("")
+        sb.AppendLine("  // --- Status auto-refresh (every 5 seconds) ---")
+        sb.AppendLine("  function refreshStatus() {")
+        sb.AppendLine("    fetch('status')")
+        sb.AppendLine("      .then(function(r) { return r.ok ? r.json() : null; })")
+        sb.AppendLine("      .then(function(data) {")
+        sb.AppendLine("        if (!data) return;")
+        sb.AppendLine("        // Update each printer row badge and buttons")
+        sb.AppendLine("        data.printers.forEach(function(p) {")
+        sb.AppendLine("          var row = document.getElementById(p.rowId);")
+        sb.AppendLine("          if (!row) return;")
+        sb.AppendLine("          var badge = row.querySelector('.pr-badge');")
+        sb.AppendLine("          var actionsDiv = document.getElementById(p.rowId + '-actions');")
+        sb.AppendLine("          if (badge) { badge.className = 'pr-badge ' + p.badgeClass; badge.textContent = p.status; }")
+        sb.AppendLine("          if (actionsDiv) { actionsDiv.innerHTML = badge ? badge.outerHTML + p.actionsHtml : p.actionsHtml; }")
+        sb.AppendLine("        });")
+        sb.AppendLine("        // Update header count")
+        sb.AppendLine("        var hdr = document.getElementById('pr-header');")
+        sb.AppendLine("        if (hdr) hdr.textContent = 'Printers (' + data.configured + ' configured, ' + data.active + ' active)';")
+        sb.AppendLine("        // Update clock")
+        sb.AppendLine("        var clk = document.getElementById('admin-clock');")
+        sb.AppendLine("        if (clk) clk.textContent = data.time;")
+        sb.AppendLine("      })")
+        sb.AppendLine("      .catch(function() {});  // silently ignore network errors")
+        sb.AppendLine("  }")
+        sb.AppendLine("")
+        sb.AppendLine("  // --- Log tail (every 5 seconds) ---")
+        sb.AppendLine("  var logUserScrolled = false;")
+        sb.AppendLine("  function refreshLog() {")
+        sb.AppendLine("    fetch('log')")
+        sb.AppendLine("      .then(function(r) { return r.ok ? r.text() : null; })")
+        sb.AppendLine("      .then(function(text) {")
+        sb.AppendLine("        if (text === null) return;")
+        sb.AppendLine("        var el = document.getElementById('log-tail');")
+        sb.AppendLine("        if (!el) return;")
+        sb.AppendLine("        // Colour-code lines by level")
+        sb.AppendLine("        var lines = text.split('\n');")
+        sb.AppendLine("        var html = lines.map(function(line) {")
+        sb.AppendLine("          var cls = 'log-line';")
+        sb.AppendLine("          if (line.indexOf('[Error]') >= 0 || line.indexOf('[Critical]') >= 0) cls += ' log-error';")
+        sb.AppendLine("          else if (line.indexOf('[Warning]') >= 0) cls += ' log-warn';")
+        sb.AppendLine("          else if (line.indexOf('[Debug]') >= 0 || line.indexOf('[Trace]') >= 0) cls += ' log-debug';")
+        sb.AppendLine("          var escaped = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');")
+        sb.AppendLine("          return '<span class=""' + cls + '"">' + escaped + '</span>';")
+        sb.AppendLine("        }).join('\n');")
+        sb.AppendLine("        el.innerHTML = html;")
+        sb.AppendLine("        // Auto-scroll to bottom unless user has scrolled up")
+        sb.AppendLine("        if (!logUserScrolled) el.scrollTop = el.scrollHeight;")
+        sb.AppendLine("      })")
+        sb.AppendLine("      .catch(function() {});")
+        sb.AppendLine("  }")
+        sb.AppendLine("")
+        sb.AppendLine("  // Track manual scroll so we stop auto-scrolling when user reads up")
+        sb.AppendLine("  document.addEventListener('DOMContentLoaded', function() {")
+        sb.AppendLine("    var el = document.getElementById('log-tail');")
+        sb.AppendLine("    if (el) {")
+        sb.AppendLine("      el.addEventListener('scroll', function() {")
+        sb.AppendLine("        logUserScrolled = (el.scrollTop + el.clientHeight) < (el.scrollHeight - 20);")
+        sb.AppendLine("      });")
+        sb.AppendLine("    }")
+        sb.AppendLine("    refreshStatus();")
+        sb.AppendLine("    refreshLog();")
+        sb.AppendLine("    setInterval(refreshStatus, 5000);")
+        sb.AppendLine("    setInterval(refreshLog, 5000);")
+        sb.AppendLine("  });")
+        sb.AppendLine("})();")
+        sb.AppendLine("</script>")
+        sb.AppendLine("</head><body>")
 
         ' Header
         sb.AppendLine("<header><div class=""container"">")
@@ -743,7 +834,7 @@ Public Class WebWorker
         sb.AppendLine("<a href="".."" class=""logo"">Flashback</a>")
         sb.AppendLine("<h1>Administration</h1>")
         sb.AppendLine("</div>")
-        sb.AppendLine($"<div class=""system-info"">{currentDate} {currentTime} | Admin</div>")
+        sb.AppendLine($"<div class=""system-info""><span id=""admin-clock"">{currentDate} {currentTime}</span> | Admin</div>")
         sb.AppendLine("</div></header>")
 
         sb.AppendLine("<main>")
@@ -759,19 +850,19 @@ Public Class WebWorker
         sb.AppendLine("</p>")
         sb.AppendLine("<div style=""display: flex; gap: 12px; flex-wrap: wrap;"">")
 
-        ' Restart button
+        ' Restart button — red/danger to signal destructive action
         sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""restart"" />")
-        sb.AppendLine("<button type=""submit"" class=""btn btn-warning"" onclick=""return confirm('Restart the Flashback Engine? All printer connections will be briefly interrupted.')"">")
-        sb.AppendLine("Restart Engine")
+        sb.AppendLine("<button type=""submit"" class=""btn btn-danger"" onclick=""return confirm('Restart the Flashback Engine? All printer connections will be briefly interrupted.')"">")
+        sb.AppendLine("&#x21BA; Restart Engine")
         sb.AppendLine("</button>")
         sb.AppendLine("</form>")
 
-        ' Stop button
+        ' Stop button — darker red to distinguish from restart
         sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""stop"" />")
-        sb.AppendLine("<button type=""submit"" class=""btn btn-danger"" onclick=""return confirm('Stop the Flashback Engine? The service will terminate.')"">")
-        sb.AppendLine("Stop Engine")
+        sb.AppendLine("<button type=""submit"" class=""btn btn-danger btn-danger-dark"" onclick=""return confirm('Stop the Flashback Engine? The service will terminate.')"">")
+        sb.AppendLine("&#x25A0; Stop Engine")
         sb.AppendLine("</button>")
         sb.AppendLine("</form>")
 
@@ -816,7 +907,7 @@ Public Class WebWorker
 
         sb.AppendLine("<div class=""section"">")
         sb.AppendLine("<div class=""section-header"">")
-        sb.AppendLine($"<h2 class=""section-title"">Printers ({prNames.Count} configured, {liveDevices.Count} active)</h2>")
+        sb.AppendLine($"<h2 class=""section-title"" id=""pr-header"">Printers ({prNames.Count} configured, {liveDevices.Count} active)</h2>")
         sb.AppendLine("</div>")
         sb.AppendLine("<div class=""section-content"">")
 
@@ -829,63 +920,48 @@ Public Class WebWorker
                 Dim prDest = prDests(i)
                 Dim prIsEnabled = prEnabled(i)
 
-                ' Determine live status
                 Dim statusBadge As String
-                Dim canStart As Boolean
-                Dim canStop As Boolean
+                Dim badgeClass As String
+                Dim actionsHtml As String
 
                 If Not prIsEnabled Then
-                    statusBadge = "<span class=""badge-disabled"">Disabled</span>"
-                    canStart = False
-                    canStop = False
+                    badgeClass = "badge-disabled"
+                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Disabled</span>"
+                    actionsHtml = ""
                 ElseIf liveDevices.ContainsKey(prName) Then
                     Dim dev = liveDevices(prName)
                     If dev.Connected Then
-                        statusBadge = "<span class=""badge-connected"">Connected</span>"
-                        canStart = False
-                        canStop = True
+                        badgeClass = "badge-connected"
+                        statusBadge = $"<span class=""pr-badge {badgeClass}"">Connected</span>"
+                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
                     ElseIf dev.Connecting Then
-                        statusBadge = "<span class=""badge-connecting"">Connecting...</span>"
-                        canStart = False
-                        canStop = True
+                        badgeClass = "badge-connecting"
+                        statusBadge = $"<span class=""pr-badge {badgeClass}"">Connecting...</span>"
+                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
                     Else
-                        statusBadge = "<span class=""badge-disconnected"">Disconnected</span>"
-                        canStart = True
-                        canStop = False
+                        badgeClass = "badge-disconnected"
+                        statusBadge = $"<span class=""pr-badge {badgeClass}"">Disconnected</span>"
+                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                     End If
                 Else
-                    statusBadge = "<span class=""badge-disconnected"">Stopped</span>"
-                    canStart = True
-                    canStop = False
+                    badgeClass = "badge-disconnected"
+                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Stopped</span>"
+                    actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                 End If
 
                 Dim connTypeName = If(prConnType = 3, "Listener", "Client")
                 Dim encodedName = WebUtility.HtmlEncode(prName)
+                ' Safe DOM id: base64-like encoding using just the name; JS uses this to find the row
+                Dim rowId = "pr-" & WebUtility.UrlEncode(prName).Replace("%", "_")
 
-                sb.AppendLine("<div class=""file-card"">")
+                sb.AppendLine($"<div class=""file-card"" id=""{rowId}"">")
                 sb.AppendLine("<div class=""file-info"">")
                 sb.AppendLine($"<span class=""file-name"">{encodedName}</span>")
                 sb.AppendLine($"<span class=""file-meta"">{WebUtility.HtmlEncode(prDesc)} &nbsp;&bull;&nbsp; {connTypeName}: {WebUtility.HtmlEncode(prDest)}</span>")
                 sb.AppendLine("</div>")
-                sb.AppendLine("<div class=""file-actions"">")
+                sb.AppendLine($"<div class=""file-actions"" id=""{rowId}-actions"">")
                 sb.AppendLine(statusBadge)
-
-                If canStart Then
-                    sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;"">")
-                    sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""connect"" />")
-                    sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
-                    sb.AppendLine("<button type=""submit"" class=""btn btn-primary"">Start</button>")
-                    sb.AppendLine("</form>")
-                End If
-
-                If canStop Then
-                    sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;"">")
-                    sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""disconnect"" />")
-                    sb.AppendLine($"<input type=""hidden"" name=""dev"" value=""{encodedName}"" />")
-                    sb.AppendLine("<button type=""submit"" class=""btn btn-secondary"">Stop</button>")
-                    sb.AppendLine("</form>")
-                End If
-
+                sb.AppendLine(actionsHtml)
                 sb.AppendLine("</div>")
                 sb.AppendLine("</div>")
             Next
@@ -895,6 +971,17 @@ Public Class WebWorker
         End If
 
         sb.AppendLine("</div></div>")
+
+        ' --- Log Tail section ---
+        sb.AppendLine("<div class=""section"">")
+        sb.AppendLine("<div class=""section-header"" style=""display:flex; align-items:center; justify-content:space-between;"">")
+        sb.AppendLine("<h2 class=""section-title"">Engine Log</h2>")
+        sb.AppendLine("<span style=""font-size:0.75rem; color:#525252; padding-right:16px;"">Last 100 lines &bull; updates every 5s</span>")
+        sb.AppendLine("</div>")
+        sb.AppendLine("<div class=""section-content"" style=""padding:0;"">")
+        sb.AppendLine("<pre id=""log-tail"" class=""log-tail"">Loading log...</pre>")
+        sb.AppendLine("</div></div>")
+
         sb.AppendLine("</main>")
         sb.AppendLine("<div class=""status-bar"">Flashback Administration Panel &nbsp;&bull;&nbsp; <a href="".."" style=""color:#525252;"">Spool Management</a></div>")
         sb.AppendLine("</body></html>")
@@ -1024,6 +1111,143 @@ Public Class WebWorker
         context.Response.ContentLength64 = buffer.Length
         context.Response.ContentType = "text/html; charset=utf-8"
         context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        context.Response.Close()
+    End Sub
+
+    ' ---------------------------------------------------------------------------
+    ' Admin API endpoints — /admin/status (JSON) and /admin/log (plain text)
+    ' ---------------------------------------------------------------------------
+
+    ''' <summary>
+    ''' GET /admin/status — returns JSON with live printer statuses and clock time.
+    ''' Consumed by the admin panel JavaScript every 5 seconds for live updates.
+    ''' </summary>
+    Private Sub ServeAdminStatus(context As HttpListenerContext)
+        Try
+            Dim separator() As String = {"||"}
+            Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
+            Dim prNames As New List(Of String)
+            Dim prEnabled As New List(Of Boolean)
+
+            If File.Exists(configFile) Then
+                For Each line In File.ReadAllLines(configFile)
+                    If String.IsNullOrWhiteSpace(line) Then Continue For
+                    Dim p = line.Split(separator, StringSplitOptions.None)
+                    If p.Length < 10 Then Continue For
+                    prNames.Add(p(0))
+                    prEnabled.Add(If(p.Length >= 13, p(12) = "True", True))
+                Next
+            End If
+
+            Dim liveDevices As New Dictionary(Of String, Devs)(StringComparer.OrdinalIgnoreCase)
+            For Each d In _registry.GetSnapshot()
+                liveDevices(d.DevName) = d
+            Next
+
+            Dim sb As New StringBuilder()
+            sb.AppendLine("{")
+            sb.AppendLine($"  ""time"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}"",")
+            sb.AppendLine($"  ""configured"": {prNames.Count},")
+            sb.AppendLine($"  ""active"": {liveDevices.Count},")
+            sb.AppendLine("  ""printers"": [")
+
+            For i As Integer = 0 To prNames.Count - 1
+                Dim prName = prNames(i)
+                Dim prIsEnabled = prEnabled(i)
+                Dim rowId = "pr-" & WebUtility.UrlEncode(prName).Replace("%", "_")
+                Dim statusText As String
+                Dim badgeClass As String
+                Dim actionsHtml As String
+
+                If Not prIsEnabled Then
+                    badgeClass = "badge-disabled"
+                    statusText = "Disabled"
+                    actionsHtml = ""
+                ElseIf liveDevices.ContainsKey(prName) Then
+                    Dim dev = liveDevices(prName)
+                    If dev.Connected Then
+                        badgeClass = "badge-connected"
+                        statusText = "Connected"
+                        actionsHtml = $"<form method='POST' action='action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
+                    ElseIf dev.Connecting Then
+                        badgeClass = "badge-connecting"
+                        statusText = "Connecting..."
+                        actionsHtml = $"<form method='POST' action='action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
+                    Else
+                        badgeClass = "badge-disconnected"
+                        statusText = "Disconnected"
+                        actionsHtml = $"<form method='POST' action='action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
+                    End If
+                Else
+                    badgeClass = "badge-disconnected"
+                    statusText = "Stopped"
+                    actionsHtml = $"<form method='POST' action='action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
+                End If
+
+                ' Escape strings for JSON — replace backslash then quote
+                Dim jsonName = prName.Replace("\", "\\").Replace("""", "\""")
+                Dim jsonRowId = rowId.Replace("\", "\\").Replace("""", "\""")
+                Dim jsonStatus = statusText.Replace("\", "\\").Replace("""", "\""")
+                Dim jsonBadge = badgeClass.Replace("\", "\\").Replace("""", "\""")
+                ' actionsHtml uses single quotes so no JSON escaping needed for inner attributes
+                Dim jsonActions = actionsHtml.Replace("\", "\\").Replace("""", "\""")
+
+                Dim comma = If(i < prNames.Count - 1, ",", "")
+                sb.AppendLine($"    {{ ""name"": ""{jsonName}"", ""rowId"": ""{jsonRowId}"", ""status"": ""{jsonStatus}"", ""badgeClass"": ""{jsonBadge}"", ""actionsHtml"": ""{jsonActions}"" }}{comma}")
+            Next
+
+            sb.AppendLine("  ]")
+            sb.Append("}")
+
+            Dim buffer = Encoding.UTF8.GetBytes(sb.ToString())
+            context.Response.ContentLength64 = buffer.Length
+            context.Response.ContentType = "application/json; charset=utf-8"
+            context.Response.Headers.Add("Cache-Control", "no-cache")
+            context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        Catch ex As Exception
+            _logger.LogError("Error in ServeAdminStatus: {Error}", ex.Message)
+            context.Response.StatusCode = 500
+        End Try
+        context.Response.Close()
+    End Sub
+
+    ''' <summary>
+    ''' GET /admin/log — returns the last 100 lines of printers.log as plain text.
+    ''' Consumed by the admin panel JavaScript every 5 seconds for the log tail viewer.
+    ''' </summary>
+    Private Sub ServeAdminLog(context As HttpListenerContext)
+        Try
+            Dim logFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "printers.log")
+            Dim text As String
+
+            If File.Exists(logFile) Then
+                ' Read tail efficiently — open with shared read so the logger can still write
+                Dim lines As New List(Of String)
+                Using fs As New FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                    Using sr As New StreamReader(fs, Encoding.UTF8)
+                        Dim line As String = sr.ReadLine()
+                        While line IsNot Nothing
+                            lines.Add(line)
+                            line = sr.ReadLine()
+                        End While
+                    End Using
+                End Using
+                ' Take last 100 lines
+                Dim startLine = Math.Max(0, lines.Count - 100)
+                text = String.Join(Environment.NewLine, lines.Skip(startLine))
+            Else
+                text = "(Log file not found — the engine may not have written any entries yet.)"
+            End If
+
+            Dim buffer = Encoding.UTF8.GetBytes(text)
+            context.Response.ContentLength64 = buffer.Length
+            context.Response.ContentType = "text/plain; charset=utf-8"
+            context.Response.Headers.Add("Cache-Control", "no-cache")
+            context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        Catch ex As Exception
+            _logger.LogError("Error in ServeAdminLog: {Error}", ex.Message)
+            context.Response.StatusCode = 500
+        End Try
         context.Response.Close()
     End Sub
 

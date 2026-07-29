@@ -389,6 +389,52 @@ button[type='submit']:hover {
     background-color: #fef3c7;
 }
 
+/* Darker danger variant for Stop (vs Restart) */
+.btn-danger-dark {
+    background-color: #a91a21;
+    border-color: #a91a21;
+}
+
+.btn-danger-dark:hover {
+    background-color: #7d1319;
+    border-color: #7d1319;
+}
+
+/* Log tail viewer */
+.log-tail {
+    display: block;
+    width: 100%;
+    height: 320px;
+    overflow-y: auto;
+    overflow-x: auto;
+    background-color: #161616;
+    color: #f4f4f4;
+    font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    padding: 16px;
+    margin: 0;
+    white-space: pre;
+    box-sizing: border-box;
+}
+
+.log-line {
+    display: block;
+    color: #f4f4f4;
+}
+
+.log-error {
+    color: #ff8389;
+}
+
+.log-warn {
+    color: #f1c21b;
+}
+
+.log-debug {
+    color: #6f6f6f;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     main { padding: 16px; }
@@ -396,6 +442,7 @@ button[type='submit']:hover {
     .file-card > div { padding: 12px 16px; }
     .file-info, .file-actions { display: block; width: 100%; }
     .file-actions { text-align: left; margin-top: 8px; }
+    .log-tail { height: 220px; }
 }
 "
 
