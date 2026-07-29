@@ -1,3 +1,5 @@
+<i>Note:  AI assistance has been employed in the development of this project.  If this offends you, I'm sorry but I'm not changing anything</i>
+
 # 🖨️ Flashback Print Server Suite
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
