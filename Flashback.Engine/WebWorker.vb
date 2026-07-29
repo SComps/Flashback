@@ -805,8 +805,14 @@ Public Class WebWorker
             Next
         End If
 
-        ' Build a lookup of live devices by name
-        Dim liveDevices = _registry.GetSnapshot().ToDictionary(Function(d) d.DevName, StringComparer.OrdinalIgnoreCase)
+        ' Build a lookup of live devices by name.
+        ' Use a manual loop instead of .ToDictionary() to safely handle the case where
+        ' a device name appears more than once in the registry during a reconnect race
+        ' (duplicate key would cause .ToDictionary() to throw).
+        Dim liveDevices As New Dictionary(Of String, Devs)(StringComparer.OrdinalIgnoreCase)
+        For Each d In _registry.GetSnapshot()
+            liveDevices(d.DevName) = d   ' overwrite on duplicate — last writer wins
+        Next
 
         sb.AppendLine("<div class=""section"">")
         sb.AppendLine("<div class=""section-header"">")

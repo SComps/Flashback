@@ -91,22 +91,26 @@ Public Class Worker
 
                 If Not isEnabled Then Continue For
 
-                ' Check if this device already exists in _devList (connected or currently connecting)
-                Dim existing As Devs = Nothing
+                ' Check if this device already exists in _devList AND add it atomically
+                ' inside a single lock to prevent a race where two timer ticks (the 5s
+                ' retry timer and the 30s main loop can both call this method concurrently)
+                ' both see the device as absent and each create a duplicate entry.
+                Dim shouldConnect As Boolean = False
+                Dim d As Devs = Nothing
                 SyncLock _devList
-                    existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                    Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                    If existing Is Nothing Then
+                        d = CreateDevice(p)
+                        If d IsNot Nothing Then
+                            _devList.Add(d)
+                            loadedCount = _devList.Count
+                            shouldConnect = True
+                        End If
+                    End If
                 End SyncLock
 
-                If existing IsNot Nothing Then Continue For  ' Device exists - leave it alone
-
-                ' Device is absent - recreate it fresh
-                _logger.LogInformation("{Dev} is absent from device list. Recreating and connecting.", devName)
-                Dim d = CreateDevice(p)
-                If d IsNot Nothing Then
-                    SyncLock _devList
-                        _devList.Add(d)
-                        loadedCount = _devList.Count
-                    End SyncLock
+                If shouldConnect AndAlso d IsNot Nothing Then
+                    _logger.LogInformation("{Dev} is absent from device list. Recreating and connecting.", devName)
                     _registry.Register(d)
                     d.Connect()
                 End If
