@@ -138,7 +138,7 @@
         <Grid x:Name="overlayLock" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Visibility="Visible">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="320" Spacing="20">
                 <TextBlock Text="SECURITY LOCK" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                <PasswordBox x:Name="pbLogin" Header="Enter Password" PasswordRevealMode="Hidden" KeyDown="pbLogin_KeyDown"/>
+                <PasswordBox x:Name="pbLogin" Header="Enter Password" PasswordRevealMode="Hidden" MaxLength="25" KeyDown="pbLogin_KeyDown"/>
                 <Button Content="Unlock" Click="Login_Click" Style="{ThemeResource AccentButtonStyle}" HorizontalAlignment="Stretch" Padding="0,12"/>
                 <TextBlock x:Name="lblLoginError" Text="Denied." Foreground="Red" HorizontalAlignment="Center" Visibility="Collapsed"/>
             </StackPanel>

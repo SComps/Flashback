@@ -14,7 +14,6 @@ namespace Flashback.Config.WinUI
     {
         public ObservableCollection<DeviceItem> Devices { get; set; } = new ObservableCollection<DeviceItem>();
         private string configFile = "devices.dat";
-        private string pwFile = "syspw.txt";
         private string themeFile = "uipalette.dat";
         private string _syspw = "";
         private bool _loading = true;
@@ -114,7 +113,7 @@ namespace Flashback.Config.WinUI
 
         private void LoadSecurity()
         {
-            if (File.Exists(pwFile)) _syspw = File.ReadAllText(pwFile).Trim();
+            _syspw = Flashback.Core.SecurityUtils.ReadSyspw(AppDomain.CurrentDomain.BaseDirectory);
         }
 
         private void cmbUITheme_SelectionChanged(object sender, SelectionChangedEventArgs e)

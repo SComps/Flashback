@@ -689,25 +689,13 @@ Public Class WebWorker
     ' ---------------------------------------------------------------------------
 
     ''' <summary>
-    ''' Reads syspw.txt from the application base directory.
-    ''' Returns String.Empty if the file does not exist (open access mode).
-    ''' </summary>
-    Private Function ReadSyspw() As String
-        Dim pwFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")
-        If File.Exists(pwFile) Then
-            Return File.ReadAllText(pwFile).Trim()
-        End If
-        Return String.Empty
-    End Function
-
-    ''' <summary>
     ''' Returns True if the request is authorized to access the admin panel.
     ''' If no syspw is configured, all requests are allowed.
     ''' If a syspw is configured, requires HTTP Basic Auth with username "admin"
     ''' and the syspw as the password.
     ''' </summary>
     Private Function IsAdminAuthorized(context As HttpListenerContext) As Boolean
-        Dim syspw = ReadSyspw()
+        Dim syspw = SecurityUtils.ReadSyspw(AppDomain.CurrentDomain.BaseDirectory)
         If String.IsNullOrEmpty(syspw) Then Return True  ' No password configured — open access
 
         Dim authHeader = context.Request.Headers("Authorization")
@@ -721,7 +709,7 @@ Public Class WebWorker
             If colon < 0 Then Return False
             Dim inputUser = decoded.Substring(0, colon)
             Dim inputPass = decoded.Substring(colon + 1)
-            Return inputUser.Equals("admin", StringComparison.OrdinalIgnoreCase) AndAlso inputPass = syspw
+            Return inputUser.Equals("admin", StringComparison.OrdinalIgnoreCase) AndAlso inputPass.Trim() = syspw
         Catch
             Return False
         End Try

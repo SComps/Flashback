@@ -48,7 +48,7 @@ The primary way to manage devices is the **Flashback.Config.Console** tool. It p
 ### 3270 Remote Administration
 For administrators on z/OS or other terminal-heavy systems, the **3270 Config Server** allows remote management via any TN3270 terminal emulator.
 - **Port**: Default is `3270`.
-- **Security**: Can be protected with a `SYSPW` (System Password).
+- **Security**: Can be protected with a `SYSPW` (System Password). Place a plain-text file named `SYSPW` (or `SYSPW.txt`) in the application directory containing the password (maximum 25 characters).
 
 ### Email Delivery Configuration
 Flashback supports automatic email delivery of generated PDF documents on a per-device basis. Each virtual printer can be configured to send PDFs to one or more email recipients immediately after generation.
@@ -196,7 +196,7 @@ To upgrade, place your generated `flashback.lic` file into the application base 
 ---
 
 ## 6. Security Best Practices
-- **SYSPW**: Always set a system password for the 3270 server using the `--password` flag or a `syspw.txt` file.
+- **SYSPW**: Always set a system password using the `--password` flag or a `SYSPW` file (also accepted: `SYSPW.txt`) in the application directory. Maximum password length is **25 characters**, enforced across all configuration surfaces.
 - **Control Plane**: Ensure the application directory has restricted permissions to protect the `commands.dat` signaling file.
 - **Network**: Use a firewall to restrict access to the Flashback ports (3270 and printer ports) to trusted host IPs only.
 

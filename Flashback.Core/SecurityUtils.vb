@@ -44,4 +44,23 @@ Public Class SecurityUtils
         Dim newHash = HashPassword(password, salt)
         Return newHash = hash
     End Function
+
+    ''' <summary>
+    ''' Resolves and reads the system password file from the given base directory.
+    ''' Tries the following filenames in order: SYSPW, syspw, SYSPW.txt, syspw.txt.
+    ''' This covers the canonical name, the lowercase variant (Linux case-sensitive
+    ''' filesystems), and both .txt fallbacks for existing deployments.
+    ''' Returns String.Empty if no file is found (open access mode).
+    ''' Maximum enforced password length is 25 characters.
+    ''' </summary>
+    Public Shared Function ReadSyspw(baseDir As String) As String
+        Dim candidates = {"SYSPW", "syspw", "SYSPW.txt", "syspw.txt"}
+        For Each name In candidates
+            Dim filePath = Path.Combine(baseDir, name)
+            If File.Exists(filePath) Then
+                Return File.ReadAllText(filePath).Trim()
+            End If
+        Next
+        Return String.Empty
+    End Function
 End Class

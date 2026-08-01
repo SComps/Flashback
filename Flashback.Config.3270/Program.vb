@@ -44,8 +44,8 @@ Module Program
             End Select
         Next
 
-        If String.IsNullOrEmpty(syspw) AndAlso System.IO.File.Exists(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")) Then
-            syspw = System.IO.File.ReadAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "syspw.txt")).Trim()
+        If String.IsNullOrEmpty(syspw) Then
+            syspw = Flashback.Core.SecurityUtils.ReadSyspw(AppDomain.CurrentDomain.BaseDirectory)
         End If
 
         If isDaemon Then

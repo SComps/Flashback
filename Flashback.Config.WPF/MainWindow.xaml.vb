@@ -5,7 +5,6 @@ Imports Flashback.Core
 Class MainWindow
     Public Property Devices As New ObservableCollection(Of DeviceItem)
     Private configFile As String = "devices.dat"
-    Private pwFile As String = "syspw.txt"
     Private themeFile As String = "uipalette.dat"
     Private _syspw As String = ""
     Private _loading As Boolean = True
@@ -110,7 +109,7 @@ Class MainWindow
         End Try
     End Sub
     Private Sub LoadSecurity()
-        If File.Exists(pwFile) Then _syspw = File.ReadAllText(pwFile).Trim()
+        _syspw = SecurityUtils.ReadSyspw(AppDomain.CurrentDomain.BaseDirectory)
     End Sub
     Private Sub cmbUITheme_SelectionChanged(sender As Object, e As SelectionChangedEventArgs)
         If _loading Then Return
