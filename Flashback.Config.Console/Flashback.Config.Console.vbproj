@@ -7,7 +7,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Config.Console</RootNamespace>
-    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
 </Project>

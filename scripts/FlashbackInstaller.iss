@@ -68,11 +68,11 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 ; ============================================================================
 [Icons]
 ; Configuration tools - always installed
-Name: "{group}\Flashback Config Console"; Filename: "{app}\Flashback.Config.Console.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Console Configuration"
-Name: "{group}\Flashback Config WPF"; Filename: "{app}\Flashback.Config.WPF.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WPF Configuration"
-Name: "{group}\Flashback Config WinUI"; Filename: "{app}\Flashback.Config.WinUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WinUI Configuration"
+Name: "{group}\Flashback Console"; Filename: "{app}\Flashback.Config.Console.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Console Configuration"
+Name: "{group}\Flashback WPF"; Filename: "{app}\Flashback.Config.WPF.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WPF Configuration"
+Name: "{group}\Flashback WinUI"; Filename: "{app}\Flashback.Config.WinUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback WinUI Configuration"
 Name: "{group}\Flashback Engine"; Filename: "{app}\Flashback.Engine.exe"; Parameters: "{code:GetWebArg}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback Print Engine"
-Name: "{group}\Flashback Config 3270"; Filename: "{app}\Flashback.Config.3270.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback 3270 Terminal Configuration"
+Name: "{group}\Flashback 3270"; Filename: "{app}\Flashback.Config.3270.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\printer.ico"; Comment: "Flashback 3270 Terminal Configuration"
 Name: "{group}\Uninstall Flashback LPT"; Filename: "{uninstallexe}"; Comment: "Uninstall Flashback LPT"
 
 ; Tray auto-startup is now handled by a Scheduled Task in the [Run] section for silent elevation

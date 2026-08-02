@@ -23,7 +23,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flashback.Engine</RootNamespace>
-    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <Deterministic>true</Deterministic>
     <Version>2.1.0.0</Version>
     <AssemblyVersion>2.1.0.0</AssemblyVersion>

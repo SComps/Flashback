@@ -1,16 +1,25 @@
 # Flashback WPF Configuration Tool - Standalone Publish Script
+param(
+    [string]$PublishDir = ""
+)
 $ErrorActionPreference = "Stop"
 
 # Define paths
 $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
 $DefaultPublishDir = Join-Path (Split-Path $RepoRoot -Parent) "Flashback-Publish"
 
-Write-Host "`nFlashback WPF Publish" -ForegroundColor Cyan
-Write-Host "Where should the output be located?" -ForegroundColor White
-Write-Host "Default: $DefaultPublishDir" -ForegroundColor Gray
-$InputPath = Read-Host "Path [Enter for default]"
+if ([string]::IsNullOrWhiteSpace($PublishDir)) {
+    Write-Host "`nFlashback WPF Publish" -ForegroundColor Cyan
+    Write-Host "Where should the output be located?" -ForegroundColor White
+    Write-Host "Default: $DefaultPublishDir" -ForegroundColor Gray
+    $InputPath = Read-Host "Path [Enter for default]"
+    $PublishDir = if ([string]::IsNullOrWhiteSpace($InputPath)) {
+        $DefaultPublishDir
+    } else {
+        $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InputPath)
+    }
+}
 
-$PublishDir = If ([string]::IsNullOrWhiteSpace($InputPath)) { $DefaultPublishDir } Else { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InputPath) }
 if (-not (Test-Path $PublishDir)) { New-Item -ItemType Directory -Force $PublishDir | Out-Null }
 
 # Ensure the application isn't running (avoids UnauthorizedAccessException)
@@ -24,14 +33,15 @@ if ($RunningApp) {
 
 Write-Host "`n-> Publishing Flashback.Config.WPF (Single File)..." -ForegroundColor Yellow
 
-# WPF doesn't support NativeAOT like console apps, so we use SingleFile instead
-dotnet publish "E:\Flashback\Flashback.Config.WPF\Flashback.Config.WPF.vbproj" `
+# WPF doesn't support NativeAOT; use SingleFile with compression instead
+dotnet publish ..\Flashback.Config.WPF\Flashback.Config.WPF.vbproj `
     -c Release `
     -r win-x64 `
     -f net10.0-windows `
     --self-contained true `
     /p:PublishSingleFile=true `
     /p:IncludeNativeLibrariesForSelfExtract=true `
+    /p:EnableCompressionInSingleFile=true `
     /p:PublishDir=$PublishDir
 
 Write-Host "`nPublish complete! WPF Config located in: $PublishDir" -ForegroundColor Green
