@@ -8,7 +8,7 @@ Module Program
     Sub Main(args As String())
         ' Single Instance Check
         Dim createdNew As Boolean
-        Dim mutex As New Mutex(True, "Global\FlashbackConfig3270", createdNew)
+        Dim mutex As New Mutex(True, "Local\FlashbackConfig3270", createdNew)
         If Not createdNew Then
             System.Console.WriteLine("Error: Flashback 3270 Configuration Server is already running.")
             Environment.Exit(1)

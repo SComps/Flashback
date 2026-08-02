@@ -4,8 +4,8 @@ Imports Flashback.Core
 
 Class MainWindow
     Public Property Devices As New ObservableCollection(Of DeviceItem)
-    Private configFile As String = "devices.dat"
-    Private themeFile As String = "uipalette.dat"
+    Private configFile As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
+    Private themeFile As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "uipalette.dat")
     Private _syspw As String = ""
     Private _loading As Boolean = True
 

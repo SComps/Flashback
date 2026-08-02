@@ -10,7 +10,7 @@ Module Program
     Sub Main(args As String())
         ' Single Instance Check
         Dim createdNew As Boolean
-        Dim mutex As New Mutex(True, "Global\FlashbackSpooler", createdNew)
+        Dim mutex As New Mutex(True, "Local\FlashbackSpooler", createdNew)
         If Not createdNew Then
             Console.WriteLine("Error: Flashback Spooler is already running.")
             Environment.Exit(1)

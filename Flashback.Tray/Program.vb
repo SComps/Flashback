@@ -6,7 +6,7 @@ Module Program
     Sub Main()
         ' Single Instance Check
         Dim createdNew As Boolean
-        Dim mutex As New System.Threading.Mutex(True, "Global\FlashbackTray", createdNew)
+        Dim mutex As New System.Threading.Mutex(True, "Local\FlashbackTray", createdNew)
         If Not createdNew Then
             ' Tray app usually exits silently if already running
             Return

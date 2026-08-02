@@ -13,8 +13,8 @@ namespace Flashback.Config.WinUI
     public sealed partial class MainWindow : Window
     {
         public ObservableCollection<DeviceItem> Devices { get; set; } = new ObservableCollection<DeviceItem>();
-        private string configFile = "devices.dat";
-        private string themeFile = "uipalette.dat";
+        private string configFile = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat");
+        private string themeFile = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "uipalette.dat");
         private string _syspw = "";
         private bool _loading = true;
 

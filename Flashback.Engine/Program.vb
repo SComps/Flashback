@@ -10,7 +10,7 @@ Module Program
     Sub Main(args As String())
         ' Single Instance Check
         Dim createdNew As Boolean
-        Dim mutex As New Mutex(True, "Global\FlashbackEngine", createdNew)
+        Dim mutex As New Mutex(True, "Local\FlashbackEngine", createdNew)
         If Not createdNew Then
             System.Console.WriteLine("Error: Flashback Engine is already running.")
             Environment.Exit(1)
