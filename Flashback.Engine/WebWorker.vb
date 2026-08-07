@@ -844,7 +844,7 @@ Public Class WebWorker
         sb.AppendLine("<div style=""display: flex; gap: 12px; flex-wrap: wrap;"">")
 
         ' Restart button — red/danger to signal destructive action
-        sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
+        sb.AppendLine("<form method=""POST"" action=""admin/action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""restart"" />")
         sb.AppendLine("<button type=""submit"" class=""btn btn-danger"" onclick=""return confirm('Restart the Flashback Engine? All printer connections will be briefly interrupted.')"">")
         sb.AppendLine("&#x21BA; Restart Engine")
@@ -852,7 +852,7 @@ Public Class WebWorker
         sb.AppendLine("</form>")
 
         ' Stop button — darker red to distinguish from restart
-        sb.AppendLine("<form method=""POST"" action=""action"" style=""display:inline;"">")
+        sb.AppendLine("<form method=""POST"" action=""admin/action"" style=""display:inline;"">")
         sb.AppendLine("<input type=""hidden"" name=""cmd"" value=""stop"" />")
         sb.AppendLine("<button type=""submit"" class=""btn btn-danger btn-danger-dark"" onclick=""return confirm('Stop the Flashback Engine? The service will terminate.')"">")
         sb.AppendLine("&#x25A0; Stop Engine")
@@ -926,20 +926,20 @@ Public Class WebWorker
                     If dev.Connected Then
                         badgeClass = "badge-connected"
                         statusBadge = $"<span class=""pr-badge {badgeClass}"">Connected</span>"
-                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
+                        actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
                     ElseIf dev.Connecting Then
                         badgeClass = "badge-connecting"
                         statusBadge = $"<span class=""pr-badge {badgeClass}"">Connecting...</span>"
-                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
+                        actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
                     Else
                         badgeClass = "badge-disconnected"
                         statusBadge = $"<span class=""pr-badge {badgeClass}"">Disconnected</span>"
-                        actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
+                        actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                     End If
                 Else
                     badgeClass = "badge-disconnected"
                     statusBadge = $"<span class=""pr-badge {badgeClass}"">Stopped</span>"
-                    actionsHtml = $"<form method=""POST"" action=""action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
+                    actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                 End If
 
                 Dim connTypeName = If(prConnType = 3, "Listener", "Client")
@@ -949,7 +949,7 @@ Public Class WebWorker
 
                 sb.AppendLine($"<div class=""file-card"" id=""{rowId}"">")
                 sb.AppendLine("<div class=""file-info"">")
-                sb.AppendLine($"<span class=""file-name"">{encodedName}</span>")
+                sb.AppendLine($"<span class=""file-name-static"">{encodedName}</span>")
                 sb.AppendLine($"<span class=""file-meta"">{WebUtility.HtmlEncode(prDesc)} &nbsp;&bull;&nbsp; {connTypeName}: {WebUtility.HtmlEncode(prDest)}</span>")
                 sb.AppendLine("</div>")
                 sb.AppendLine($"<div class=""file-actions"" id=""{rowId}-actions"">")

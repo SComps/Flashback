@@ -144,6 +144,14 @@ main {
     text-decoration: underline;
 }
 
+.file-name-static {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #161616;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+
 .file-meta {
     font-size: 0.75rem;
     color: #525252;
