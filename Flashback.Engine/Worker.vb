@@ -125,13 +125,21 @@ Public Class Worker
     ''' <summary>
     ''' Called by the Disconnected event on a Devs object. Immediately removes the
     ''' device from _devList so RecreateDisconnectedDevices() will rebuild it fresh.
+    ''' If the device was disabled (manual stop), auto-reconnect is suppressed.
     ''' </summary>
     Private Sub OnDeviceDisconnected(dev As Devs)
         Dim devName = dev.DevName
+        Dim wasManualStop = Not dev.Enabled
         SyncLock _devList
             _devList.Remove(dev)
         End SyncLock
         _registry.Unregister(dev)
+
+        If wasManualStop Then
+            _logger.LogInformation("{Dev} disconnected (manual stop — auto-reconnect suppressed).", devName)
+            Return
+        End If
+
         _lastDisconnectTime = DateTime.Now
         ' Kick off aggressive retry phase: attempt reconnect every 5 seconds for 2 minutes.
         If Not _timersDisposed Then
@@ -150,6 +158,39 @@ Public Class Worker
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
                 _logger.LogError("ERROR saving configuration: {Error}", ex.Message)
             End If
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Flips a device's Enabled flag to True directly in devices.dat.
+    ''' Used when a CONNECT command arrives for a device that is not in _devList
+    ''' (i.e. it was previously stopped and removed). The next RecreateDisconnectedDevices
+    ''' cycle will see it as enabled and recreate + connect it.
+    ''' </summary>
+    Private Sub EnableDeviceInConfig(devName As String)
+        Try
+            If Not File.Exists(_configFile) Then Return
+            Dim separator() As String = {"||"}
+            Dim lines = File.ReadAllLines(_configFile)
+            Dim changed = False
+            For i = 0 To lines.Length - 1
+                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                If p.Length < 13 Then Continue For
+                If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
+                    p(12) = "True"
+                    lines(i) = String.Join("||", p)
+                    changed = True
+                    Exit For
+                End If
+            Next
+            If changed Then
+                File.WriteAllLines(_configFile, lines)
+                _configDate = File.GetLastWriteTime(_configFile)
+                _logger.LogInformation("Signal: Re-enabled {Dev} in config. Will reconnect on next cycle.", devName)
+            End If
+        Catch ex As Exception
+            _logger.LogError("ERROR enabling device {Dev} in config: {Error}", devName, ex.Message)
         End Try
     End Sub
 
@@ -450,16 +491,30 @@ Public Class Worker
                     target = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
                 End SyncLock
 
-                If target IsNot Nothing Then
-                    Select Case cmd
-                        Case "CONNECT"
-                            _logger.LogInformation("Signal: Manual connect requested for {Dev}", devName)
+                Select Case cmd
+                    Case "CONNECT"
+                        _logger.LogInformation("Signal: Manual connect requested for {Dev}", devName)
+                        If target IsNot Nothing Then
+                            ' Re-enable in memory and persist before connecting.
+                            target.Enabled = True
+                            SaveDevices()
                             target.Connect()
-                        Case "DISCONNECT"
-                            _logger.LogInformation("Signal: Manual disconnect requested for {Dev}", devName)
+                        Else
+                            ' Device not in _devList (was stopped) — flip Enabled in devices.dat
+                            ' then immediately recreate and connect it without waiting for next cycle.
+                            EnableDeviceInConfig(devName)
+                            RecreateDisconnectedDevices()
+                        End If
+                    Case "DISCONNECT"
+                        _logger.LogInformation("Signal: Manual disconnect requested for {Dev}", devName)
+                        If target IsNot Nothing Then
+                            ' Disable in memory and persist before disconnecting so that
+                            ' OnDeviceDisconnected sees Enabled=False and skips auto-reconnect.
+                            target.Enabled = False
+                            SaveDevices()
                             target.Disconnect()
-                    End Select
-                End If
+                        End If
+                End Select
             Next
         Catch ex As Exception
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then

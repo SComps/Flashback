@@ -918,9 +918,9 @@ Public Class WebWorker
                 Dim actionsHtml As String
 
                 If Not prIsEnabled Then
-                    badgeClass = "badge-disabled"
-                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Disabled</span>"
-                    actionsHtml = ""
+                    badgeClass = "badge-disconnected"
+                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Stopped</span>"
+                    actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                 ElseIf liveDevices.ContainsKey(prName) Then
                     Dim dev = liveDevices(prName)
                     If dev.Connected Then
@@ -1153,9 +1153,9 @@ Public Class WebWorker
                 Dim actionsHtml As String
 
                 If Not prIsEnabled Then
-                    badgeClass = "badge-disabled"
-                    statusText = "Disabled"
-                    actionsHtml = ""
+                    badgeClass = "badge-disconnected"
+                    statusText = "Stopped"
+                    actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
                 ElseIf liveDevices.ContainsKey(prName) Then
                     Dim dev = liveDevices(prName)
                     If dev.Connected Then
