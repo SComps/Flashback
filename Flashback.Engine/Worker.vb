@@ -15,9 +15,12 @@ Public Class Worker
     Private _configDate As DateTime
     Private WithEvents _statTimer As System.Timers.Timer
     Private WithEvents _cmdTimer As System.Timers.Timer
-    Private WithEvents _retryTimer As System.Timers.Timer
     Private _timersDisposed As Boolean = False
-    Private _lastDisconnectTime As DateTime = DateTime.MinValue
+
+    ' Prevents concurrent Reconcile() calls from the stat timer and the main loop
+    ' firing close together. TryEnter: if already running, the caller simply skips —
+    ' the next tick will pick up any remaining work.
+    Private ReadOnly _reconcileLock As New Object()
 
     Public Sub New(logger As ILogger(Of Worker), registry As PrinterRegistry)
         _logger = logger
@@ -31,30 +34,29 @@ Public Class Worker
         Dim version = Reflection.Assembly.GetExecutingAssembly().GetName().Version
         _logger.LogInformation("Flashback Engine Service v{Ver} Starting.", version.ToString())
 
-        ' Initialize timers
         _statTimer = New System.Timers.Timer()
         _cmdTimer = New System.Timers.Timer()
-        _retryTimer = New System.Timers.Timer()
 
-        LoadDevices()
+        ' Initial load: bring up all enabled devices from devices.dat
+        Reconcile()
 
+        ' Config-file watcher: detects changes made by the web admin or config tool
         _statTimer.Interval = 5000
         _statTimer.Enabled = True
 
+        ' Command-file poller: processes CONNECT / DISCONNECT signals from the web admin
         _cmdTimer.Interval = 500
         _cmdTimer.Enabled = True
 
-        ' Retry timer: 5-second interval, only enabled after a disconnection event.
-        ' Drives aggressive reconnect attempts for the first 2 minutes after any disconnect.
-        _retryTimer.Interval = 5000
-        _retryTimer.Enabled = False
-
+        ' Main loop: reconciles every 15 seconds.
+        ' This is both the steady-state health check AND the reconnect retry mechanism.
+        ' Any device that dropped its connection will have been removed from _devList by
+        ' OnDeviceDisconnected; the next Reconcile pass sees it absent and recreates it.
+        ' No separate retry timer is needed.
         While Not stoppingToken.IsCancellationRequested
-            Await Task.Delay(30000, stoppingToken)
-
-            ' Re-examine config and recreate any devices that have disappeared
+            Await Task.Delay(15000, stoppingToken)
             If Not stoppingToken.IsCancellationRequested Then
-                RecreateDisconnectedDevices()
+                Reconcile()
             End If
         End While
 
@@ -63,17 +65,28 @@ Public Class Worker
     End Function
 
     ''' <summary>
-    ''' Called every 30 seconds. Reads the config and ensures every enabled device
-    ''' exists in _devList. Any device that was destroyed (via the Disconnected event)
-    ''' will be absent and gets recreated fresh here.
+    ''' Single method that reconciles the live device list against devices.dat.
+    '''
+    ''' Rules applied for each config entry:
+    '''   Disabled  → disconnect and remove if currently active; skip recreation.
+    '''   Enabled + present + critical settings unchanged → update non-critical props in place.
+    '''   Enabled + present + critical settings changed   → disconnect; recreate next pass.
+    '''   Enabled + absent  → create fresh object and connect (subject to license cap).
+    '''   Stale (deleted from config entirely) → disconnect and remove.
+    '''
+    ''' Called on startup, every 15 seconds (reconnect retry), and on config file changes.
+    ''' Protected by _reconcileLock to prevent concurrent execution.
     ''' </summary>
-    Private Sub RecreateDisconnectedDevices()
-        If Not File.Exists(_configFile) Then Return
-
+    Private Sub Reconcile()
+        If Not Monitor.TryEnter(_reconcileLock) Then Return
         Try
+            If Not File.Exists(_configFile) Then Return
+
+            _configDate = File.GetLastWriteTime(_configFile)
             Dim lic = LicenseManager.GetLicenseInfo()
             Dim lines = File.ReadAllLines(_configFile)
-            Dim loadedCount As Integer = 0
+            Dim configNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            Dim loadedCount As Integer
 
             SyncLock _devList
                 loadedCount = _devList.Count
@@ -84,22 +97,87 @@ Public Class Worker
                 Dim p = line.Split("||", StringSplitOptions.TrimEntries)
                 If p.Length < 10 Then Continue For
 
-                If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
-
                 Dim devName = p(0)
+                configNames.Add(devName)
+
                 Dim isEnabled = If(p.Length >= 13, (p(12) = "True"), True)
 
-                If Not isEnabled Then Continue For
-
-                ' Check if this device already exists in _devList AND add it atomically
-                ' inside a single lock to prevent a race where two timer ticks (the 5s
-                ' retry timer and the 30s main loop can both call this method concurrently)
-                ' both see the device as absent and each create a duplicate entry.
-                Dim shouldConnect As Boolean = False
-                Dim d As Devs = Nothing
+                Dim existing As Devs = Nothing
                 SyncLock _devList
-                    Dim existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
-                    If existing Is Nothing Then
+                    existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
+                End SyncLock
+
+                ' ── Disabled in config: disconnect and remove if currently active ──────────
+                If Not isEnabled Then
+                    If existing IsNot Nothing Then
+                        _logger.LogInformation("{Dev} disabled in config. Disconnecting.", devName)
+                        SyncLock _devList
+                            _devList.Remove(existing)
+                        End SyncLock
+                        _registry.Unregister(existing)
+                        existing.Disconnect()
+                    End If
+                    Continue For
+                End If
+
+                ' ── Enabled and already active: check for setting changes ─────────────────
+                If existing IsNot Nothing Then
+                    Dim newConnType = CInt(Val(p(3)))
+                    Dim newDevDest = p(4)
+                    Dim newOS = CType(CInt(Val(p(5))), OSType)
+
+                    If (existing.DevDest <> newDevDest) OrElse
+                       (existing.OS <> newOS) OrElse
+                       (existing.ConnType <> newConnType) Then
+                        ' Connection-critical settings changed: disconnect now. The device
+                        ' will be absent on the next Reconcile pass and recreated with
+                        ' the new settings automatically.
+                        _logger.LogInformation("Connection settings changed for {Dev}. Disconnecting; will reconnect with new settings on next cycle.", devName)
+                        SyncLock _devList
+                            _devList.Remove(existing)
+                        End SyncLock
+                        _registry.Unregister(existing)
+                        existing.Disconnect()
+                        Continue For
+                    End If
+
+                    ' Non-critical settings changed: update the live object in place.
+                    existing.DevDescription = p(1)
+                    existing.DevType = CInt(Val(p(2)))
+                    existing.PDF = (p(7) = "True")
+                    existing.Orientation = CInt(Val(p(8)))
+                    existing.OutDest = p(9)
+
+                    If p.Length >= 12 Then
+                        existing.Shading = CType(CInt(Val(p(10))), RenderPDF.ShadingColor)
+                        existing.JobNumber = CInt(Val(p(11)))
+                    End If
+
+                    If p.Length >= 14 Then existing.EmailEnabled = (p(13) = "True")
+                    If p.Length >= 15 Then existing.EmailRecipients = p(14)
+                    If p.Length >= 16 Then existing.SmtpServer = p(15)
+                    If p.Length >= 17 Then existing.SmtpPort = CInt(Val(p(16)))
+                    If p.Length >= 18 Then existing.SmtpUsername = p(17)
+                    If p.Length >= 19 Then existing.SmtpPassword = p(18)
+                    If p.Length >= 20 Then existing.SmtpUseTLS = (p(19) = "True")
+                    If p.Length >= 21 Then existing.EmailFromAddress = p(20)
+                    If p.Length >= 22 Then existing.EmailFromName = p(21)
+                    If p.Length >= 23 Then existing.EmailSubject = p(22)
+                    If p.Length >= 24 Then existing.EmailBody = p(23)
+
+                    Continue For
+                End If
+
+                ' ── Enabled but not active: create and connect (subject to license cap) ───
+                If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
+
+                Dim d As Devs = Nothing
+                Dim shouldConnect As Boolean = False
+                SyncLock _devList
+                    ' Re-check inside lock to prevent a race where the stat timer and the
+                    ' main loop both enter this path milliseconds apart and each create a
+                    ' duplicate object for the same printer.
+                    If _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase)) Is Nothing Then
                         d = CreateDevice(p)
                         If d IsNot Nothing Then
                             _devList.Add(d)
@@ -110,50 +188,89 @@ Public Class Worker
                 End SyncLock
 
                 If shouldConnect AndAlso d IsNot Nothing Then
-                    _logger.LogInformation("{Dev} is absent from device list. Recreating and connecting.", devName)
+                    _logger.LogInformation("{Dev} not active. Creating and connecting.", devName)
                     _registry.Register(d)
                     d.Connect()
                 End If
             Next
+
+            ' ── Remove devices deleted from devices.dat entirely ─────────────────────────
+            Dim stale As New List(Of Devs)
+            SyncLock _devList
+                stale.AddRange(_devList.Where(Function(d) Not configNames.Contains(d.DevName)))
+                For Each d In stale
+                    _devList.Remove(d)
+                Next
+            End SyncLock
+            For Each d In stale
+                _registry.Unregister(d)
+                _logger.LogInformation("{Dev} removed from config. Disconnecting.", d.DevName)
+                d.Disconnect()
+            Next
+
         Catch ex As Exception
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
-                _logger.LogError("ERROR in RecreateDisconnectedDevices: {Error}", ex.Message)
+                _logger.LogError("ERROR in Reconcile: {Error}", ex.Message)
             End If
+        Finally
+            Monitor.Exit(_reconcileLock)
         End Try
     End Sub
 
     ''' <summary>
-    ''' Called by the Disconnected event on a Devs object. Immediately removes the
-    ''' device from _devList so RecreateDisconnectedDevices() will rebuild it fresh.
-    ''' If the device was disabled (manual stop), auto-reconnect is suppressed.
+    ''' Called by the Disconnected event on a Devs object.
+    ''' Removes the device from _devList and the registry. If the device is still
+    ''' enabled (unexpected drop), the next Reconcile() pass will recreate and reconnect it.
+    ''' If Enabled=False (manual stop), Reconcile() will see it disabled and skip it.
     ''' </summary>
     Private Sub OnDeviceDisconnected(dev As Devs)
-        Dim devName = dev.DevName
-        Dim wasManualStop = Not dev.Enabled
         SyncLock _devList
             _devList.Remove(dev)
         End SyncLock
         _registry.Unregister(dev)
 
-        If wasManualStop Then
-            _logger.LogInformation("{Dev} disconnected (manual stop — auto-reconnect suppressed).", devName)
-            Return
+        If dev.Enabled Then
+            _logger.LogInformation("{Dev} disconnected. Will reconnect on next cycle.", dev.DevName)
+        Else
+            _logger.LogInformation("{Dev} stopped (disabled). Auto-reconnect suppressed.", dev.DevName)
         End If
-
-        _lastDisconnectTime = DateTime.Now
-        ' Kick off aggressive retry phase: attempt reconnect every 5 seconds for 2 minutes.
-        If Not _timersDisposed Then
-            _retryTimer.Enabled = True
-        End If
-        _logger.LogInformation("{Dev} disconnected. Aggressive retry phase started (5s interval for 2 min).", devName)
     End Sub
 
+    ''' <summary>
+    ''' Persists runtime-updated settings (job counters etc.) back to devices.dat
+    ''' without disturbing entries for devices not currently in _devList.
+    ''' Uses a merge strategy: read existing lines, overwrite only the lines
+    ''' for live devices, preserve all others — so a device between retry cycles
+    ''' is never silently dropped from the config file.
+    ''' </summary>
     Private Sub SaveDevices()
         Try
+            If Not File.Exists(_configFile) Then Return
+
+            Dim separator() As String = {"||"}
+            Dim lines = File.ReadAllLines(_configFile)
+
+            ' Snapshot live device config lines, keyed by name
+            Dim liveLines As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
             SyncLock _devList
-                File.WriteAllLines(_configFile, _devList.Select(Function(d) d.ToConfigLine()))
-                _configDate = File.GetLastWriteTime(_configFile)
+                For Each d In _devList
+                    liveLines(d.DevName) = d.ToConfigLine()
+                Next
             End SyncLock
+
+            ' Update only the lines belonging to currently live devices
+            For i = 0 To lines.Length - 1
+                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                If p.Length < 1 Then Continue For
+                Dim name = p(0)
+                If liveLines.ContainsKey(name) Then
+                    lines(i) = liveLines(name)
+                End If
+            Next
+
+            File.WriteAllLines(_configFile, lines)
+            _configDate = File.GetLastWriteTime(_configFile)
         Catch ex As Exception
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
                 _logger.LogError("ERROR saving configuration: {Error}", ex.Message)
@@ -163,9 +280,9 @@ Public Class Worker
 
     ''' <summary>
     ''' Flips a device's Enabled flag to True directly in devices.dat.
-    ''' Used when a CONNECT command arrives for a device that is not in _devList
-    ''' (i.e. it was previously stopped and removed). The next RecreateDisconnectedDevices
-    ''' cycle will see it as enabled and recreate + connect it.
+    ''' Used when a CONNECT command arrives for a device not currently in _devList
+    ''' (it was previously stopped and removed). The next Reconcile() pass will see
+    ''' it as enabled and create + connect it immediately.
     ''' </summary>
     Private Sub EnableDeviceInConfig(devName As String)
         Try
@@ -194,153 +311,41 @@ Public Class Worker
         End Try
     End Sub
 
-    Private Sub LoadDevices()
-        Dim lic = LicenseManager.GetLicenseInfo()
-        If lic.IsLicensed Then
-            Dim limitStr As String = If(lic.MaxPrinters = 0, "Unlimited", lic.MaxPrinters.ToString())
-            _logger.LogInformation("LICENSE: Licensed to {User}. Max concurrent printers: {Count}", lic.LicensedTo, limitStr)
-        Else
-            If Not String.IsNullOrEmpty(lic.Error) Then
-                _logger.LogError("LICENSE ERROR: {Error}", lic.Error)
-            End If
-            _logger.LogWarning("LICENSE: No valid license found. Running in FREE mode (Max 2 printers).")
-        End If
-
-        If Not File.Exists(_configFile) Then Return
-
+    ''' <summary>
+    ''' Flips a device's Enabled flag to False directly in devices.dat.
+    ''' Used when a DISCONNECT command arrives for a device not currently in _devList
+    ''' (it is between retry cycles). Prevents Reconcile() from recreating it.
+    ''' </summary>
+    Private Sub DisableDeviceInConfig(devName As String)
         Try
-            Dim activeDevices As New List(Of Devs)
-            Dim newDevices As New List(Of Devs)
-            Dim loadedCount As Integer = 0
+            If Not File.Exists(_configFile) Then Return
+            Dim separator() As String = {"||"}
             Dim lines = File.ReadAllLines(_configFile)
-
-            For Each line In lines
-                If String.IsNullOrWhiteSpace(line) Then Continue For
-                Dim p = line.Split("||", StringSplitOptions.TrimEntries)
-                If p.Length < 10 Then Continue For
-
-                If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
-
-                Dim devName = p(0)
-                Dim newEnabled = If(p.Length >= 13, (p(12) = "True"), True)
-
-                Dim existing As Devs = Nothing
-                SyncLock _devList
-                    existing = _devList.FirstOrDefault(Function(x) x.DevName.Equals(devName, StringComparison.OrdinalIgnoreCase))
-                End SyncLock
-
-                ' Device exists and is being disabled - disconnect and remove
-                If existing IsNot Nothing AndAlso Not newEnabled Then
-                    _logger.LogInformation("{Dev} is being disabled. Disconnecting and removing.", devName)
-                    existing.Disconnect()
-                    SyncLock _devList
-                        _devList.Remove(existing)
-                    End SyncLock
-                    Continue For
-                End If
-
-                ' Device doesn't exist and is disabled - skip it
-                If existing Is Nothing AndAlso Not newEnabled Then
-                    Continue For
-                End If
-
-                ' Device exists and is enabled - check for connection-critical config changes
-                If existing IsNot Nothing AndAlso newEnabled Then
-                    Dim newConnType = Val(p(3))
-                    Dim newDevDest = p(4)
-                    Dim newOS = CType(Val(p(5)), OSType)
-
-                    Dim needsReconnect = (existing.DevDest <> newDevDest) OrElse
-                                        (existing.OS <> newOS) OrElse
-                                        (existing.ConnType <> newConnType)
-
-                    If Not needsReconnect Then
-                        ' Non-critical settings changed - update in place, no reconnect needed
-                        existing.DevDescription = p(1)
-                        existing.DevType = Val(p(2))
-                        existing.PDF = (p(7) = "True")
-                        existing.Orientation = Val(p(8))
-                        existing.OutDest = p(9)
-
-                        If p.Length >= 12 Then
-                            existing.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
-                            existing.JobNumber = Val(p(11))
-                        End If
-
-                        If p.Length >= 14 Then existing.EmailEnabled = (p(13) = "True")
-                        If p.Length >= 15 Then existing.EmailRecipients = p(14)
-                        If p.Length >= 16 Then existing.SmtpServer = p(15)
-                        If p.Length >= 17 Then existing.SmtpPort = Val(p(16))
-                        If p.Length >= 18 Then existing.SmtpUsername = p(17)
-                        If p.Length >= 19 Then existing.SmtpPassword = p(18)
-                        If p.Length >= 20 Then existing.SmtpUseTLS = (p(19) = "True")
-                        If p.Length >= 21 Then existing.EmailFromAddress = p(20)
-                        If p.Length >= 22 Then existing.EmailFromName = p(21)
-                        If p.Length >= 23 Then existing.EmailSubject = p(22)
-                        If p.Length >= 24 Then existing.EmailBody = p(23)
-
-                        ' Device stays in _devList - just track it as still active
-                        activeDevices.Add(existing)
-                        loadedCount += 1
-                        Continue For
-                    End If
-
-                    ' Connection-critical settings changed - disconnect and recreate
-                    _logger.LogInformation("Connection settings changed for {Dev}. Disconnecting before recreating.", devName)
-                    existing.Disconnect()
-                    SyncLock _devList
-                        _devList.Remove(existing)
-                    End SyncLock
-                    Threading.Thread.Sleep(500)
-                    ' Fall through to create new device
-                End If
-
-                ' Create new device (new or being recreated) - only if enabled
-                If newEnabled Then
-                    Dim d = CreateDevice(p)
-                    If d IsNot Nothing Then
-                        activeDevices.Add(d)
-                        newDevices.Add(d)
-                        loadedCount += 1
-                    End If
+            Dim changed = False
+            For i = 0 To lines.Length - 1
+                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                If p.Length < 13 Then Continue For
+                If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
+                    p(12) = "False"
+                    lines(i) = String.Join("||", p)
+                    changed = True
+                    Exit For
                 End If
             Next
-
-            ' Remove from _devList anything no longer in the config (not in activeDevices)
-            Dim activeNames = New HashSet(Of String)(activeDevices.Select(Function(d) d.DevName), StringComparer.OrdinalIgnoreCase)
-            Dim staleDevices As New List(Of Devs)
-            SyncLock _devList
-                staleDevices.AddRange(_devList.Where(Function(d) Not activeNames.Contains(d.DevName)))
-                For Each d In staleDevices
-                    _devList.Remove(d)
-                Next
-                ' Add the newly created devices to _devList
-                _devList.AddRange(newDevices)
-            End SyncLock
-            _configDate = File.GetLastWriteTime(_configFile)
-
-            ' Disconnect stale devices outside the lock
-            For Each d In staleDevices
-                _registry.Unregister(d)
-                _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
-                d.Disconnect()
-            Next
-
-            ' Connect only the newly created devices
-            For Each d In newDevices
-                _registry.Register(d)
-                d.Connect()
-            Next
-        Catch ex As Exception
-            If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
-                _logger.LogError("ERROR loading configuration: {Error}", ex.Message)
+            If changed Then
+                File.WriteAllLines(_configFile, lines)
+                _configDate = File.GetLastWriteTime(_configFile)
+                _logger.LogInformation("Signal: Disabled {Dev} in config. Auto-reconnect suppressed.", devName)
             End If
+        Catch ex As Exception
+            _logger.LogError("ERROR disabling device {Dev} in config: {Error}", devName, ex.Message)
         End Try
     End Sub
 
     ''' <summary>
     ''' Creates and wires up a new Devs object from a config line token array.
-    ''' Does NOT call Connect() - the caller is responsible for that.
+    ''' Does NOT call Connect() — the caller is responsible for that.
     ''' </summary>
     Private Function CreateDevice(p As String()) As Devs
         Try
@@ -348,17 +353,17 @@ Public Class Worker
             Dim d As New Devs()
             d.DevName = p(0)
             d.DevDescription = p(1)
-            d.DevType = Val(p(2))
-            d.ConnType = Val(p(3))
+            d.DevType = CInt(Val(p(2)))
+            d.ConnType = CInt(Val(p(3)))
             d.DevDest = p(4)
-            d.OS = CType(Val(p(5)), OSType)
+            d.OS = CType(CInt(Val(p(5))), OSType)
             d.PDF = (p(7) = "True")
-            d.Orientation = Val(p(8))
+            d.Orientation = CInt(Val(p(8)))
             d.OutDest = p(9)
 
             If p.Length >= 12 Then
-                d.Shading = CType(Val(p(10)), RenderPDF.ShadingColor)
-                d.JobNumber = Val(p(11))
+                d.Shading = CType(CInt(Val(p(10))), RenderPDF.ShadingColor)
+                d.JobNumber = CInt(Val(p(11)))
             End If
 
             d.Enabled = True
@@ -366,7 +371,7 @@ Public Class Worker
             If p.Length >= 14 Then d.EmailEnabled = (p(13) = "True")
             If p.Length >= 15 Then d.EmailRecipients = p(14)
             If p.Length >= 16 Then d.SmtpServer = p(15)
-            If p.Length >= 17 Then d.SmtpPort = Val(p(16))
+            If p.Length >= 17 Then d.SmtpPort = CInt(Val(p(16)))
             If p.Length >= 18 Then d.SmtpUsername = p(17)
             If p.Length >= 19 Then d.SmtpPassword = p(18)
             If p.Length >= 20 Then d.SmtpUseTLS = (p(19) = "True")
@@ -387,20 +392,6 @@ Public Class Worker
             Return Nothing
         End Try
     End Function
-
-    Private Sub CleanupDevices()
-        Dim devicesSnapshot As List(Of Devs)
-        SyncLock _devList
-            devicesSnapshot = New List(Of Devs)(_devList)
-            _devList.Clear()
-        End SyncLock
-
-        For Each d In devicesSnapshot
-            _registry.Unregister(d)
-            _logger.LogInformation("Device object destroyed: {Dev}", d.DevName)
-            d.Disconnect()
-        Next
-    End Sub
 
     Private Sub Cleanup()
         If _timersDisposed Then Return
@@ -424,15 +415,6 @@ Public Class Worker
             _logger.LogWarning("Error disposing cmd timer: {Error}", ex.Message)
         End Try
 
-        Try
-            If _retryTimer IsNot Nothing Then
-                _retryTimer.Enabled = False
-                _retryTimer.Dispose()
-            End If
-        Catch ex As Exception
-            _logger.LogWarning("Error disposing retry timer: {Error}", ex.Message)
-        End Try
-
         Threading.Thread.Sleep(100)
 
         _logger.LogInformation("Stopping all printer connection tasks...")
@@ -450,6 +432,10 @@ Public Class Worker
         Next
     End Sub
 
+    ''' <summary>
+    ''' Fires every 5 seconds. Triggers Reconcile() when devices.dat has changed,
+    ''' applying any edits made by the web admin or config tool immediately.
+    ''' </summary>
     Private Sub StatTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _statTimer.Elapsed
         If _timersDisposed Then Return
 
@@ -458,7 +444,7 @@ Public Class Worker
                 Dim currentCfgDate = File.GetLastWriteTime(_configFile)
                 If currentCfgDate > _configDate Then
                     _logger.LogInformation("Configuration file change detected.")
-                    LoadDevices()
+                    Reconcile()
                 End If
             End If
         Catch ex As ObjectDisposedException
@@ -470,6 +456,10 @@ Public Class Worker
         End Try
     End Sub
 
+    ''' <summary>
+    ''' Fires every 500 ms. Processes CONNECT and DISCONNECT commands written to
+    ''' commands.dat by the web admin panel.
+    ''' </summary>
     Private Sub CmdTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _cmdTimer.Elapsed
         If _timersDisposed Then Return
         If Not File.Exists(_cmdFile) Then Return
@@ -495,24 +485,32 @@ Public Class Worker
                     Case "CONNECT"
                         _logger.LogInformation("Signal: Manual connect requested for {Dev}", devName)
                         If target IsNot Nothing Then
-                            ' Re-enable in memory and persist before connecting.
+                            ' Device is live but may have Enabled=False (was stopped).
+                            ' Re-enable in memory, persist, then connect.
                             target.Enabled = True
                             SaveDevices()
                             target.Connect()
                         Else
-                            ' Device not in _devList (was stopped) — flip Enabled in devices.dat
-                            ' then immediately recreate and connect it without waiting for next cycle.
+                            ' Device is not in _devList (was stopped and removed, or between
+                            ' retry cycles). Flip Enabled=True in devices.dat then run
+                            ' Reconcile immediately so it reconnects without waiting 15 seconds.
                             EnableDeviceInConfig(devName)
-                            RecreateDisconnectedDevices()
+                            Reconcile()
                         End If
+
                     Case "DISCONNECT"
                         _logger.LogInformation("Signal: Manual disconnect requested for {Dev}", devName)
                         If target IsNot Nothing Then
-                            ' Disable in memory and persist before disconnecting so that
-                            ' OnDeviceDisconnected sees Enabled=False and skips auto-reconnect.
+                            ' Disable in memory and persist BEFORE disconnecting so that
+                            ' OnDeviceDisconnected sees Enabled=False and logs "stopped",
+                            ' and Reconcile() won't recreate it on the next pass.
                             target.Enabled = False
                             SaveDevices()
                             target.Disconnect()
+                        Else
+                            ' Device is between retry cycles (not in _devList but enabled
+                            ' in config). Flip Enabled=False so Reconcile() won't recreate it.
+                            DisableDeviceInConfig(devName)
                         End If
                 End Select
             Next
@@ -521,19 +519,5 @@ Public Class Worker
                 _logger.LogError("ERROR processing command file: {Error}", ex.Message)
             End If
         End Try
-    End Sub
-
-    Private Sub RetryTimer_Elapsed(sender As Object, e As Timers.ElapsedEventArgs) Handles _retryTimer.Elapsed
-        If _timersDisposed Then Return
-
-        ' If we are still within the 2-minute aggressive window, run a reconnect cycle.
-        ' Otherwise, disable this timer and let the 30-second main loop handle it.
-        If DateTime.Now - _lastDisconnectTime < TimeSpan.FromMinutes(2) Then
-            _logger.LogInformation("Retry timer: checking for disconnected devices (aggressive phase).")
-            RecreateDisconnectedDevices()
-        Else
-            _retryTimer.Enabled = False
-            _logger.LogInformation("Retry timer: aggressive phase ended, returning to 30s steady-state cycle.")
-        End If
     End Sub
 End Class

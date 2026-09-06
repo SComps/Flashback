@@ -927,19 +927,16 @@ Public Class WebWorker
                         badgeClass = "badge-connected"
                         statusBadge = $"<span class=""pr-badge {badgeClass}"">Connected</span>"
                         actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
-                    ElseIf dev.Connecting Then
+                    Else
                         badgeClass = "badge-connecting"
                         statusBadge = $"<span class=""pr-badge {badgeClass}"">Connecting...</span>"
                         actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
-                    Else
-                        badgeClass = "badge-disconnected"
-                        statusBadge = $"<span class=""pr-badge {badgeClass}"">Disconnected</span>"
-                        actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
                     End If
                 Else
-                    badgeClass = "badge-disconnected"
-                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Stopped</span>"
-                    actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""connect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-primary"">Start</button></form>"
+                    ' Enabled in config but not currently active — between retry cycles
+                    badgeClass = "badge-connecting"
+                    statusBadge = $"<span class=""pr-badge {badgeClass}"">Retrying...</span>"
+                    actionsHtml = $"<form method=""POST"" action=""admin/action"" style=""display:inline; margin-left:8px;""><input type=""hidden"" name=""cmd"" value=""disconnect"" /><input type=""hidden"" name=""dev"" value=""{WebUtility.HtmlEncode(prName)}"" /><button type=""submit"" class=""btn btn-secondary"">Stop</button></form>"
                 End If
 
                 Dim connTypeName = If(prConnType = 3, "Listener", "Client")
@@ -1156,25 +1153,14 @@ Public Class WebWorker
                     badgeClass = "badge-disconnected"
                     statusText = "Stopped"
                     actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
-                ElseIf liveDevices.ContainsKey(prName) Then
-                    Dim dev = liveDevices(prName)
-                    If dev.Connected Then
-                        badgeClass = "badge-connected"
-                        statusText = "Connected"
-                        actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
-                    ElseIf dev.Connecting Then
-                        badgeClass = "badge-connecting"
-                        statusText = "Connecting..."
-                        actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
-                    Else
-                        badgeClass = "badge-disconnected"
-                        statusText = "Disconnected"
-                        actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
-                    End If
+                ElseIf liveDevices.ContainsKey(prName) AndAlso liveDevices(prName).Connected Then
+                    badgeClass = "badge-connected"
+                    statusText = "Connected"
+                    actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
                 Else
-                    badgeClass = "badge-disconnected"
-                    statusText = "Stopped"
-                    actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='connect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-primary'>Start</button></form>"
+                    badgeClass = "badge-connecting"
+                    statusText = "Retrying..."
+                    actionsHtml = $"<form method='POST' action='admin/action' style='display:inline; margin-left:8px;'><input type='hidden' name='cmd' value='disconnect' /><input type='hidden' name='dev' value='{WebUtility.HtmlEncode(prName)}' /><button type='submit' class='btn btn-secondary'>Stop</button></form>"
                 End If
 
                 ' Escape strings for JSON — replace backslash then quote

@@ -52,8 +52,6 @@ Public Class Devs
 #End If
     Private _cancellationTokenSource As CancellationTokenSource
     Private IsConnected As Boolean = False
-    Private IsConnecting As Boolean = False
-    Private _receivingFlag As Integer = 0  ' 0 = False, 1 = True (for thread-safe access)
 
     Private ReadOnly _connectionLock As New Object()
 
@@ -65,13 +63,6 @@ Public Class Devs
         End Get
     End Property
 
-    Public ReadOnly Property Connecting As Boolean
-        Get
-            SyncLock _connectionLock
-                Return IsConnecting
-            End SyncLock
-        End Get
-    End Property
 
     Private Sub Log(msg As String, Optional col As ConsoleColor = ConsoleColor.White)
         RaiseEvent LogMessage(msg, col)
@@ -92,17 +83,13 @@ Public Class Devs
         End Try
     End Sub
 
+    ''' <summary>
+    ''' Initiates a connection attempt in a background task. Calling Connect() on a
+    ''' freshly created object is the only intended use; the Worker always creates a
+    ''' new Devs instance before connecting, so no re-entry guard is necessary.
+    ''' </summary>
     Public Function ConnectAsync() As Task
-        SyncLock _connectionLock
-            If IsConnected OrElse IsConnecting Then
-                Log($"[{DevName}] Connect() skipped - already connected or connecting.", ConsoleColor.DarkYellow)
-                Return Task.CompletedTask
-            End If
-            IsConnecting = True
-        End SyncLock
-
         Log($"[{DevName}] Connecting to {DevDest}...", ConsoleColor.Cyan)
-
         Return Task.Run(Async Function()
             Try
                 SplitDestination(DevDest)
@@ -113,10 +100,6 @@ Public Class Devs
                 End If
             Catch ex As Exception
                 Log($"[{DevName}] Connection failed: {ex.Message}", ConsoleColor.Yellow)
-            Finally
-                SyncLock _connectionLock
-                    IsConnecting = False
-                End SyncLock
             End Try
         End Function)
     End Function
@@ -293,7 +276,10 @@ Public Class Devs
         Dim buffer(8192) As Byte
         Dim dataBuilder As New StringBuilder()
         Dim lastReceivedTime As DateTime = DateTime.Now
+        Dim lastProbeTime As DateTime = DateTime.Now
         Dim inactivityTimeout As TimeSpan = TimeSpan.FromSeconds(1)
+        Dim keepaliveInterval As TimeSpan = TimeSpan.FromSeconds(30)
+        Dim loggedReceiving As Boolean = False
 
         Try
             While Not cancellationToken.IsCancellationRequested
@@ -326,9 +312,25 @@ Public Class Devs
                         ProcessDocumentData(dataBuilder.ToString())
                         dataBuilder.Clear()
                         lastReceivedTime = DateTime.Now
+                        loggedReceiving = False
+                    End If
+
+                    ' Client-mode keepalive probe: send a null byte every 30 seconds to
+                    ' verify the remote host is still reachable. The remote silently
+                    ' discards the null byte. A send failure means the connection is gone;
+                    ' exit the loop to let StartAsync's Finally trigger the disconnect path.
+                    If ConnType <> 3 AndAlso (DateTime.Now - lastProbeTime) > keepaliveInterval Then
+                        lastProbeTime = DateTime.Now
+                        Try
+                            socket.Send(New Byte() {0})
+                        Catch ex As Exception
+                            Log($"[{DevName}] Connection lost (keepalive probe failed): {ex.Message}", ConsoleColor.Red)
+                            Exit While
+                        End Try
                     End If
                 Else
-                    If Interlocked.CompareExchange(_receivingFlag, 1, 0) = 0 Then
+                    If Not loggedReceiving Then
+                        loggedReceiving = True
                         If ConnType = 3 Then
                             Log($"[{DevName}] receiving raw data from stream.", ConsoleColor.Yellow)
                         ElseIf OS <> OSType.OS_RSTS AndAlso OS <> OSType.OS_NOS278 Then
@@ -415,7 +417,6 @@ Public Class Devs
             lines.RemoveAt(lines.Count - 1)
         End If
 
-        Interlocked.Exchange(_receivingFlag, 0)
         If ConnType = 3 OrElse lines.Count > 9 Then
             Dim docCopy = New List(Of String)(lines)
             Task.Run(Sub() ProcessDocument(docCopy))
@@ -476,7 +477,6 @@ Public Class Devs
         Finally
             SyncLock _connectionLock
                 IsConnected = False
-                IsConnecting = False
             End SyncLock
             Log($"[{DevName}] Disconnect() completed.", ConsoleColor.Cyan)
         End Try
