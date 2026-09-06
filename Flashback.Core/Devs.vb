@@ -83,12 +83,19 @@ Public Class Devs
         End Try
     End Sub
 
+    Private _connectStarted As Integer = 0
+
     ''' <summary>
     ''' Initiates a connection attempt in a background task. Calling Connect() on a
-    ''' freshly created object is the only intended use; the Worker always creates a
-    ''' new Devs instance before connecting, so no re-entry guard is necessary.
+    ''' freshly created object is the only intended use. Protected against multiple
+    ''' calls via _connectStarted.
     ''' </summary>
     Public Function ConnectAsync() As Task
+        If Interlocked.CompareExchange(_connectStarted, 1, 0) <> 0 Then
+            Log($"[{DevName}] Connect skipped: connection attempt already started.", ConsoleColor.DarkYellow)
+            Return Task.CompletedTask
+        End If
+
         Log($"[{DevName}] Connecting to {DevDest}...", ConsoleColor.Cyan)
         Return Task.Run(Async Function()
             Try
@@ -97,6 +104,7 @@ Public Class Devs
                     Await StartAsync()
                 Else
                     Log($"[{DevName}] Connect skipped: invalid port in destination '{DevDest}'.", ConsoleColor.DarkYellow)
+                    RaiseEvent Disconnected(Me)
                 End If
             Catch ex As Exception
                 Log($"[{DevName}] Connection failed: {ex.Message}", ConsoleColor.Yellow)
@@ -315,16 +323,22 @@ Public Class Devs
                         loggedReceiving = False
                     End If
 
-                    ' Client-mode keepalive probe: send a null byte every 30 seconds to
-                    ' verify the remote host is still reachable. The remote silently
+                    ' Client-mode keepalive probe: send a null byte every 30 seconds of
+                    ' idle time to verify the remote is still reachable. The remote silently
                     ' discards the null byte. A send failure means the connection is gone;
                     ' exit the loop to let StartAsync's Finally trigger the disconnect path.
+                    ' Snapshot socket to a local to avoid a NullReferenceException race if
+                    ' Disconnect() is called concurrently from another thread.
                     If ConnType <> 3 AndAlso (DateTime.Now - lastProbeTime) > keepaliveInterval Then
                         lastProbeTime = DateTime.Now
+                        Dim localSocket = socket
+                        If localSocket Is Nothing OrElse Not localSocket.Connected Then Exit While
                         Try
-                            socket.Send(New Byte() {0})
-                        Catch ex As Exception
+                            localSocket.Send(New Byte() {0})
+                        Catch ex As Net.Sockets.SocketException
                             Log($"[{DevName}] Connection lost (keepalive probe failed): {ex.Message}", ConsoleColor.Red)
+                            Exit While
+                        Catch ex As ObjectDisposedException
                             Exit While
                         End Try
                     End If
@@ -350,6 +364,7 @@ Public Class Devs
                     End If
                     dataBuilder.Append(Encoding.UTF8.GetString(buffer, 0, recd))
                     lastReceivedTime = DateTime.Now
+                    lastProbeTime = DateTime.Now  ' Data proves connection is alive; reset probe timer
                 End If
             End While
         Catch ex As OperationCanceledException

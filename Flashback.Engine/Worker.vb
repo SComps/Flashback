@@ -22,6 +22,10 @@ Public Class Worker
     ' the next tick will pick up any remaining work.
     Private ReadOnly _reconcileLock As New Object()
 
+    ' Synchronizes all reads and writes to devices.dat across threads (SaveDevices,
+    ' EnableDeviceInConfig, DisableDeviceInConfig, Reconcile, and StatTimer).
+    Private ReadOnly _configFileLock As New Object()
+
     Public Sub New(logger As ILogger(Of Worker), registry As PrinterRegistry)
         _logger = logger
         _registry = registry
@@ -80,11 +84,14 @@ Public Class Worker
     Private Sub Reconcile()
         If Not Monitor.TryEnter(_reconcileLock) Then Return
         Try
-            If Not File.Exists(_configFile) Then Return
+            Dim lines As String()
+            SyncLock _configFileLock
+                If Not File.Exists(_configFile) Then Return
+                _configDate = File.GetLastWriteTime(_configFile)
+                lines = File.ReadAllLines(_configFile)
+            End SyncLock
 
-            _configDate = File.GetLastWriteTime(_configFile)
             Dim lic = LicenseManager.GetLicenseInfo()
-            Dim lines = File.ReadAllLines(_configFile)
             Dim configNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
             Dim loadedCount As Integer
 
@@ -228,6 +235,7 @@ Public Class Worker
             _devList.Remove(dev)
         End SyncLock
         _registry.Unregister(dev)
+        RemoveHandler dev.Disconnected, AddressOf OnDeviceDisconnected
 
         If dev.Enabled Then
             _logger.LogInformation("{Dev} disconnected. Will reconnect on next cycle.", dev.DevName)
@@ -245,32 +253,34 @@ Public Class Worker
     ''' </summary>
     Private Sub SaveDevices()
         Try
-            If Not File.Exists(_configFile) Then Return
+            SyncLock _configFileLock
+                If Not File.Exists(_configFile) Then Return
 
-            Dim separator() As String = {"||"}
-            Dim lines = File.ReadAllLines(_configFile)
+                Dim separator() As String = {"||"}
+                Dim lines = File.ReadAllLines(_configFile)
 
-            ' Snapshot live device config lines, keyed by name
-            Dim liveLines As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
-            SyncLock _devList
-                For Each d In _devList
-                    liveLines(d.DevName) = d.ToConfigLine()
+                ' Snapshot live device config lines, keyed by name
+                Dim liveLines As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+                SyncLock _devList
+                    For Each d In _devList
+                        liveLines(d.DevName) = d.ToConfigLine()
+                    Next
+                End SyncLock
+
+                ' Update only the lines belonging to currently live devices
+                For i = 0 To lines.Length - 1
+                    If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                    Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                    If p.Length < 1 Then Continue For
+                    Dim name = p(0)
+                    If liveLines.ContainsKey(name) Then
+                        lines(i) = liveLines(name)
+                    End If
                 Next
+
+                File.WriteAllLines(_configFile, lines)
+                _configDate = File.GetLastWriteTime(_configFile)
             End SyncLock
-
-            ' Update only the lines belonging to currently live devices
-            For i = 0 To lines.Length - 1
-                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
-                Dim p = lines(i).Split(separator, StringSplitOptions.None)
-                If p.Length < 1 Then Continue For
-                Dim name = p(0)
-                If liveLines.ContainsKey(name) Then
-                    lines(i) = liveLines(name)
-                End If
-            Next
-
-            File.WriteAllLines(_configFile, lines)
-            _configDate = File.GetLastWriteTime(_configFile)
         Catch ex As Exception
             If Not ex.Message.ToUpper().Contains("PDFSHARP") Then
                 _logger.LogError("ERROR saving configuration: {Error}", ex.Message)
@@ -286,26 +296,28 @@ Public Class Worker
     ''' </summary>
     Private Sub EnableDeviceInConfig(devName As String)
         Try
-            If Not File.Exists(_configFile) Then Return
-            Dim separator() As String = {"||"}
-            Dim lines = File.ReadAllLines(_configFile)
-            Dim changed = False
-            For i = 0 To lines.Length - 1
-                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
-                Dim p = lines(i).Split(separator, StringSplitOptions.None)
-                If p.Length < 13 Then Continue For
-                If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
-                    p(12) = "True"
-                    lines(i) = String.Join("||", p)
-                    changed = True
-                    Exit For
+            SyncLock _configFileLock
+                If Not File.Exists(_configFile) Then Return
+                Dim separator() As String = {"||"}
+                Dim lines = File.ReadAllLines(_configFile)
+                Dim changed = False
+                For i = 0 To lines.Length - 1
+                    If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                    Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                    If p.Length < 13 Then Continue For
+                    If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
+                        p(12) = "True"
+                        lines(i) = String.Join("||", p)
+                        changed = True
+                        Exit For
+                    End If
+                Next
+                If changed Then
+                    File.WriteAllLines(_configFile, lines)
+                    _configDate = File.GetLastWriteTime(_configFile)
+                    _logger.LogInformation("Signal: Re-enabled {Dev} in config. Will reconnect on next cycle.", devName)
                 End If
-            Next
-            If changed Then
-                File.WriteAllLines(_configFile, lines)
-                _configDate = File.GetLastWriteTime(_configFile)
-                _logger.LogInformation("Signal: Re-enabled {Dev} in config. Will reconnect on next cycle.", devName)
-            End If
+            End SyncLock
         Catch ex As Exception
             _logger.LogError("ERROR enabling device {Dev} in config: {Error}", devName, ex.Message)
         End Try
@@ -318,26 +330,28 @@ Public Class Worker
     ''' </summary>
     Private Sub DisableDeviceInConfig(devName As String)
         Try
-            If Not File.Exists(_configFile) Then Return
-            Dim separator() As String = {"||"}
-            Dim lines = File.ReadAllLines(_configFile)
-            Dim changed = False
-            For i = 0 To lines.Length - 1
-                If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
-                Dim p = lines(i).Split(separator, StringSplitOptions.None)
-                If p.Length < 13 Then Continue For
-                If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
-                    p(12) = "False"
-                    lines(i) = String.Join("||", p)
-                    changed = True
-                    Exit For
+            SyncLock _configFileLock
+                If Not File.Exists(_configFile) Then Return
+                Dim separator() As String = {"||"}
+                Dim lines = File.ReadAllLines(_configFile)
+                Dim changed = False
+                For i = 0 To lines.Length - 1
+                    If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
+                    Dim p = lines(i).Split(separator, StringSplitOptions.None)
+                    If p.Length < 13 Then Continue For
+                    If p(0).Equals(devName, StringComparison.OrdinalIgnoreCase) Then
+                        p(12) = "False"
+                        lines(i) = String.Join("||", p)
+                        changed = True
+                        Exit For
+                    End If
+                Next
+                If changed Then
+                    File.WriteAllLines(_configFile, lines)
+                    _configDate = File.GetLastWriteTime(_configFile)
+                    _logger.LogInformation("Signal: Disabled {Dev} in config. Auto-reconnect suppressed.", devName)
                 End If
-            Next
-            If changed Then
-                File.WriteAllLines(_configFile, lines)
-                _configDate = File.GetLastWriteTime(_configFile)
-                _logger.LogInformation("Signal: Disabled {Dev} in config. Auto-reconnect suppressed.", devName)
-            End If
+            End SyncLock
         Catch ex As Exception
             _logger.LogError("ERROR disabling device {Dev} in config: {Error}", devName, ex.Message)
         End Try
@@ -440,12 +454,19 @@ Public Class Worker
         If _timersDisposed Then Return
 
         Try
-            If File.Exists(_configFile) Then
-                Dim currentCfgDate = File.GetLastWriteTime(_configFile)
-                If currentCfgDate > _configDate Then
-                    _logger.LogInformation("Configuration file change detected.")
-                    Reconcile()
+            Dim shouldReconcile As Boolean = False
+            SyncLock _configFileLock
+                If File.Exists(_configFile) Then
+                    Dim currentCfgDate = File.GetLastWriteTime(_configFile)
+                    If currentCfgDate > _configDate Then
+                        shouldReconcile = True
+                    End If
                 End If
+            End SyncLock
+
+            If shouldReconcile Then
+                _logger.LogInformation("Configuration file change detected.")
+                Reconcile()
             End If
         Catch ex As ObjectDisposedException
             Return
@@ -465,8 +486,14 @@ Public Class Worker
         If Not File.Exists(_cmdFile) Then Return
 
         Try
-            Dim lines = File.ReadAllLines(_cmdFile)
-            File.Delete(_cmdFile)
+            Dim lines As String()
+            Try
+                lines = File.ReadAllLines(_cmdFile)
+                File.Delete(_cmdFile)
+            Catch ex As IOException
+                ' WebWorker or admin panel may be actively writing; retry next tick
+                Return
+            End Try
 
             For Each line In lines
                 If String.IsNullOrWhiteSpace(line) Then Continue For
@@ -485,11 +512,14 @@ Public Class Worker
                     Case "CONNECT"
                         _logger.LogInformation("Signal: Manual connect requested for {Dev}", devName)
                         If target IsNot Nothing Then
-                            ' Device is live but may have Enabled=False (was stopped).
-                            ' Re-enable in memory, persist, then connect.
+                            ' Device object is already created and in _devList
                             target.Enabled = True
                             SaveDevices()
-                            target.Connect()
+                            If target.Connected Then
+                                _logger.LogInformation("{Dev} is already connected.", devName)
+                            Else
+                                _logger.LogInformation("{Dev} connection attempt is already in progress.", devName)
+                            End If
                         Else
                             ' Device is not in _devList (was stopped and removed, or between
                             ' retry cycles). Flip Enabled=True in devices.dat then run
