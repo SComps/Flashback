@@ -29,6 +29,7 @@
     <File Path="scripts/FlashbackInstaller.iss" />
     <File Path="scripts/flashback_setup.iss" />
     <File Path="scripts/publish_license_generator.sh" />
+    <File Path="scripts/publish_freebsd.sh" />
     <File Path="scripts/publish_linux.sh" />
     <File Path="scripts/publish_windows.ps1" />
     <File Path="scripts/publish_winui.ps1" />

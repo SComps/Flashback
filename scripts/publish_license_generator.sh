@@ -3,14 +3,30 @@
 # Publishes to the same directory as other Flashback components
 set -e
 
-# Detect Architecture
+# Resolve script and repository directories
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Detect OS and Architecture
+OS=$(uname -s)
 ARCH=$(uname -m)
-case $ARCH in
-    x86_64)  RID="linux-x64" ;;
-    aarch64) RID="linux-arm64" ;;
-    armv7l)  RID="linux-arm" ;;
-    *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
-esac
+
+if [ "$OS" = "FreeBSD" ]; then
+    case $ARCH in
+        amd64|x86_64)  RID="freebsd-x64" ;;
+        arm64|aarch64) RID="freebsd-arm64" ;;
+        *)             echo "Unknown architecture: $ARCH. Defaulting to freebsd-x64."; RID="freebsd-x64" ;;
+    esac
+    PUB_EXTRA_FLAGS="/p:PublishSingleFile=true /p:PublishAot=false"
+else
+    case $ARCH in
+        x86_64)  RID="linux-x64" ;;
+        aarch64) RID="linux-arm64" ;;
+        armv7l)  RID="linux-arm" ;;
+        *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
+    esac
+    PUB_EXTRA_FLAGS="/p:PublishAot=true"
+fi
 
 # Define default path (outside the git tree) and prompt user
 DEFAULT_PUBLISH_DIR="$HOME/flashback-publish"
@@ -37,16 +53,16 @@ else
 fi
 mkdir -p "$PUBLISH_DIR"
 
-echo "Publishing Flashback.LicenseGenerator.Console for $ARCH ($RID)..."
+echo "Publishing Flashback.LicenseGenerator.Console for $OS $ARCH ($RID)..."
 
 # Publish License Generator Console
 echo "-> Publishing Flashback.LicenseGenerator.Console..."
-dotnet publish Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj \
+dotnet publish "$REPO_ROOT/Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" \
     -c Release \
     -r $RID \
     -f net9.0 \
     --self-contained true \
-    /p:PublishAot=true \
+    $PUB_EXTRA_FLAGS \
     /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"

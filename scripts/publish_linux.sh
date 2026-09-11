@@ -3,6 +3,17 @@
 # NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 set -e
 
+# Check if running on FreeBSD
+if [ "$(uname -s)" = "FreeBSD" ]; then
+    echo "Error: FreeBSD detected. Native AOT is not supported on FreeBSD."
+    echo "Please use ./publish_freebsd.sh instead."
+    exit 1
+fi
+
+# Resolve script and repository directories
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Detect Architecture
 ARCH=$(uname -m)
 case $ARCH in
@@ -45,18 +56,18 @@ echo "(Note: UI components like WPF, WinUI, and Tray are Windows-only and exclud
 
 # 1. Engine (Service/Daemon)
 echo "-> Publishing Flashback.Engine..."
-dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish "$REPO_ROOT/Flashback.Engine/Flashback.Engine.vbproj" -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 2. Console Configuration Tool
 echo "-> Publishing Flashback.Config.Console..."
-dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish "$REPO_ROOT/Flashback.Config.Console/Flashback.Config.Console.vbproj" -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 3. 3270 Terminal Configuration Tool
 echo "-> Publishing Flashback.Config.3270..."
-dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish "$REPO_ROOT/Flashback.Config.3270/Flashback.Config.3270.vbproj" -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 4. Spooler Service
 echo "-> Publishing Flashback.Spooler..."
-dotnet publish ../Flashback.Spooler/Flashback.Spooler.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish "$REPO_ROOT/Flashback.Spooler/Flashback.Spooler.vbproj" -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
