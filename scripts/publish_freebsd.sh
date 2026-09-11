@@ -38,28 +38,45 @@ mkdir -p "$PUBLISH_DIR"
 echo "Cleaning up old binaries (preserving config and licenses)..."
 find "$PUBLISH_DIR" -maxdepth 1 -type f ! -name "*.dat" ! -name "*.lic" -delete
 
-echo "Publishing Flashback Suite for FreeBSD $ARCH ($RID)..."
-echo "(Note: Native AOT is unsupported on FreeBSD; publishing self-contained single-file binaries)"
+echo "Publishing Flashback Suite for FreeBSD $ARCH..."
+echo "(Note: FreeBSD uses system dotnet runtime; publishing framework-dependent binaries with executable launchers)"
 echo "(Note: UI components like WPF, WinUI, and Tray are Windows-only and excluded)"
 
 # Common publish arguments:
-# Single-file self-contained publish with PublishAot disabled.
-PUB_ARGS="-c Release -r $RID -f net9.0 --self-contained true /p:PublishSingleFile=true /p:PublishAot=false /p:PublishDir=$PUBLISH_DIR"
+# Framework-dependent publish without RID to use the FreeBSD host's dotnet runtime.
+PUB_ARGS="-c Release -f net9.0 --no-self-contained /p:PublishAot=false /p:PublishDir=$PUBLISH_DIR"
+
+# Helper to create executable launchers
+create_launcher() {
+    _bin="$1"
+    _dll="$2"
+    cat << EOF > "$PUBLISH_DIR/$_bin"
+#!/bin/sh
+APP_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+exec dotnet "\$APP_DIR/$_dll" "\$@"
+EOF
+    chmod +x "$PUBLISH_DIR/$_bin"
+}
 
 # 1. Engine (Service/Daemon)
 echo "-> Publishing Flashback.Engine..."
 dotnet publish "$REPO_ROOT/Flashback.Engine/Flashback.Engine.vbproj" $PUB_ARGS
+create_launcher "Flashback.Engine" "Flashback.Engine.dll"
 
 # 2. Console Configuration Tool
 echo "-> Publishing Flashback.Config.Console..."
 dotnet publish "$REPO_ROOT/Flashback.Config.Console/Flashback.Config.Console.vbproj" $PUB_ARGS
+create_launcher "Flashback.Config.Console" "Flashback.Config.Console.dll"
 
 # 3. 3270 Terminal Configuration Tool
 echo "-> Publishing Flashback.Config.3270..."
 dotnet publish "$REPO_ROOT/Flashback.Config.3270/Flashback.Config.3270.vbproj" $PUB_ARGS
+create_launcher "Flashback.Config.3270" "Flashback.Config.3270.dll"
 
 # 4. Spooler Service
 echo "-> Publishing Flashback.Spooler..."
 dotnet publish "$REPO_ROOT/Flashback.Spooler/Flashback.Spooler.vbproj" $PUB_ARGS
+create_launcher "Flashback.Spooler" "Flashback.Spooler.dll"
 
 printf "\n\033[1;32mPublish complete! Files located in: %s\033[0m\n" "$PUBLISH_DIR"
+printf "You can run components directly using ./Flashback.Engine, ./Flashback.Config.Console, etc.\n"

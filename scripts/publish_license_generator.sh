@@ -10,24 +10,6 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Detect OS and Architecture
 OS=$(uname -s)
 ARCH=$(uname -m)
-
-if [ "$OS" = "FreeBSD" ]; then
-    case $ARCH in
-        amd64|x86_64)  RID="freebsd-x64" ;;
-        arm64|aarch64) RID="freebsd-arm64" ;;
-        *)             echo "Unknown architecture: $ARCH. Defaulting to freebsd-x64."; RID="freebsd-x64" ;;
-    esac
-    PUB_EXTRA_FLAGS="/p:PublishSingleFile=true /p:PublishAot=false"
-else
-    case $ARCH in
-        x86_64)  RID="linux-x64" ;;
-        aarch64) RID="linux-arm64" ;;
-        armv7l)  RID="linux-arm" ;;
-        *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
-    esac
-    PUB_EXTRA_FLAGS="/p:PublishAot=true"
-fi
-
 # Define default path (outside the git tree) and prompt user
 DEFAULT_PUBLISH_DIR="$HOME/flashback-publish"
 
@@ -53,17 +35,40 @@ else
 fi
 mkdir -p "$PUBLISH_DIR"
 
-echo "Publishing Flashback.LicenseGenerator.Console for $OS $ARCH ($RID)..."
+if [ "$OS" = "FreeBSD" ]; then
+    echo "Publishing Flashback.LicenseGenerator.Console for FreeBSD $ARCH..."
+    echo "(Note: FreeBSD uses system dotnet runtime; publishing framework-dependent binaries)"
+    dotnet publish "$REPO_ROOT/Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" \
+        -c Release \
+        -f net9.0 \
+        --no-self-contained \
+        /p:PublishAot=false \
+        /p:PublishDir="$PUBLISH_DIR"
 
-# Publish License Generator Console
-echo "-> Publishing Flashback.LicenseGenerator.Console..."
-dotnet publish "$REPO_ROOT/Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" \
-    -c Release \
-    -r $RID \
-    -f net9.0 \
-    --self-contained true \
-    $PUB_EXTRA_FLAGS \
-    /p:PublishDir="$PUBLISH_DIR"
+    # Create launcher
+    cat << EOF > "$PUBLISH_DIR/Flashback.LicenseGenerator.Console"
+#!/bin/sh
+APP_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+exec dotnet "\$APP_DIR/Flashback.LicenseGenerator.Console.dll" "\$@"
+EOF
+    chmod +x "$PUBLISH_DIR/Flashback.LicenseGenerator.Console"
+else
+    case $ARCH in
+        x86_64)  RID="linux-x64" ;;
+        aarch64) RID="linux-arm64" ;;
+        armv7l)  RID="linux-arm" ;;
+        *)       echo "Unknown architecture: $ARCH. Defaulting to x64."; RID="linux-x64" ;;
+    esac
+
+    echo "Publishing Flashback.LicenseGenerator.Console for Linux $ARCH ($RID)..."
+    dotnet publish "$REPO_ROOT/Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" \
+        -c Release \
+        -r $RID \
+        -f net9.0 \
+        --self-contained true \
+        /p:PublishAot=true \
+        /p:PublishDir="$PUBLISH_DIR"
+fi
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
 
