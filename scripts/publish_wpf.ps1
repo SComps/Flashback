@@ -37,7 +37,7 @@ Write-Host "`n-> Publishing Flashback.Config.WPF (Single File)..." -ForegroundCo
 dotnet publish ..\Flashback.Config.WPF\Flashback.Config.WPF.vbproj `
     -c Release `
     -r win-x64 `
-    -f net10.0-windows `
+    -f net9.0-windows `
     --self-contained true `
     /p:PublishSingleFile=true `
     /p:IncludeNativeLibrariesForSelfExtract=true `

@@ -30,6 +30,6 @@ New-Item -ItemType Directory -Force $PublishDir | Out-Null
 Write-Host "Publishing Flashback.Config.WinUI..." -ForegroundColor Cyan
 
 # WinUI 3 cannot be single-file or AOT; publishes as a folder
-dotnet publish ..\Flashback.Config.WinUI\Flashback.Config.WinUI.csproj -c Release -r win-x64 -f net10.0-windows10.0.19041.0 --self-contained true /p:PublishDir=$PublishDir /p:WindowsAppSDKSelfContained=true /p:SatelliteResourceLanguages=en
+dotnet publish ..\Flashback.Config.WinUI\Flashback.Config.WinUI.csproj -c Release -r win-x64 -f net9.0-windows10.0.19041.0 --self-contained true /p:PublishDir=$PublishDir /p:WindowsAppSDKSelfContained=true /p:SatelliteResourceLanguages=en
 
 Write-Host "`nPublish complete! Files located in: $PublishDir" -ForegroundColor Green

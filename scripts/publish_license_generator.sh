@@ -44,7 +44,7 @@ echo "-> Publishing Flashback.LicenseGenerator.Console..."
 dotnet publish Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj \
     -c Release \
     -r $RID \
-    -f net10.0 \
+    -f net9.0 \
     --self-contained true \
     /p:PublishAot=true \
     /p:PublishDir="$PUBLISH_DIR"

@@ -52,24 +52,24 @@ $SingleFileFlags = @(
     "/p:PublishDir=$PublishDir"
 )
 
-# Engine (cross-platform service host — net10.0, Single File)
+# Engine (cross-platform service host — net9.0, Single File)
 Write-Host "-> Publishing Flashback.Engine (Single File)..."
-dotnet publish ..\Flashback.Engine\Flashback.Engine.vbproj -c Release -r win-x64 -f net10.0 @SingleFileFlags
+dotnet publish ..\Flashback.Engine\Flashback.Engine.vbproj -c Release -r win-x64 -f net9.0 @SingleFileFlags
 
-# Console Config (cross-platform — net10.0, Single File)
+# Console Config (cross-platform — net9.0, Single File)
 Write-Host "-> Publishing Flashback.Config.Console (Single File)..."
-dotnet publish ..\Flashback.Config.Console\Flashback.Config.Console.vbproj -c Release -r win-x64 -f net10.0 @SingleFileFlags
+dotnet publish ..\Flashback.Config.Console\Flashback.Config.Console.vbproj -c Release -r win-x64 -f net9.0 @SingleFileFlags
 
-# 3270 Config (cross-platform — net10.0, Single File)
+# 3270 Config (cross-platform — net9.0, Single File)
 Write-Host "-> Publishing Flashback.Config.3270 (Single File)..."
-dotnet publish ..\Flashback.Config.3270\Flashback.Config.3270.vbproj -c Release -r win-x64 -f net10.0 @SingleFileFlags
+dotnet publish ..\Flashback.Config.3270\Flashback.Config.3270.vbproj -c Release -r win-x64 -f net9.0 @SingleFileFlags
 
-# Spooler Service (cross-platform — net10.0, Single File)
+# Spooler Service (cross-platform — net9.0, Single File)
 Write-Host "-> Publishing Flashback.Spooler (Single File)..."
-dotnet publish ..\Flashback.Spooler\Flashback.Spooler.vbproj -c Release -r win-x64 -f net10.0 @SingleFileFlags
+dotnet publish ..\Flashback.Spooler\Flashback.Spooler.vbproj -c Release -r win-x64 -f net9.0 @SingleFileFlags
 
-# Tray Controller (WinForms — net10.0-windows, Single File, no AOT)
+# Tray Controller (WinForms — net9.0-windows, Single File, no AOT)
 Write-Host "-> Publishing Flashback.Tray (Single File)..."
-dotnet publish ..\Flashback.Tray\Flashback.Tray.vbproj -c Release -r win-x64 -f net10.0-windows --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true /p:PublishDir=$PublishDir
+dotnet publish ..\Flashback.Tray\Flashback.Tray.vbproj -c Release -r win-x64 -f net9.0-windows --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true /p:PublishDir=$PublishDir
 
 Write-Host "`nPublish complete! Files located in: $PublishDir" -ForegroundColor Green

@@ -246,6 +246,7 @@ Public Class MainForm
     Private Sub OpenWPFTool()
         Try
             Dim path = "Flashback.Config.WPF.exe"
+            If Not File.Exists(path) Then path = "..\Flashback.Config.WPF\bin\Debug\net9.0-windows\Flashback.Config.WPF.exe"
             If Not File.Exists(path) Then path = "..\Flashback.Config.WPF\bin\Debug\net10.0-windows\Flashback.Config.WPF.exe"
             Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
         Catch ex As Exception
@@ -256,6 +257,7 @@ Public Class MainForm
     Private Sub OpenWinUITool()
         Try
             Dim path = "Flashback.Config.WinUI.exe"
+            If Not File.Exists(path) Then path = "..\Flashback.Config.WinUI\bin\x64\Debug\net9.0-windows10.0.19041.0\Flashback.Config.WinUI.exe"
             If Not File.Exists(path) Then path = "..\Flashback.Config.WinUI\bin\x64\Debug\net10.0-windows10.0.19041.0\Flashback.Config.WinUI.exe"
             Process.Start(New ProcessStartInfo(path) With {.UseShellExecute = True})
         Catch ex As Exception

@@ -45,18 +45,18 @@ echo "(Note: UI components like WPF, WinUI, and Tray are Windows-only and exclud
 
 # 1. Engine (Service/Daemon)
 echo "-> Publishing Flashback.Engine..."
-dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Engine/Flashback.Engine.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 2. Console Configuration Tool
 echo "-> Publishing Flashback.Config.Console..."
-dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Config.Console/Flashback.Config.Console.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 3. 3270 Terminal Configuration Tool
 echo "-> Publishing Flashback.Config.3270..."
-dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Config.3270/Flashback.Config.3270.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 # 4. Spooler Service
 echo "-> Publishing Flashback.Spooler..."
-dotnet publish ../Flashback.Spooler/Flashback.Spooler.vbproj -c Release -r $RID -f net10.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
+dotnet publish ../Flashback.Spooler/Flashback.Spooler.vbproj -c Release -r $RID -f net9.0 --self-contained true /p:PublishAot=true /p:PublishDir="$PUBLISH_DIR"
 
 echo -e "\nPublish complete! Files located in: $PUBLISH_DIR"
