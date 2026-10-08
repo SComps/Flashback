@@ -17,9 +17,10 @@ Imports System.Text
 '''       All other parameterised sequences → discard
 '''
 ''' Control-character mapping:
-'''   CR alone (not followed by LF) → LF
-'''   CR + LF                       → LF   (already proper; CR discarded)
-'''   FF (0x0C)                     → FF   (page break, kept)
+'''   CR followed by ESC&a (row-move) → discard CR; row-move emits the LF (avoids double-spacing)
+'''   CR alone (not followed by LF)   → LF
+'''   CR + LF                         → LF   (already proper; CR discarded)
+'''   FF (0x0C)                       → FF   (page break, kept)
 '''   All other C0 controls (&lt; 0x20, not LF/FF) → discard
 ''' </summary>
 Public Class PclStripper
@@ -88,8 +89,23 @@ Public Class PclStripper
                 End If
 
             ElseIf b = &H0D Then        ' CR
-                ' Peek at next byte
-                If i + 1 < input.Length AndAlso input(i + 1) = &H0A Then
+                ' Peek ahead: if the next non-LF byte is ESC&a (a row-move sequence),
+                ' suppress this CR — the row-move itself will emit the LF, and emitting
+                ' one here too would produce unwanted double-spacing on banner lines.
+                Dim peekIdx As Integer = i + 1
+                If peekIdx < input.Length AndAlso input(peekIdx) = &H0A Then peekIdx += 1  ' skip LF if CR+LF
+                Dim followedByRowMove As Boolean = (peekIdx + 2 < input.Length AndAlso
+                                                    input(peekIdx) = &H1B AndAlso
+                                                    input(peekIdx + 1) = AscW("&") AndAlso
+                                                    input(peekIdx + 2) = AscW("a"))
+                If followedByRowMove Then
+                    ' Discard CR (and LF if present) — the row-move provides the line break
+                    If i + 1 < input.Length AndAlso input(i + 1) = &H0A Then
+                        i += 2
+                    Else
+                        i += 1
+                    End If
+                ElseIf i + 1 < input.Length AndAlso input(i + 1) = &H0A Then
                     ' CR+LF — emit single LF, skip both
                     out.Add(&H0A)
                     i += 2
