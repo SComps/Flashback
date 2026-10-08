@@ -111,7 +111,7 @@ Public Class Port9100Listener
                     
                     ' Write to spool file
                     Await _spoolManager.WriteToSpoolFileAsync(spoolFilePath, buffer.Take(bytesRead).ToArray(), cancellationToken)
-                    
+
                     totalBytes += bytesRead
                     lastReceivedTime = DateTime.Now
                     
@@ -123,11 +123,20 @@ Public Class Port9100Listener
                     End If
                 End While
                 
+                ' Strip PCL from the completed spool file so the .dat contains clean text
+                If _config.StripPCL Then
+                    Dim raw As Byte() = File.ReadAllBytes(spoolFilePath)
+                    Dim clean As Byte() = PclStripper.Strip(raw)
+                    File.WriteAllBytes(spoolFilePath, clean)
+                    _logger.LogDebug("Job {JobId} PCL strip: {Before} → {After} bytes", job.JobId, raw.Length, clean.Length)
+                    totalBytes = clean.Length
+                End If
+
                 ' Job complete
                 job.FileSize = totalBytes
                 job.State = JobState.Spooled
-                
-                _logger.LogInformation("Job {JobId} received successfully. Size: {Size} bytes", 
+
+                _logger.LogInformation("Job {JobId} received successfully. Size: {Size} bytes",
                                      job.JobId, totalBytes)
                 
                 ' Add to queue for transmission

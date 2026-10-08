@@ -25,7 +25,7 @@ Public Class SpoolerWorker
         _spoolManager = New SpoolManager(logger, _config.Storage)
         _jobQueue = New JobQueue(logger, _config.Behavior)
         _port9100Listener = New Port9100Listener(logger, _config.Behavior, _spoolManager, _jobQueue)
-        _engineListener = New EngineListener(logger, _config.Listener, _config.Behavior, _spoolManager, _jobQueue)
+        _engineListener = New EngineListener(logger, _config.Listener, _spoolManager, _jobQueue)
         
         ' Setup cleanup timer (runs every hour)
         _cleanupTimer = New System.Timers.Timer(3600000) ' 1 hour
