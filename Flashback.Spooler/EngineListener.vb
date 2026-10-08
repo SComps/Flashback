@@ -8,6 +8,7 @@ Imports Microsoft.Extensions.Logging
 Public Class EngineListener
     Private ReadOnly _logger As ILogger
     Private ReadOnly _config As ListenerConfig
+    Private ReadOnly _behaviorConfig As BehaviorConfig
     Private ReadOnly _spoolManager As SpoolManager
     Private ReadOnly _jobQueue As JobQueue
     Private _listener As TcpListener
@@ -17,9 +18,10 @@ Public Class EngineListener
     Private _isRunning As Boolean = False
     Private _isEngineConnected As Boolean = False
 
-    Public Sub New(logger As ILogger, config As ListenerConfig, spoolManager As SpoolManager, jobQueue As JobQueue)
+    Public Sub New(logger As ILogger, config As ListenerConfig, behaviorConfig As BehaviorConfig, spoolManager As SpoolManager, jobQueue As JobQueue)
         _logger = logger
         _config = config
+        _behaviorConfig = behaviorConfig
         _spoolManager = spoolManager
         _jobQueue = jobQueue
     End Sub
@@ -126,29 +128,36 @@ Public Class EngineListener
             _logger.LogInformation("Transmitting job {JobId} to Engine ({Size} bytes)",
                                  job.JobId, job.FileSize)
             
-            ' Open spool file for reading
+            ' Read the full spool file
+            Dim rawBytes As Byte()
             Using fileStream = _spoolManager.OpenSpoolFileForRead(job.SpoolFilePath)
-                Dim buffer(8192 - 1) As Byte
-                Dim totalBytesSent As Long = 0
-
-                While Not cancellationToken.IsCancellationRequested
-                    Dim bytesRead = Await fileStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
-
-                    If bytesRead = 0 Then
-                        Exit While
-                    End If
-
-                    Await _engineStream.WriteAsync(buffer, 0, bytesRead, cancellationToken)
-                    totalBytesSent += bytesRead
+                rawBytes = New Byte(CInt(fileStream.Length) - 1) {}
+                Dim totalRead As Integer = 0
+                While totalRead < rawBytes.Length
+                    Dim n = Await fileStream.ReadAsync(rawBytes, totalRead, rawBytes.Length - totalRead, cancellationToken)
+                    If n = 0 Then Exit While
+                    totalRead += n
                 End While
-
-                Await _engineStream.FlushAsync(cancellationToken)
-
-                _logger.LogInformation("Job {JobId} transmitted successfully ({Size} bytes)",
-                                     job.JobId, totalBytesSent)
-
-                Return True
             End Using
+
+            ' Optionally strip PCL escape sequences before forwarding to the Engine
+            Dim sendBytes As Byte()
+            If _behaviorConfig.StripPCL Then
+                sendBytes = PclStripper.Strip(rawBytes)
+                _logger.LogDebug("Job {JobId} PCL strip: {Before} → {After} bytes",
+                                 job.JobId, rawBytes.Length, sendBytes.Length)
+            Else
+                sendBytes = rawBytes
+            End If
+
+            ' Send to Engine
+            Await _engineStream.WriteAsync(sendBytes, 0, sendBytes.Length, cancellationToken)
+            Await _engineStream.FlushAsync(cancellationToken)
+
+            _logger.LogInformation("Job {JobId} transmitted successfully ({Size} bytes)",
+                                 job.JobId, sendBytes.Length)
+
+            Return True
 
         Catch ex As IOException
             _logger.LogError(ex, "I/O error transmitting job {JobId}. Engine may have disconnected.", job.JobId)
