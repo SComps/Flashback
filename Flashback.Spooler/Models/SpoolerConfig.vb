@@ -46,6 +46,7 @@ Namespace Models
         Public Property EnableRetry As Boolean = True
         Public Property MaxRetries As Integer = 3
         Public Property RetryDelaySeconds As Integer = 30
+        Public Property StripPCL As Boolean = True
 
         Public Sub New()
         End Sub

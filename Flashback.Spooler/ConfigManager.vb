@@ -107,6 +107,8 @@ Public Class ConfigManager
                 _config.Behavior.MaxRetries = ParseInt(value, 3)
             Case "RETRYDELAYSECONDS"
                 _config.Behavior.RetryDelaySeconds = ParseInt(value, 30)
+            Case "STRIPPCL"
+                _config.Behavior.StripPCL = ParseBool(value, True)
         End Select
     End Sub
 
@@ -200,6 +202,9 @@ Public Class ConfigManager
             defaultConfig.AppendLine()
             defaultConfig.AppendLine("# Retry delay in seconds")
             defaultConfig.AppendLine("RetryDelaySeconds=30")
+            defaultConfig.AppendLine()
+            defaultConfig.AppendLine("# Strip PCL escape sequences from incoming jobs (recommended for MPE/iX JetDirect)")
+            defaultConfig.AppendLine("StripPCL=true")
 
             File.WriteAllText(_configPath, defaultConfig.ToString())
             Console.WriteLine($"Default configuration created: {_configPath}")
