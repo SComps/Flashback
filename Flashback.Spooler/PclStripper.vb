@@ -13,8 +13,9 @@ Imports System.Text
 '''   ESC E / ESC Z / ESC =  — single-parameter two-byte sequences  → discard
 '''   ESC % ...              — Universal Exit Language (UEL): ESC % [-0-9]* [A-Za-z] → discard
 '''   ESC &amp; / ESC ( / ESC ) / ESC * — parameterised sequences ending on an uppercase letter
-'''       ESC&a+NNR (relative row move) is the banner line-break command → emit LF instead
-'''       All other parameterised sequences → discard
+'''       ESC&a+NNR (relative row move) → emit N × LF  (preserves vertical spacing on banner pages)
+'''       ESC&lNV   (page size / media eject)           → emit FF  (page break, dedup-guarded)
+'''       All other parameterised sequences              → discard
 '''
 ''' Control-character mapping:
 '''   CR followed by ESC&a (row-move) → discard CR; row-move emits the LF (avoids double-spacing)
@@ -64,12 +65,14 @@ Public Class PclStripper
                         groupChar = input(i)
                     End If
 
-                    ' Consume through the terminating character.
+                    ' Consume through the terminating character, accumulating the numeric
+                    ' parameter value so we can use it (e.g. row-move count).
                     ' PCL parameterised sequences end on an uppercase letter [A-Z].
                     ' Exception: ESC&d uses '@' (0x40) as its sole terminator value.
                     ' PCL combination sequences use lowercase for intermediate params and
                     ' uppercase for the final one — we scan to the first uppercase or '@'.
                     Dim terminatorByte As Byte = 0
+                    Dim paramStr As New System.Text.StringBuilder()
                     While i < input.Length
                         Dim pb As Byte = input(i)
                         i += 1
@@ -77,11 +80,27 @@ Public Class PclStripper
                             terminatorByte = pb
                             Exit While
                         End If
+                        ' Accumulate digit/sign characters for the numeric parameter
+                        If (pb >= AscW("0") AndAlso pb <= AscW("9")) OrElse pb = AscW("+") OrElse pb = AscW("-") OrElse pb = AscW(".") Then
+                            paramStr.Append(ChrW(pb))
+                        End If
                     End While
 
-                    ' ESC&a...R  →  row move  →  treat as line break
+                    ' Parse the numeric parameter (ignore sign for row counts — always positive move)
+                    Dim paramVal As Integer = 0
+                    If paramStr.Length > 0 Then
+                        Integer.TryParse(paramStr.ToString().TrimStart("+"), paramVal)
+                        If paramVal < 0 Then paramVal = -paramVal
+                    End If
+
+                    ' ESC&a...R  →  relative row move  →  emit that many LFs (min 1)
+                    ' e.g. ESC&a+01R = 1 LF (normal line spacing on banner)
+                    '      ESC&a+17R = 17 LFs (large vertical gap between banner sections)
                     If kind = AscW("&") AndAlso groupChar = AscW("a") AndAlso terminatorByte = AscW("R") Then
-                        out.Add(&H0A)   ' LF
+                        Dim lfCount As Integer = If(paramVal > 0, paramVal, 1)
+                        For n As Integer = 1 To lfCount
+                            out.Add(&H0A)   ' LF
+                        Next
 
                     ' ESC&l...V  →  page size / media select — on a real PCL printer this ejects
                     ' the current page and starts a new one.  MPE/iX uses ESC&l0V between the job
