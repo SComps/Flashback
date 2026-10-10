@@ -161,7 +161,7 @@ Public Class MpeProfile
     Implements IOsProfile
 
     Public ReadOnly Property OS As OSType = OSType.OS_MPE Implements IOsProfile.OS
-    Public ReadOnly Property FirstLine As Double = 25 Implements IOsProfile.FirstLine
+    Public ReadOnly Property FirstLine As Double = 23 Implements IOsProfile.FirstLine
     Public ReadOnly Property LinesPerPage As Integer = 66 Implements IOsProfile.LinesPerPage
     Public ReadOnly Property StartLine As Integer = 3 Implements IOsProfile.StartLine
     Public ReadOnly Property DefaultFont As String = "OCR-B" Implements IOsProfile.DefaultFont
