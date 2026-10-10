@@ -87,8 +87,13 @@ Public Class PclStripper
                     ' the current page and starts a new one.  MPE/iX uses ESC&l0V between the job
                     ' body and the trailing banner (no FF is sent), so we must convert it to FF to
                     ' give Flashback.Engine a proper page-break signal.
+                    ' Guard: only emit if the previous output byte is not already an FF —
+                    ' MPE/iX emits ESC&l0V multiple times in a row and also immediately after
+                    ' a real FF (0x0C), which would otherwise produce duplicate page breaks.
                     ElseIf kind = AscW("&") AndAlso groupChar = AscW("l") AndAlso terminatorByte = AscW("V") Then
-                        out.Add(&H0C)   ' FF
+                        If out.Count = 0 OrElse out(out.Count - 1) <> &H0C Then
+                            out.Add(&H0C)   ' FF
+                        End If
                     End If
                     ' All other parameterised sequences are discarded (already consumed above)
                 Else
