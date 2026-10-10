@@ -82,6 +82,13 @@ Public Class PclStripper
                     ' ESC&a...R  →  row move  →  treat as line break
                     If kind = AscW("&") AndAlso groupChar = AscW("a") AndAlso terminatorByte = AscW("R") Then
                         out.Add(&H0A)   ' LF
+
+                    ' ESC&l...V  →  page size / media select — on a real PCL printer this ejects
+                    ' the current page and starts a new one.  MPE/iX uses ESC&l0V between the job
+                    ' body and the trailing banner (no FF is sent), so we must convert it to FF to
+                    ' give Flashback.Engine a proper page-break signal.
+                    ElseIf kind = AscW("&") AndAlso groupChar = AscW("l") AndAlso terminatorByte = AscW("V") Then
+                        out.Add(&H0C)   ' FF
                     End If
                     ' All other parameterised sequences are discarded (already consumed above)
                 Else
