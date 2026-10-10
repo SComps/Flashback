@@ -105,9 +105,9 @@ Public Class EngineListener
                 Dim success = Await TransmitJobAsync(job, cancellationToken)
                 
                 If success Then
-                    ' Mark job as completed and delete spool file
+                    ' Mark job as completed — spool file retained for diagnostics (TODO: re-enable deletion)
                     _jobQueue.MarkCompleted(job)
-                    _spoolManager.DeleteSpoolFile(job.SpoolFilePath)
+                    '_spoolManager.DeleteSpoolFile(job.SpoolFilePath)
                 Else
                     ' Mark job as failed (will retry if configured)
                     _jobQueue.MarkFailed(job)
