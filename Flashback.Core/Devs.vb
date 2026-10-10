@@ -433,7 +433,9 @@ Public Class Devs
         ' the last one is the page-break that separates the job body from the trailing
         ' banner page — removing it would merge them onto the same page.
         Dim ffCount = lines.Where(Function(l) l = vbFormFeed).Count()
-        If lines.Count > 0 AndAlso lines(lines.Count - 1) = vbFormFeed AndAlso ffCount = 1 Then
+        Dim lastIsFF = lines.Count > 0 AndAlso lines(lines.Count - 1) = vbFormFeed
+        Log($"[{DevName}] FF check: lines={lines.Count}, ffCount={ffCount}, lastIsFF={lastIsFF}")
+        If lastIsFF AndAlso ffCount = 1 Then
             lines.RemoveAt(lines.Count - 1)
         End If
 
