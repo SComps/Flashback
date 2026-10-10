@@ -428,7 +428,12 @@ Public Class Devs
             lines.RemoveAt(lines.Count - 1)
         End If
 
-        If lines.Count > 0 AndAlso lines(lines.Count - 1) = vbFormFeed Then
+        ' Only strip a trailing FF if it is the ONLY FF in the document (i.e. a bare
+        ' end-of-job marker with no trailing banner).  When there are two or more FFs
+        ' the last one is the page-break that separates the job body from the trailing
+        ' banner page — removing it would merge them onto the same page.
+        Dim ffCount = lines.Where(Function(l) l = vbFormFeed).Count()
+        If lines.Count > 0 AndAlso lines(lines.Count - 1) = vbFormFeed AndAlso ffCount = 1 Then
             lines.RemoveAt(lines.Count - 1)
         End If
 
