@@ -18,6 +18,7 @@ Imports System.Text
 '''
 ''' Control-character mapping:
 '''   CR followed by ESC&a (row-move) → discard CR; row-move emits the LF (avoids double-spacing)
+'''   CR followed by FF               → discard CR; FF provides the page break (no spurious blank line)
 '''   CR alone (not followed by LF)   → LF
 '''   CR + LF                         → LF   (already proper; CR discarded)
 '''   FF (0x0C)                       → FF   (page break, kept)
@@ -89,17 +90,19 @@ Public Class PclStripper
                 End If
 
             ElseIf b = &H0D Then        ' CR
-                ' Peek ahead: if the next non-LF byte is ESC&a (a row-move sequence),
-                ' suppress this CR — the row-move itself will emit the LF, and emitting
-                ' one here too would produce unwanted double-spacing on banner lines.
+                ' Peek ahead: if the next non-LF byte is ESC&a (a row-move) or FF,
+                ' suppress this CR — the following character already provides the
+                ' necessary break, and emitting an extra LF here causes double-spacing
+                ' on banner lines or inserts a spurious blank line before a page break.
                 Dim peekIdx As Integer = i + 1
                 If peekIdx < input.Length AndAlso input(peekIdx) = &H0A Then peekIdx += 1  ' skip LF if CR+LF
                 Dim followedByRowMove As Boolean = (peekIdx + 2 < input.Length AndAlso
                                                     input(peekIdx) = &H1B AndAlso
                                                     input(peekIdx + 1) = AscW("&") AndAlso
                                                     input(peekIdx + 2) = AscW("a"))
-                If followedByRowMove Then
-                    ' Discard CR (and LF if present) — the row-move provides the line break
+                Dim followedByFF As Boolean = (peekIdx < input.Length AndAlso input(peekIdx) = &H0C)
+                If followedByRowMove OrElse followedByFF Then
+                    ' Discard CR (and LF if present) — the following sequence provides the break
                     If i + 1 < input.Length AndAlso input(i + 1) = &H0A Then
                         i += 2
                     Else
