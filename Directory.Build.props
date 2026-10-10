@@ -11,13 +11,13 @@
     If git is not available the commit count defaults to 0 and sha to "unknown".
 
     Implementation:
-    We disable the SDK's auto-generated AssemblyInfo for the version attributes and
-    write our own obj\GitVersionInfo.vb (or .cs) before CoreCompile so the compiler
-    picks up the correct values.  InformationalVersion is also set as a property so
-    it appears in NuGet metadata and dotnet CLI output.
+    We disable the SDK's auto-generation of the three version assembly attributes
+    and write our own obj\GitVersionInfo.vb (or .cs) before CoreCompile so the
+    compiler picks up the correct values directly.  Uses only Exec + WriteLinesToFile
+    so it works on Windows, Linux (Devbox / DietPi) and macOS without changes.
   -->
 
-  <!-- Disable SDK auto-generation of the four version attributes we own -->
+  <!-- Disable SDK auto-generation of the version attributes we own -->
   <PropertyGroup>
     <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
     <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
@@ -25,73 +25,64 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
-  <UsingTask TaskName="GetGitVersion"
-             TaskFactory="RoslynCodeTaskFactory"
-             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
-    <ParameterGroup>
-      <CommitCount ParameterType="System.String" Output="true" />
-      <ShortSha    ParameterType="System.String" Output="true" />
-    </ParameterGroup>
-    <Task>
-      <Using Namespace="System.Diagnostics" />
-      <Code Type="Fragment" Language="cs"><![CDATA[
-        CommitCount = "0";
-        ShortSha    = "unknown";
-        try {
-            var psi = new ProcessStartInfo("git", "rev-list --count HEAD") {
-                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
-            };
-            using (var p = Process.Start(psi)) {
-                CommitCount = p.StandardOutput.ReadToEnd().Trim();
-                p.WaitForExit();
-            }
-            psi = new ProcessStartInfo("git", "rev-parse --short=7 HEAD") {
-                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
-            };
-            using (var p = Process.Start(psi)) {
-                ShortSha = p.StandardOutput.ReadToEnd().Trim();
-                p.WaitForExit();
-            }
-        } catch {}
-      ]]></Code>
-    </Task>
-  </UsingTask>
-
   <Target Name="GitVersion" BeforeTargets="CoreCompile">
-    <GetGitVersion>
-      <Output TaskParameter="CommitCount" PropertyName="GitCommitCount" />
-      <Output TaskParameter="ShortSha"    PropertyName="GitShortSha" />
-    </GetGitVersion>
+
+    <!-- git rev-list: commit count (build number) -->
+    <Exec Command="git rev-list --count HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitCommitCountRaw" />
+    </Exec>
+
+    <!-- git rev-parse: short sha -->
+    <Exec Command="git rev-parse --short=7 HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitShortShaRaw" />
+    </Exec>
+
     <PropertyGroup>
+      <!-- Trim whitespace / newlines that the shell appends -->
+      <GitCommitCount>$(_GitCommitCountRaw.Trim())</GitCommitCount>
+      <GitShortSha>$(_GitShortShaRaw.Trim())</GitShortSha>
+      <!-- Fall back gracefully when git is not available -->
+      <GitCommitCount Condition="'$(GitCommitCount)' == ''">0</GitCommitCount>
+      <GitShortSha    Condition="'$(GitShortSha)'    == ''">unknown</GitShortSha>
+
+      <!-- Resolve base version: VersionPrefix → Version → 1.0.0 -->
       <_BaseVersion>$(VersionPrefix)</_BaseVersion>
       <_BaseVersion Condition="'$(_BaseVersion)' == ''">$(Version)</_BaseVersion>
       <_BaseVersion Condition="'$(_BaseVersion)' == ''">1.0.0</_BaseVersion>
+
       <_GitAssemblyVersion>$(_BaseVersion).$(GitCommitCount)</_GitAssemblyVersion>
       <_GitInfoVersion>$(_BaseVersion)+$(GitShortSha)</_GitInfoVersion>
-      <!-- Also stamp the MSBuild properties so NuGet / pack picks them up -->
+
+      <!-- Keep MSBuild properties in sync for NuGet / pack -->
       <AssemblyVersion>$(_GitAssemblyVersion)</AssemblyVersion>
       <FileVersion>$(_GitAssemblyVersion)</FileVersion>
       <InformationalVersion>$(_GitInfoVersion)</InformationalVersion>
     </PropertyGroup>
 
-    <!-- Write a source file with the assembly attributes — compiler picks these up directly -->
+    <!-- Write assembly attributes into a generated source file in obj\ so the
+         compiler sees the correct values regardless of SDK evaluation order.
+         DefaultLanguageSourceExtension is .vb for VB projects, .cs for C#. -->
     <PropertyGroup>
       <_GitVersionFile>$(IntermediateOutputPath)GitVersionInfo$(DefaultLanguageSourceExtension)</_GitVersionFile>
     </PropertyGroup>
 
-    <!-- VB syntax -->
     <WriteLinesToFile File="$(_GitVersionFile)"
                       Condition="'$(DefaultLanguageSourceExtension)' == '.vb'"
-                      Lines="' Auto-generated by Directory.Build.props — do not edit
+                      Lines="' Auto-generated — do not edit
 &lt;Assembly: System.Reflection.AssemblyVersion(&quot;$(_GitAssemblyVersion)&quot;)&gt;
 &lt;Assembly: System.Reflection.AssemblyFileVersion(&quot;$(_GitAssemblyVersion)&quot;)&gt;
 &lt;Assembly: System.Reflection.AssemblyInformationalVersion(&quot;$(_GitInfoVersion)&quot;)&gt;"
                       Overwrite="true" />
 
-    <!-- C# syntax -->
     <WriteLinesToFile File="$(_GitVersionFile)"
                       Condition="'$(DefaultLanguageSourceExtension)' == '.cs'"
-                      Lines="// Auto-generated by Directory.Build.props — do not edit
+                      Lines="// Auto-generated — do not edit
 [assembly: System.Reflection.AssemblyVersion(&quot;$(_GitAssemblyVersion)&quot;)]
 [assembly: System.Reflection.AssemblyFileVersion(&quot;$(_GitAssemblyVersion)&quot;)]
 [assembly: System.Reflection.AssemblyInformationalVersion(&quot;$(_GitInfoVersion)&quot;)]"
