@@ -177,6 +177,7 @@ Public Class RenderPDF
                     End If
 
                     If line.StartsWith(vbFormFeed) Then
+                        Logger?.LogInformation("{Dev}: FF → new page (currentLine={CL}, pages so far={PC})", DevName, currentLine, doc.PageCount)
                         InitializeNewPage()
                     End If
 
