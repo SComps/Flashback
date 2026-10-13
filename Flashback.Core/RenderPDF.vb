@@ -118,7 +118,7 @@ Public Class RenderPDF
             Dim InitializeNewPage = Sub()
                                         page = doc.AddPage()
 
-                                        If Orientation <= 1 Then
+                                        If Orientation = 0 Then
                                             ' Landscape: 132 characters wide
                                             page.Orientation = PdfSharp.PageOrientation.Landscape
                                             page.Width = XUnit.FromInch(14.875)
@@ -132,14 +132,14 @@ Public Class RenderPDF
 
                                         gfx = XGraphics.FromPdfPage(page)
 
-                                        If (Orientation = 0) Or (Orientation = 2) Then
+                                        If Shading <> ShadingColor.None Then
                                             DrawGreenBarBackground(gfx, page.Width.Point, page.Height.Point)
                                         End If
 
                                         availableWidth = page.Width.Point - leftMargin - rightMargin
 
                                         ' Calculate font size to fit exact character count per line
-                                        Dim targetCharsPerLine As Integer = If(Orientation <= 1, 132, 80)
+                                        Dim targetCharsPerLine As Integer = If(Orientation = 0, 132, 80)
 
                                         ' Start with a base font size and measure
                                         Dim testFont As XFont = New XFont(TypeFaceName, 12, XFontStyleEx.Regular)
