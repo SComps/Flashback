@@ -168,9 +168,11 @@ Public Class WebWorker
                 Dim isAdmin = (urlPath.EndsWith("/admin") OrElse urlPath = "/admin") AndAlso
                               Not isAdminAction AndAlso Not isAdminStatus AndAlso Not isAdminLog
                 Dim isEmail = urlPath.EndsWith("/email") OrElse urlPath = "/email"
+                Dim isDelete = urlPath.EndsWith("/delete") OrElse urlPath = "/delete"
+                Dim isPoll = urlPath.EndsWith("/poll") OrElse urlPath = "/poll"
                 Dim isRoot = urlPath = "" OrElse urlPath = "/index.html" OrElse
                              (Not isAdmin AndAlso Not isAdminAction AndAlso Not isAdminStatus AndAlso
-                              Not isAdminLog AndAlso Not isEmail AndAlso
+                              Not isAdminLog AndAlso Not isEmail AndAlso Not isDelete AndAlso Not isPoll AndAlso
                               Not isDirectDownload AndAlso parts.Length <= 1 AndAlso Not urlPath.EndsWith(".pdf"))
 
                 If isAdmin Then
@@ -221,6 +223,17 @@ Public Class WebWorker
                         context.Response.StatusCode = 405
                         context.Response.Close()
                     End If
+                ElseIf isDelete Then
+                    If context.Request.HttpMethod = "POST" OrElse context.Request.HttpMethod = "GET" Then
+                        Await HandleDelete(context, user, printerFilter, userFilter, fileParam)
+                    Else
+                        context.Response.StatusCode = 405
+                        context.Response.Close()
+                    End If
+                ElseIf isPoll Then
+                    ' Auth already enforced above for protected folders.
+                    ' Poll is GET-only; returns JSON directory snapshot for the client poller.
+                    ServePoll(context, user, printerFilter, userFilter)
                 ElseIf isDirectDownload Then
                     ' Direct PDF download — auth was already enforced above via requiresAuth/user checks
                     ' because printerFilter/userFilter were populated from the URL parts (lines 89-96).
@@ -315,6 +328,65 @@ Public Class WebWorker
         
         Return devices
     End Function
+
+    ''' <summary>
+    ''' Returns a JSON snapshot of the requested printer/subuser directory.
+    ''' Response: { "count": N, "newest": "ISO-8601 or empty string" }
+    ''' The client poller compares these two values against the baseline baked into
+    ''' the page at render time and reloads when either changes (new file or deletion).
+    ''' Auth is already enforced upstream in ProcessRequest.
+    ''' </summary>
+    Private Sub ServePoll(context As HttpListenerContext, user As UserInfo, printerFilter As String, userFilter As String)
+        Try
+            ' Both parameters are required
+            If String.IsNullOrWhiteSpace(printerFilter) OrElse String.IsNullOrWhiteSpace(userFilter) Then
+                context.Response.StatusCode = 400
+                context.Response.Close()
+                Return
+            End If
+
+            Dim allowedDevices = GetAllowedDevices(user)
+            If Not allowedDevices.ContainsKey(printerFilter) Then
+                context.Response.StatusCode = 404
+                context.Response.Close()
+                Return
+            End If
+
+            Dim root = allowedDevices(printerFilter)
+            Dim targetDir = Path.Combine(root, userFilter)
+
+            Dim count As Integer = 0
+            Dim newest As String = ""
+
+            If Directory.Exists(targetDir) Then
+                Dim files = Directory.GetFiles(targetDir, "*.pdf", SearchOption.TopDirectoryOnly) _
+                            .Select(Function(f) New FileInfo(f)) _
+                            .OrderByDescending(Function(f) f.LastWriteTime) _
+                            .ToList()
+                count = files.Count
+                If files.Any() Then newest = files(0).LastWriteTime.ToString("o")
+            End If
+
+            ' Minimal hand-built JSON — no serialiser dependency needed
+            Dim json = $"{{""count"":{count},""newest"":""{newest}""}}"
+            Dim buffer = Encoding.UTF8.GetBytes(json)
+            context.Response.ContentType = "application/json; charset=utf-8"
+            context.Response.ContentLength64 = buffer.Length
+            context.Response.Headers.Add("Cache-Control", "no-store")
+            context.Response.OutputStream.Write(buffer, 0, buffer.Length)
+        Catch ex As Exception
+            _logger.LogError("ServePoll error: {Error}", ex.Message)
+            Try
+                context.Response.StatusCode = 500
+            Catch
+            End Try
+        Finally
+            Try
+                context.Response.Close()
+            Catch
+            End Try
+        End Try
+    End Sub
 
     Private Function GenerateHtml(user As UserInfo, printerFilter As String, userFilter As String) As String
         Dim sb As New StringBuilder()
@@ -412,25 +484,34 @@ Public Class WebWorker
             If allowedDevices.ContainsKey(printerFilter) Then
                 Dim root = allowedDevices(printerFilter)
                 Dim targetDir = Path.Combine(root, userFilter)
-                
+
                 If Directory.Exists(targetDir) Then
+                    ' Materialise the list once — used for both HTML rendering and poll baseline
                     Dim files = Directory.GetFiles(targetDir, "*.pdf", SearchOption.TopDirectoryOnly) _
                                 .Select(Function(f) New FileInfo(f)) _
-                                .OrderByDescending(Function(f) f.LastWriteTime)
-                    
+                                .OrderByDescending(Function(f) f.LastWriteTime) _
+                                .ToList()
+
+                    ' Capture baseline values that the client poller will compare against
+                    Dim pollCount As Integer = files.Count
+                    Dim pollNewest As String = If(files.Any(),
+                                                  files(0).LastWriteTime.ToString("o"),
+                                                  "")
+
                     sb.AppendLine("<div class=""section"">")
                     sb.AppendLine("<div class=""section-header"">")
                     sb.AppendLine($"<h2 class=""section-title"">Documents - {WebUtility.HtmlEncode(userFilter)}</h2>")
                     sb.AppendLine("</div>")
                     sb.AppendLine("<div class=""section-content"">")
-                    
+
                     If files.Any() Then
                         sb.AppendLine("<div class=""file-list"">")
                         For Each fi In files
                             Dim downloadUrl = $"{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
-                            Dim emailUrl = $"/email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fi.Name)}"
+                            Dim emailUrl = $"email?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fi.Name)}"
+                            Dim deleteUrl = $"delete?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}&file={WebUtility.UrlEncode(fi.Name)}"
                             Dim sizeMb = fi.Length / (1024.0 * 1024.0)
-                            
+
                             sb.AppendLine("<div class=""file-card"">")
                             sb.AppendLine("<div class=""file-info"">")
                             sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" class=""file-name"">{WebUtility.HtmlEncode(fi.Name)}</a>")
@@ -439,6 +520,12 @@ Public Class WebWorker
                             sb.AppendLine("<div class=""file-actions"">")
                             sb.AppendLine($"<a href=""{emailUrl}"" class=""btn btn-secondary"">Email</a>")
                             sb.AppendLine($"<a href=""{downloadUrl}"" target=""_blank"" class=""btn btn-primary"">Download</a>")
+                            sb.AppendLine($"<form method=""POST"" action=""{deleteUrl}"" style=""display:inline; margin:0; padding:0;"" onsubmit=""return confirm('Are you sure you want to delete {WebUtility.HtmlEncode(fi.Name)}? This cannot be undone.');"">")
+                            sb.AppendLine($"<input type=""hidden"" name=""printer"" value=""{WebUtility.HtmlEncode(printerFilter)}"" />")
+                            sb.AppendLine($"<input type=""hidden"" name=""subuser"" value=""{WebUtility.HtmlEncode(userFilter)}"" />")
+                            sb.AppendLine($"<input type=""hidden"" name=""file"" value=""{WebUtility.HtmlEncode(fi.Name)}"" />")
+                            sb.AppendLine("<button type=""submit"" class=""btn btn-danger"">Delete</button>")
+                            sb.AppendLine("</form>")
                             sb.AppendLine("</div>")
                             sb.AppendLine("</div>")
                         Next
@@ -446,8 +533,40 @@ Public Class WebWorker
                     Else
                         sb.AppendLine("<div class=""empty-state"">No documents found</div>")
                     End If
-                    
+
                     sb.AppendLine("</div></div>")
+
+                    ' ── Polling script — only emitted on the Level 3 (document list) view ─────
+                    ' Encodes printer/subuser directly into the script to avoid query-string
+                    ' round-trips; the server validates them again in ServePoll anyway.
+                    Dim encodedPrinter = WebUtility.HtmlEncode(WebUtility.UrlEncode(printerFilter))
+                    Dim encodedSubuser = WebUtility.HtmlEncode(WebUtility.UrlEncode(userFilter))
+                    ' Escape the newest timestamp for safe JS string literal embedding
+                    Dim safeNewest = pollNewest.Replace("\", "\\").Replace("""", "\""")
+
+                    sb.AppendLine("<script>")
+                    sb.AppendLine("(function () {")
+                    sb.AppendLine("  'use strict';")
+                    sb.AppendLine($"  var lastCount  = {pollCount};")
+                    sb.AppendLine($"  var lastNewest = '{safeNewest}';")
+                    sb.AppendLine($"  var pollUrl    = 'poll?printer={encodedPrinter}&subuser={encodedSubuser}';")
+                    sb.AppendLine("")
+                    sb.AppendLine("  function poll() {")
+                    sb.AppendLine("    fetch(pollUrl, { credentials: 'same-origin' })")
+                    sb.AppendLine("      .then(function (r) { return r.ok ? r.json() : null; })")
+                    sb.AppendLine("      .then(function (data) {")
+                    sb.AppendLine("        if (!data) return;")
+                    sb.AppendLine("        if (data.count !== lastCount || data.newest !== lastNewest) {")
+                    sb.AppendLine("          window.location.reload();")
+                    sb.AppendLine("        }")
+                    sb.AppendLine("      })")
+                    sb.AppendLine("      .catch(function () { /* network error — retry next interval */ });")
+                    sb.AppendLine("  }")
+                    sb.AppendLine("")
+                    sb.AppendLine("  setInterval(poll, 5000);")
+                    sb.AppendLine("})();")
+                    sb.AppendLine("</script>")
+                    ' ─────────────────────────────────────────────────────────────────────────
                 End If
             End If
         End If
@@ -602,6 +721,91 @@ Public Class WebWorker
         Catch ex As Exception
             _logger.LogError("Error sending email: {Error}", ex.Message)
             ServeErrorPage(context, $"Error: {ex.Message}")
+        End Try
+    End Function
+
+    Private Async Function HandleDelete(context As HttpListenerContext, user As UserInfo, printerFilter As String, userFilter As String, fileName As String) As Task
+        Try
+            ' If parameters were not in query string, attempt to read from form body
+            If (String.IsNullOrEmpty(printerFilter) OrElse String.IsNullOrEmpty(userFilter) OrElse String.IsNullOrEmpty(fileName)) AndAlso context.Request.HasEntityBody Then
+                Using reader As New StreamReader(context.Request.InputStream, context.Request.ContentEncoding)
+                    Dim body = Await reader.ReadToEndAsync()
+                    Dim formData = System.Web.HttpUtility.ParseQueryString(body)
+                    If String.IsNullOrEmpty(printerFilter) Then printerFilter = formData("printer")
+                    If String.IsNullOrEmpty(userFilter) Then userFilter = formData("subuser")
+                    If String.IsNullOrEmpty(fileName) Then fileName = formData("file")
+                End Using
+            End If
+
+            If String.IsNullOrWhiteSpace(printerFilter) OrElse String.IsNullOrWhiteSpace(userFilter) OrElse String.IsNullOrWhiteSpace(fileName) Then
+                _logger.LogWarning("Delete rejected - missing required parameters.")
+                ServeErrorPage(context, "Printer, user, and file name are required.")
+                Return
+            End If
+
+            ' Security checks: Ensure fileName contains no path separators or directory navigation
+            Dim cleanFileName = Path.GetFileName(fileName)
+            If cleanFileName <> fileName OrElse fileName.Contains("..") Then
+                _logger.LogWarning("Delete rejected - invalid file name: {File}", fileName)
+                ServeErrorPage(context, "Invalid file name.")
+                Return
+            End If
+
+            ' Ensure only PDF files can be deleted
+            If Not fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) Then
+                _logger.LogWarning("Delete rejected - only PDF files may be deleted: {File}", fileName)
+                ServeErrorPage(context, "Only PDF files can be deleted.")
+                Return
+            End If
+
+            ' Verify allowed device for current user
+            Dim allowedDevices = GetAllowedDevices(user)
+            If Not allowedDevices.ContainsKey(printerFilter) Then
+                _logger.LogWarning("Delete rejected - printer not allowed or not found: {Printer}", printerFilter)
+                ServeErrorPage(context, "Printer not found or access denied.")
+                Return
+            End If
+
+            Dim root = allowedDevices(printerFilter)
+            Dim targetDir = Path.Combine(root, userFilter)
+            Dim filePath = Path.Combine(targetDir, cleanFileName)
+
+            ' Prevent path traversal outside target directory
+            Dim fullPath = Path.GetFullPath(filePath)
+            Dim fullTargetDir = Path.GetFullPath(targetDir).TrimEnd(Path.DirectorySeparatorChar)
+            If Not fullPath.StartsWith(fullTargetDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) Then
+                _logger.LogWarning("Delete rejected - directory traversal detected: {Path}", filePath)
+                ServeErrorPage(context, "Access denied.")
+                Return
+            End If
+
+            If Not File.Exists(filePath) Then
+                _logger.LogWarning("Delete rejected - file not found: {Path}", filePath)
+                ServeErrorPage(context, "File not found.")
+                Return
+            End If
+
+            ' Delete the file from the filesystem
+            File.Delete(filePath)
+            _logger.LogInformation("Deleted PDF document {Path}", filePath)
+
+            ' Redirect back to document list
+            Dim requestPath = context.Request.Url.AbsolutePath
+            Dim deleteIdx = requestPath.LastIndexOf("/delete", StringComparison.OrdinalIgnoreCase)
+            Dim basePath = If(deleteIdx >= 0, requestPath.Substring(0, deleteIdx), "")
+            If String.IsNullOrEmpty(basePath) Then basePath = "/"
+            If Not basePath.EndsWith("/"c) Then basePath &= "/"
+
+            Dim redirectUrl = $"{basePath}?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"
+            context.Response.StatusCode = 302
+            context.Response.Headers.Add("Location", redirectUrl)
+            context.Response.Close()
+        Catch ex As IOException
+            _logger.LogError("File deletion failed (file in use): {Error}", ex.Message)
+            ServeErrorPage(context, $"File could not be deleted because it is currently open or in use: {ex.Message}")
+        Catch ex As Exception
+            _logger.LogError("Error deleting file: {Error}", ex.Message)
+            ServeErrorPage(context, $"Failed to delete file: {ex.Message}")
         End Try
     End Function
 

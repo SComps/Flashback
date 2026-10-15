@@ -122,12 +122,20 @@ main {
 }
 
 .file-info {
-    width: 60%;
+    width: 50%;
 }
 
 .file-actions {
-    width: 40%;
+    width: 50%;
     text-align: right;
+    white-space: nowrap;
+}
+
+.file-actions form {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0;
+    padding: 0;
 }
 
 .file-name {
@@ -159,56 +167,141 @@ main {
 }
 
 /* Buttons */
-.btn {
-    display: inline-block;
-    padding: 8px 16px;
+.btn, a.btn, button.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 34px;
+    padding: 0 16px;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
+    line-height: 1;
     text-align: center;
-    text-decoration: none;
+    text-decoration: none !important;
     border: 1px solid transparent;
+    border-radius: 2px;
     cursor: pointer;
-    transition: all 0.1s;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     margin-left: 8px;
+    vertical-align: middle;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
-.btn-primary {
-    background-color: #0f62fe;
-    color: #ffffff;
-    border-color: #0f62fe;
+.btn:focus, a.btn:focus, button.btn:focus {
+    outline: 2px solid #0f62fe;
+    outline-offset: 2px;
 }
 
-.btn-primary:hover {
-    background-color: #0043ce;
-    border-color: #0043ce;
+/* Primary Button (Download, View Users, View Files, Send Email) */
+.btn-primary, a.btn-primary, button.btn-primary {
+    background-color: #0f62fe !important;
+    color: #ffffff !important;
+    border-color: #0f62fe !important;
+    text-decoration: none !important;
 }
 
-.btn-secondary {
-    background-color: transparent;
-    color: #0f62fe;
-    border-color: #0f62fe;
+.btn-primary:hover, a.btn-primary:hover, button.btn-primary:hover,
+.btn-primary:active, a.btn-primary:active, button.btn-primary:active {
+    background-color: #0043ce !important;
+    color: #ffffff !important;
+    border-color: #0043ce !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    text-decoration: none !important;
 }
 
-.btn-secondary:hover {
-    background-color: #e8f4ff;
+.btn-primary:visited, a.btn-primary:visited {
+    color: #ffffff !important;
 }
 
-.email-link {
-    background-color: transparent;
-    color: #0f62fe;
-    border: 1px solid #0f62fe;
-    padding: 6px 12px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-    display: inline-block;
-    transition: all 0.1s;
+/* Secondary Button (Email, Cancel) */
+.btn-secondary, a.btn-secondary, button.btn-secondary {
+    background-color: #ffffff !important;
+    color: #0f62fe !important;
+    border: 1px solid #0f62fe !important;
+    text-decoration: none !important;
 }
 
-.email-link:hover {
-    background-color: #e8f4ff;
-    color: #0043ce;
-    border-color: #0043ce;
+.btn-secondary:hover, a.btn-secondary:hover, button.btn-secondary:hover,
+.btn-secondary:active, a.btn-secondary:active, button.btn-secondary:active {
+    background-color: #0f62fe !important;
+    color: #ffffff !important;
+    border-color: #0f62fe !important;
+    box-shadow: 0 2px 4px rgba(15,98,254,0.25) !important;
+    text-decoration: none !important;
+}
+
+.btn-secondary:visited, a.btn-secondary:visited {
+    color: #0f62fe !important;
+}
+
+.btn-secondary:visited:hover, a.btn-secondary:visited:hover {
+    color: #ffffff !important;
+}
+
+/* Danger Button (Delete, Restart Engine) */
+.btn-danger, a.btn-danger, button.btn-danger {
+    background-color: #da1e28 !important;
+    color: #ffffff !important;
+    border: 1px solid #da1e28 !important;
+    text-decoration: none !important;
+}
+
+.btn-danger:hover, a.btn-danger:hover, button.btn-danger:hover,
+.btn-danger:active, a.btn-danger:active, button.btn-danger:active {
+    background-color: #ba1b23 !important;
+    color: #ffffff !important;
+    border-color: #ba1b23 !important;
+    box-shadow: 0 2px 4px rgba(218,30,40,0.3) !important;
+    text-decoration: none !important;
+}
+
+.btn-danger:visited, a.btn-danger:visited {
+    color: #ffffff !important;
+}
+
+/* Darker Danger Variant (Stop Engine) */
+.btn-danger-dark, a.btn-danger-dark, button.btn-danger-dark {
+    background-color: #750e13 !important;
+    color: #ffffff !important;
+    border: 1px solid #750e13 !important;
+    text-decoration: none !important;
+}
+
+.btn-danger-dark:hover, a.btn-danger-dark:hover, button.btn-danger-dark:hover,
+.btn-danger-dark:active, a.btn-danger-dark:active, button.btn-danger-dark:active {
+    background-color: #52070a !important;
+    color: #ffffff !important;
+    border-color: #52070a !important;
+    box-shadow: 0 2px 4px rgba(117,14,19,0.4) !important;
+    text-decoration: none !important;
+}
+
+.btn-danger-dark:visited, a.btn-danger-dark:visited {
+    color: #ffffff !important;
+}
+
+/* Warning Button */
+.btn-warning, a.btn-warning, button.btn-warning {
+    background-color: #d97706 !important;
+    color: #ffffff !important;
+    border: 1px solid #d97706 !important;
+    text-decoration: none !important;
+}
+
+.btn-warning:hover, a.btn-warning:hover, button.btn-warning:hover,
+.btn-warning:active, a.btn-warning:active, button.btn-warning:active {
+    background-color: #b45309 !important;
+    color: #ffffff !important;
+    border-color: #b45309 !important;
+    box-shadow: 0 2px 4px rgba(217,119,6,0.3) !important;
+    text-decoration: none !important;
+}
+
+.btn-warning:visited, a.btn-warning:visited {
+    color: #ffffff !important;
 }
 
 /* User Groups */
@@ -257,18 +350,18 @@ main {
     color: #525252;
 }
 
-/* Links */
-a {
+/* Links (excluding buttons) */
+a:not(.btn) {
     color: #0f62fe;
     text-decoration: none;
 }
 
-a:hover {
+a:not(.btn):hover {
     color: #0043ce;
     text-decoration: underline;
 }
 
-a:visited {
+a:not(.btn):visited {
     color: #8a3ffc;
 }
 
@@ -368,60 +461,6 @@ button.btn {
     background-color: #f4f4f4;
     color: #6f6f6f;
 }
-
-/* Danger button — white bg / red border+text at rest, inverts to solid red on hover */
-.btn-danger {
-    display: inline-block;
-    padding: 8px 16px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    border: 1px solid #da1e28;
-    background-color: #ffffff;
-    color: #da1e28;
-    transition: background-color 0.1s, color 0.1s;
-}
-
-.btn-danger:hover {
-    background-color: #da1e28;
-    border-color: #da1e28;
-    color: #ffffff;
-}
-
-/* Darker danger variant for Stop — white bg / dark-red border+text, inverts on hover */
-.btn-danger-dark {
-    border-color: #a91a21;
-    background-color: #ffffff;
-    color: #a91a21;
-}
-
-.btn-danger-dark:hover {
-    background-color: #a91a21;
-    border-color: #a91a21;
-    color: #ffffff;
-}
-
-/* Warning button (unused by engine controls now but kept for completeness) */
-.btn-warning {
-    display: inline-block;
-    padding: 8px 16px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    border: 1px solid #d97706;
-    background-color: #ffffff;
-    color: #d97706;
-    transition: background-color 0.1s, color 0.1s;
-}
-
-.btn-warning:hover {
-    background-color: #d97706;
-    border-color: #d97706;
-    color: #ffffff;
-}
-
 /* Log tail viewer */
 .log-tail {
     display: block;
@@ -462,7 +501,8 @@ button.btn {
     header .container { padding: 12px 16px; }
     .file-card > div { padding: 12px 16px; }
     .file-info, .file-actions { display: block; width: 100%; }
-    .file-actions { text-align: left; margin-top: 8px; }
+    .file-actions { text-align: left; margin-top: 8px; white-space: normal; }
+    .file-actions .btn, .file-actions form { margin: 4px 6px 4px 0; }
     .log-tail { height: 220px; }
 }
 "

@@ -90,12 +90,38 @@ Public Class EngineListener
             _logger.LogInformation("Engine listener stopped.")
         End Try
     End Function
+    ''' <summary>
+    ''' Returns True if the engine TCP socket is still alive.
+    ''' Uses the standard Socket.Poll + Available trick to detect a remote close
+    ''' without sending any data.
+    ''' </summary>
+    Private Function IsConnectionAlive() As Boolean
+        Try
+            Dim sock = _engineClient?.Client
+            If sock Is Nothing OrElse Not sock.Connected Then Return False
+            ' Poll with 0 µs timeout: returns True when data/FIN/RST is pending
+            If sock.Poll(0, SelectMode.SelectRead) Then
+                ' If no bytes are available it means the peer closed the connection
+                Return sock.Available > 0
+            End If
+            Return True
+        Catch
+            Return False
+        End Try
+    End Function
+
     Private Async Function ProcessJobsAsync(cancellationToken As CancellationToken) As Task
         Try
             While Not cancellationToken.IsCancellationRequested AndAlso _isEngineConnected
                 ' Check if there are jobs in the queue
                 Dim job As PrintJob = Nothing
                 If Not _jobQueue.TryDequeue(job) Then
+                    ' Proactively detect a silent Engine disconnect while idle
+                    If Not IsConnectionAlive() Then
+                        _logger.LogWarning("Engine connection lost (detected while idle).")
+                        _isEngineConnected = False
+                        Exit While
+                    End If
                     ' No jobs available, wait a bit
                     Await Task.Delay(500, cancellationToken)
                     Continue While
