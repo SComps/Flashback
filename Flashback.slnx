@@ -36,11 +36,6 @@
     <File Path="scripts/winpub.ps1" />
     <File Path="git_push.sh" />
   </Folder>
-  <Folder Name="/GitHub Workflows/">
-    <File Path=".github/workflows/build-linux.yml" />
-    <File Path=".github/workflows/build-windows.yml" />
-    <File Path=".github/workflows/release.yml" />
-  </Folder>
   <Folder Name="/Configuration/">
     <File Path=".gitignore" />
     <File Path="NuGet.config" />
