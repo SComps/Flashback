@@ -4,7 +4,14 @@
     <RootNamespace>TN3270Framework</RootNamespace>
     <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
     <IsTrimmable>true</IsTrimmable>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>TN3270 server-side protocol library for .NET — Telnet negotiation, 3270 data stream, and a high-level field-oriented screen API.</Description>
+    <Authors>SComps</Authors>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
+  </ItemGroup>
 
 </Project>
