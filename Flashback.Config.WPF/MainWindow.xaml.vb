@@ -168,6 +168,14 @@ Class MainWindow
                 lines.Add(String.Join("||", p))
             Next
             File.WriteAllLines(configFile, lines)
+
+            Dim validation = PrinterConfigValidator.ValidateLines(lines, AppDomain.CurrentDomain.BaseDirectory)
+            If Not validation.IsValid Then
+                Dim msg = "Warning: Duplicate output directory detected!" & vbCrLf & vbCrLf &
+                          validation.Errors(0) & vbCrLf & vbCrLf &
+                          "Flashback Engine will fail to start until each printer has a unique output directory."
+                MessageBox.Show(msg, "Configuration Warning", MessageBoxButton.OK, MessageBoxImage.Warning)
+            End If
         Catch
         End Try
     End Sub

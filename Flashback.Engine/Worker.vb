@@ -91,6 +91,16 @@ Public Class Worker
                 lines = File.ReadAllLines(_configFile)
             End SyncLock
 
+            ' Validate configuration for duplicate printer output directories
+            Dim validation = PrinterConfigValidator.ValidateLines(lines, AppDomain.CurrentDomain.BaseDirectory)
+            If Not validation.IsValid Then
+                For Each errMsg In validation.Errors
+                    _logger.LogError("Configuration error: {Error}", errMsg)
+                Next
+                _logger.LogError("Configuration reload aborted: duplicate printer output directories detected in devices.dat. Preserving current running configuration.")
+                Return
+            End If
+
             Dim lic = LicenseManager.GetLicenseInfo()
             Dim configNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
             Dim loadedCount As Integer

@@ -47,6 +47,37 @@ Module Program
             Integer.TryParse(envPort, webPort)
         End If
 
+        ' Verify configuration before launching service or detaching into background
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        Dim configFile As String = Path.Combine(baseDir, "devices.dat")
+        If File.Exists(configFile) Then
+            Dim validationResult = PrinterConfigValidator.ValidatePrinters(configFile, baseDir)
+            If Not validationResult.IsValid Then
+                Dim errHeader = "FATAL: Flashback Engine configuration error - duplicate output directories detected:"
+                Console.ForegroundColor = ConsoleColor.Red
+                Console.Error.WriteLine(errHeader)
+                For Each errMsg In validationResult.Errors
+                    Console.Error.WriteLine("  * " & errMsg)
+                Next
+                Console.ResetColor()
+
+                Dim logFile = Path.Combine(baseDir, "printers.log")
+                Try
+                    Dim sbLog As New Text.StringBuilder()
+                    sbLog.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [Critical] Flashback.Engine.Program: {errHeader}")
+                    For Each errMsg In validationResult.Errors
+                        sbLog.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [Critical] Flashback.Engine.Program:   * {errMsg}")
+                    Next
+                    File.AppendAllText(logFile, sbLog.ToString())
+                Catch
+                End Try
+
+                mutex.ReleaseMutex()
+                mutex.Dispose()
+                Environment.Exit(1)
+            End If
+        End If
+
         If isDaemon Then
             Dim psi As New ProcessStartInfo(Environment.ProcessPath)
             Dim daemonArgs = args.Where(Function(a) a <> "-d" AndAlso a <> "--daemon").ToList()

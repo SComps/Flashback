@@ -105,7 +105,12 @@ Module Program
                 Select Case sel
                     Case "SAVE"
                         SaveDevices()
-                        SetError("Configuration saved.")
+                        Dim validation = PrinterConfigValidator.ValidateDevices(devList)
+                        If Not validation.IsValid Then
+                            SetError($"Saved, but WARNING: Duplicate output dir ({validation.Errors(0)})")
+                        Else
+                            SetError("Configuration saved.")
+                        End If
                     Case "ADD"
                         Dim nd As New Devs()
                         devList.Add(nd)

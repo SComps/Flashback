@@ -187,6 +187,7 @@ namespace Flashback.Config.WinUI
                 Devices.Add(newItem);
                 SaveDevices();
                 LoadDevices();
+                await CheckForDuplicateOutputDirectoriesAsync();
             }
         }
 
@@ -209,6 +210,30 @@ namespace Flashback.Config.WinUI
             catch { }
         }
 
+        private async System.Threading.Tasks.Task CheckForDuplicateOutputDirectoriesAsync()
+        {
+            try
+            {
+                if (File.Exists(configFile))
+                {
+                    var validation = PrinterConfigValidator.ValidatePrinters(configFile, AppDomain.CurrentDomain.BaseDirectory);
+                    if (!validation.IsValid && validation.Errors.Count > 0)
+                    {
+                        var dialog = new ContentDialog
+                        {
+                            Title = "Configuration Warning",
+                            Content = $"Warning: Duplicate output directory detected!\n\n{validation.Errors[0]}\n\nFlashback Engine will fail to start until each printer has a unique output directory.",
+                            CloseButtonText = "OK",
+                            DefaultButton = ContentDialogButton.Close,
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        await dialog.ShowAsync();
+                    }
+                }
+            }
+            catch { }
+        }
+
         private async void Edit_Click(object sender, RoutedEventArgs e)
         {
             var button = sender as Button;
@@ -224,6 +249,7 @@ namespace Flashback.Config.WinUI
                 dialog.SaveFields();
                 SaveDevices();
                 LoadDevices();
+                await CheckForDuplicateOutputDirectoriesAsync();
             }
         }
 

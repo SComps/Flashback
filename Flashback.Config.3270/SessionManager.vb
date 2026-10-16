@@ -170,8 +170,14 @@ Public Class SessionStateManager
             If SaveDevices(errTitle, errMsg, errDetails) Then
                 _hasUnsavedChanges = False
                 _session.ClearModifiedTags()
-                _statusMsg = "Devices saved successfully."
-                _statusColor = TN3270Color.Green
+                Dim validation = PrinterConfigValidator.ValidateDevices(_devList)
+                If Not validation.IsValid Then
+                    _statusMsg = "Saved, but WARNING: Duplicate output dirs! Engine cannot start."
+                    _statusColor = TN3270Color.Yellow
+                Else
+                    _statusMsg = "Devices saved successfully."
+                    _statusColor = TN3270Color.Green
+                End If
                 ShowMenu()
             Else
                 ' Show error screen
