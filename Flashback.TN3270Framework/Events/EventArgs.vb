@@ -1,4 +1,5 @@
 Imports TN3270Framework.Model
+Imports TN3270Framework.Protocol
 
 Namespace Events
     Public Class TN3270ConnectionEventArgs
@@ -36,10 +37,9 @@ Namespace Events
             Me.CursorAddress = cursorAddress
         End Sub
 
-        ''' <summary>Friendly name of the AID (ENTER, PF3, …).</summary>
         Public ReadOnly Property AidName As String
             Get
-                Return Protocol.AidKeys.GetName(AidKey)
+                Return AidKeys.GetName(AidKey)
             End Get
         End Property
     End Class
@@ -48,9 +48,21 @@ Namespace Events
         Inherits EventArgs
 
         Public ReadOnly Property Data As Byte()
+        Public ReadOnly Property QueryReply As QueryReplySummary
 
-        Public Sub New(data As Byte())
+        Public Sub New(data As Byte(), Optional queryReply As QueryReplySummary = Nothing)
             Me.Data = data
+            Me.QueryReply = queryReply
+        End Sub
+    End Class
+
+    Public Class QueryReplyEventArgs
+        Inherits EventArgs
+
+        Public ReadOnly Property Summary As QueryReplySummary
+
+        Public Sub New(summary As QueryReplySummary)
+            Me.Summary = summary
         End Sub
     End Class
 End Namespace

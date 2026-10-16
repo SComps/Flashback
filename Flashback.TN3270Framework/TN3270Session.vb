@@ -23,6 +23,8 @@ Public Class TN3270Session
     Private _binaryAgreed As Boolean
     Private _eorAgreed As Boolean
     Private _ttypeAgreed As Boolean
+    Private _lastQueryReply As QueryReplySummary
+    Private _negotiationNotified As Boolean
 
     Public ReadOnly Property Client As TcpClient
         Get
@@ -60,6 +62,16 @@ Public Class TN3270Session
         End Get
     End Property
 
+    ''' <summary>Most recent parsed Query Reply summary, if any.</summary>
+    Public ReadOnly Property LastQueryReply As QueryReplySummary
+        Get
+            Return _lastQueryReply
+        End Get
+    End Property
+
+    ''' <summary>Default WCC used by ShowScreen when none is supplied.</summary>
+    Public Property DefaultWcc As WriteControlCharacter = WriteControlCharacter.DefaultPreserveMdt
+
 #End Region
 
 #Region "Events"
@@ -70,6 +82,7 @@ Public Class TN3270Session
     Public Event ScreenUpdated As EventHandler
     Public Event NegotiationComplete As EventHandler
     Public Event StructuredFieldReceived As EventHandler(Of StructuredFieldEventArgs)
+    Public Event QueryReplyReceived As EventHandler(Of QueryReplyEventArgs)
 
 #End Region
 
@@ -128,7 +141,6 @@ Public Class TN3270Session
                 End Try
             End While
         Catch
-            ' connection dropped
         Finally
             Try
                 _client.Close()
@@ -147,9 +159,12 @@ Public Class TN3270Session
                 If i + 2 < length Then
                     Dim aid = buffer(i)
                     If aid = AidKeys.StructuredField Then
-                        ProcessStructuredField(buffer, i + 3, length)
+                        ' AID 0x88 — structured fields follow (no cursor address)
+                        ' Match classic layout: skip AID then parse length-prefixed SFs
+                        ProcessStructuredField(buffer, i + 1, length - (i + 1))
                         i = length
-                    Else
+                    ElseIf IsKnownAid(aid) Then
+                        ' Only raise for real 3270 AIDs — ignores Telnet/NVT residue
                         Dim cursorAddr = AddressCodec.Decode(buffer(i + 1), buffer(i + 2))
                         ParseInboundFields(buffer, i + 3, length)
 
@@ -159,12 +174,15 @@ Public Class TN3270Session
 
                         RaiseEvent AidKeyReceived(Me, New AidKeyEventArgs(aid, activeField, cursorAddr))
                         i = length
+                    Else
+                        ' Not Telnet, not a known AID — skip byte (negotiation tail / noise)
+                        i += 1
                     End If
                 Else
                     i += 1
                 End If
             Else
-                ' Ignore non-Telnet data until negotiation completes
+                ' Not yet negotiated: ignore non-Telnet payload
                 i += 1
             End If
         End While
@@ -193,6 +211,9 @@ Public Class TN3270Session
                     End If
                     seIndex += 1
                 End While
+            Case Telnet.EOR
+                ' Record boundary — consume IAC EOR, no further action
+                Return index + 2
             Case Telnet.IAC
                 ' Escaped 0xFF data byte
                 Return index + 2
@@ -212,7 +233,6 @@ Public Class TN3270Session
                         SendTelnetCommand(Telnet.DO_OPT, opt)
                     Case Telnet.OPT_TERMINAL_TYPE
                         SendTelnetCommand(Telnet.DO_OPT, opt)
-                        ' Request terminal type
                         SendRaw({Telnet.IAC, Telnet.SB, Telnet.OPT_TERMINAL_TYPE, Telnet.TTYPE_SEND, Telnet.IAC, Telnet.SE})
                     Case Telnet.OPT_NAWS
                         SendTelnetCommand(Telnet.DO_OPT, opt)
@@ -257,7 +277,6 @@ Public Class TN3270Session
             TerminalType = Encoding.ASCII.GetString(buffer, offset + 2, count - 2).Trim()
             _ttypeAgreed = True
 
-            ' Infer model size from common terminal-type strings
             Dim tt = TerminalType.ToUpperInvariant()
             If tt.Contains("3279-5") OrElse tt.Contains("3278-5") OrElse tt.Contains("DYNAMIC") Then
                 Rows = 27 : Columns = 132
@@ -271,7 +290,6 @@ Public Class TN3270Session
 
             CheckNegotiationComplete()
         ElseIf opt = Telnet.OPT_NAWS AndAlso count >= 5 Then
-            ' NAWS: width (2 bytes) + height (2 bytes), network byte order
             Dim width = (CInt(buffer(offset + 1)) << 8) Or buffer(offset + 2)
             Dim height = (CInt(buffer(offset + 3)) << 8) Or buffer(offset + 4)
             If width > 0 AndAlso height > 0 Then
@@ -282,7 +300,8 @@ Public Class TN3270Session
     End Sub
 
     Private Sub CheckNegotiationComplete()
-        If IsNegotiated Then
+        If IsNegotiated AndAlso Not _negotiationNotified Then
+            _negotiationNotified = True
             RaiseEvent NegotiationComplete(Me, EventArgs.Empty)
         End If
     End Sub
@@ -303,9 +322,13 @@ Public Class TN3270Session
         While i < length
             Dim b = buffer(i)
 
+            ' Stop at Telnet IAC (should be IAC EOR at end of record)
+            If b = Telnet.IAC Then
+                Exit While
+            End If
+
             If b = Orders.SetBufferAddress AndAlso i + 2 < length Then
                 Dim addr = AddressCodec.Decode(buffer(i + 1), buffer(i + 2))
-                ' Terminals send the address of the first data character (Attribute + 1)
                 currentField = _fields.
                     OrderByDescending(Function(f) f.Address).
                     FirstOrDefault(Function(f) f.Address < addr)
@@ -316,12 +339,44 @@ Public Class TN3270Session
                     seenFields.Add(currentField)
                 End If
                 i += 3
-            ElseIf currentField IsNot Nothing Then
-                ' Accumulate data characters (stop at IAC or next order)
-                If b = Telnet.IAC OrElse b = Orders.SetBufferAddress OrElse b = Orders.StartField Then
-                    currentField = Nothing
-                    Continue While
+
+            ElseIf b = Orders.StartField OrElse b = Orders.StartFieldExtended Then
+                ' Host-style orders occasionally appear in inbound; skip attribute payload
+                currentField = Nothing
+                If b = Orders.StartFieldExtended AndAlso i + 1 < length Then
+                    Dim pairCount = buffer(i + 1)
+                    i += 2 + (pairCount * 2)
+                Else
+                    i += 2
                 End If
+
+            ElseIf b = Orders.GraphicEscape AndAlso i + 1 < length Then
+                ' GE + byte — treat following byte as a graphic if we have a field
+                If currentField IsNot Nothing Then
+                    Dim ch = Ebcdic.GetString({buffer(i + 1)})
+                    If currentField.Content.Length < currentField.Length Then
+                        currentField.Content &= ch
+                    End If
+                End If
+                i += 2
+
+            ElseIf b = Orders.ProgramTab OrElse b = Orders.RepeatToAddress OrElse
+                   b = Orders.EraseUnprotectedToAddress OrElse b = Orders.InsertCursor OrElse
+                   b = Orders.SetAttribute OrElse b = Orders.ModifyField Then
+                ' Orders we do not fully interpret inbound: skip conservatively
+                currentField = Nothing
+                If (b = Orders.RepeatToAddress OrElse b = Orders.EraseUnprotectedToAddress) AndAlso i + 2 < length Then
+                    i += 3
+                ElseIf b = Orders.SetAttribute AndAlso i + 2 < length Then
+                    i += 3
+                ElseIf b = Orders.ModifyField AndAlso i + 1 < length Then
+                    Dim pairCount = buffer(i + 1)
+                    i += 2 + (pairCount * 2)
+                Else
+                    i += 1
+                End If
+
+            ElseIf currentField IsNot Nothing Then
                 Dim ch = Ebcdic.GetString({b})
                 If currentField.Content.Length < currentField.Length Then
                     currentField.Content &= ch
@@ -334,10 +389,30 @@ Public Class TN3270Session
     End Sub
 
     Private Sub ProcessStructuredField(buffer() As Byte, startIndex As Integer, length As Integer)
-        Dim count = Math.Max(0, length - startIndex)
-        Dim data(count - 1) As Byte
+        Dim count = Math.Max(0, length)
+        Dim data(Math.Max(count - 1, 0)) As Byte
         If count > 0 Then Array.Copy(buffer, startIndex, data, 0, count)
-        RaiseEvent StructuredFieldReceived(Me, New StructuredFieldEventArgs(data))
+
+        Dim summary = StructuredFieldParser.ParseQueryReplies(buffer, startIndex, length)
+        If summary IsNot Nothing AndAlso summary.RawReplies.Count > 0 Then
+            _lastQueryReply = summary
+            ApplyQueryReplyToSession(summary)
+            RaiseEvent QueryReplyReceived(Me, New QueryReplyEventArgs(summary))
+        End If
+
+        RaiseEvent StructuredFieldReceived(Me, New StructuredFieldEventArgs(data, summary))
+    End Sub
+
+    ''' <summary>
+    ''' Apply Usable Area (and related) Query Reply data to session geometry when present.
+    ''' </summary>
+    Private Sub ApplyQueryReplyToSession(summary As QueryReplySummary)
+        If summary.UsableArea Is Nothing Then Return
+        Dim ua = summary.UsableArea
+        If ua.WidthChars > 0 AndAlso ua.HeightChars > 0 Then
+            Columns = ua.WidthChars
+            Rows = ua.HeightChars
+        End If
     End Sub
 
 #End Region
@@ -372,8 +447,6 @@ Public Class TN3270Session
             .Name = If(name, "")
         }
 
-        ' Hidden (non-display) fields are non-detectable: the operator cannot set MDT.
-        ' Pre-arm MDT so Read Modified still returns their content.
         If intensity = FieldIntensity.Hidden Then
             f.Modified = True
         End If
@@ -382,7 +455,6 @@ Public Class TN3270Session
         Return f
     End Function
 
-    ''' <summary>Legacy overload accepting the old TN3270Intensity enum.</summary>
     Public Function AddField(row As Integer,
                              col As Integer,
                              length As Integer,
@@ -432,12 +504,16 @@ Public Class TN3270Session
 
     Public Sub ClearModifiedTags()
         For Each field In _fields
-            ' Keep hidden fields pre-armed so they remain returned on Read Modified
             field.Modified = (field.Intensity = FieldIntensity.Hidden)
         Next
     End Sub
 
-    Public Sub ShowScreen(Optional clearScreen As Boolean = True)
+    ''' <summary>
+    ''' Build and send the current field list.
+    ''' </summary>
+    ''' <param name="clearScreen">True = Erase/Write (or Alternate); False = Write.</param>
+    ''' <param name="wcc">Optional write-control character; defaults to <see cref="DefaultWcc"/>.</param>
+    Public Sub ShowScreen(Optional clearScreen As Boolean = True, Optional wcc As WriteControlCharacter = Nothing)
         Dim buffer As New List(Of Byte)
 
         Dim cmd As Byte
@@ -448,8 +524,8 @@ Public Class TN3270Session
         End If
         buffer.Add(cmd)
 
-        ' WCC: restore keyboard, preserve MDT (&HC2)
-        buffer.Add(&HC2)
+        Dim control = If(wcc, DefaultWcc)
+        buffer.Add(control.ToByte())
 
         For Each f In _fields
             buffer.Add(Orders.SetBufferAddress)
@@ -493,7 +569,6 @@ Public Class TN3270Session
                 Next
             End If
 
-            ' Terminator attribute so intensity/color does not bleed into following cells
             Dim termAddr = (f.Address + f.Length + 1) Mod ScreenSize
             Dim collision = _fields.Any(Function(other) other.Address = termAddr OrElse
                                                        (termAddr > other.Address AndAlso termAddr <= other.Address + other.Length))
@@ -501,11 +576,10 @@ Public Class TN3270Session
                 buffer.Add(Orders.SetBufferAddress)
                 buffer.AddRange(AddressCodec.Encode(termAddr))
                 buffer.Add(Orders.StartField)
-                buffer.Add(&H60) ' protected, normal, alphanumeric
+                buffer.Add(&H60)
             End If
         Next
 
-        ' Place cursor on first unprotected field
         Dim firstUnprotected = _fields.FirstOrDefault(Function(f) Not f.IsProtected)
         If firstUnprotected IsNot Nothing Then
             buffer.Add(Orders.SetBufferAddress)
@@ -521,10 +595,69 @@ Public Class TN3270Session
 
 #End Region
 
-#Region "Host-initiated read / erase commands"
+#Region "Outbound order helpers"
 
-    Public Sub EraseAllUnprotected()
-        SendRaw({Commands.EraseAllUnprotected, &HC3, Telnet.IAC, Telnet.EOR})
+    ''' <summary>
+    ''' Emit Repeat to Address: fill from the current buffer position through
+    ''' <paramref name="endAddress"/> with <paramref name="fillChar"/> (EBCDIC byte).
+    ''' Low-level helper for custom paints; prefer the field API for normal screens.
+    ''' </summary>
+    Public Sub RepeatToAddress(endAddress As Integer, fillChar As Byte,
+                               Optional clearScreen As Boolean = False,
+                               Optional wcc As WriteControlCharacter = Nothing)
+        Dim buffer As New List(Of Byte)
+        buffer.Add(If(clearScreen,
+                      If(Columns > 80 OrElse Rows > 24, Commands.EraseWriteAlternate, Commands.EraseWrite),
+                      Commands.Write))
+        buffer.Add(If(wcc, DefaultWcc).ToByte())
+        buffer.Add(Orders.RepeatToAddress)
+        buffer.AddRange(AddressCodec.Encode(endAddress Mod ScreenSize))
+        buffer.Add(fillChar)
+        buffer.Add(Telnet.IAC)
+        buffer.Add(Telnet.EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+
+    ''' <summary>
+    ''' Emit Erase Unprotected to Address: clear unprotected positions up to
+    ''' <paramref name="endAddress"/>.
+    ''' </summary>
+    Public Sub EraseUnprotectedToAddress(endAddress As Integer,
+                                         Optional wcc As WriteControlCharacter = Nothing)
+        Dim buffer As New List(Of Byte)
+        buffer.Add(Commands.Write)
+        buffer.Add(If(wcc, DefaultWcc).ToByte())
+        buffer.Add(Orders.EraseUnprotectedToAddress)
+        buffer.AddRange(AddressCodec.Encode(endAddress Mod ScreenSize))
+        buffer.Add(Telnet.IAC)
+        buffer.Add(Telnet.EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+
+    ''' <summary>
+    ''' Position the cursor without rewriting the whole screen.
+    ''' </summary>
+    Public Sub SetCursor(row As Integer, col As Integer,
+                         Optional wcc As WriteControlCharacter = Nothing)
+        Dim addr = (((row - 1) * Columns) + (col - 1)) Mod ScreenSize
+        Dim buffer As New List(Of Byte)
+        buffer.Add(Commands.Write)
+        buffer.Add(If(wcc, DefaultWcc).ToByte())
+        buffer.Add(Orders.SetBufferAddress)
+        buffer.AddRange(AddressCodec.Encode(addr))
+        buffer.Add(Orders.InsertCursor)
+        buffer.Add(Telnet.IAC)
+        buffer.Add(Telnet.EOR)
+        SendRaw(buffer.ToArray())
+    End Sub
+
+#End Region
+
+#Region "Host-initiated read / erase / query"
+
+    Public Sub EraseAllUnprotected(Optional wcc As WriteControlCharacter = Nothing)
+        Dim control = If(wcc, WriteControlCharacter.ResetMdtAndRestore)
+        SendRaw({Commands.EraseAllUnprotected, control.ToByte(), Telnet.IAC, Telnet.EOR})
     End Sub
 
     Public Sub ReadModified()
@@ -539,9 +672,16 @@ Public Class TN3270Session
         SendRaw({Commands.ReadBuffer, Telnet.IAC, Telnet.EOR})
     End Sub
 
+    ''' <summary>
+    ''' Request Query Reply from the terminal (Read Partition Query).
+    ''' Results arrive via StructuredFieldReceived / QueryReplyReceived.
+    ''' </summary>
     Public Sub SendReadPartitionQuery()
-        ' WSF + length + Read Partition Query
-        Dim cmd As Byte() = {Commands.WriteStructuredField, 0, 5, 1, &HFF, Telnet.IAC, Telnet.EOR}
+        Dim cmd As Byte() = {
+            Commands.WriteStructuredField, 0, 5,
+            StructuredFieldTypes.ReadPartition, StructuredFieldTypes.Query,
+            Telnet.IAC, Telnet.EOR
+        }
         SendRaw(cmd)
     End Sub
 
@@ -576,5 +716,27 @@ Public Class TN3270Session
     End Sub
 
 #End Region
+
+
+    ''' <summary>
+    ''' True when <paramref name="aid"/> is a standard 3270 attention identifier.
+    ''' Used so Telnet option bytes and NVT data never surface as AidKeyReceived.
+    ''' </summary>
+    Private Shared Function IsKnownAid(aid As Byte) As Boolean
+        Select Case aid
+            Case AidKeys.Enter, AidKeys.Clear,
+                 AidKeys.PA1, AidKeys.PA2, AidKeys.PA3,
+                 AidKeys.SysReq, AidKeys.StructuredField,
+                 AidKeys.PF1, AidKeys.PF2, AidKeys.PF3, AidKeys.PF4,
+                 AidKeys.PF5, AidKeys.PF6, AidKeys.PF7, AidKeys.PF8,
+                 AidKeys.PF9, AidKeys.PF10, AidKeys.PF11, AidKeys.PF12,
+                 AidKeys.PF13, AidKeys.PF14, AidKeys.PF15, AidKeys.PF16,
+                 AidKeys.PF17, AidKeys.PF18, AidKeys.PF19, AidKeys.PF20,
+                 AidKeys.PF21, AidKeys.PF22, AidKeys.PF23, AidKeys.PF24
+                Return True
+            Case Else
+                Return False
+        End Select
+    End Function
 
 End Class

@@ -183,7 +183,14 @@ End Class
 
 Public Class StructuredFieldEventArgs
     Inherits Events.StructuredFieldEventArgs
-    Public Sub New(data As Byte())
-        MyBase.New(data)
+    Public Sub New(data As Byte(), Optional queryReply As Protocol.QueryReplySummary = Nothing)
+        MyBase.New(data, queryReply)
+    End Sub
+End Class
+
+Public Class QueryReplyEventArgs
+    Inherits Events.QueryReplyEventArgs
+    Public Sub New(summary As Protocol.QueryReplySummary)
+        MyBase.New(summary)
     End Sub
 End Class
