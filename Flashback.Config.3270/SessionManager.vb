@@ -43,7 +43,7 @@ Public Class SessionStateManager
         End If
     End Sub
 
-    Public Sub InitSession()
+    Public Sub InitSession(sender As Object, e As EventArgs)
         If _mode = ScreenMode.Login Then
             ShowLogin()
         Else

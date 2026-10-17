@@ -46,11 +46,10 @@ Public Class Config3270Worker
         Dim session = e.Session
         ' Re-load devices before starting session to ensure consistency
         LoadDevices()
-        session.SetModel(TerminalModel.Model2)
         Dim stateManager As New SessionStateManager(session, _devList, _configFile, _syspw)
         AddHandler session.NegotiationComplete, AddressOf stateManager.InitSession
         AddHandler session.AidKeyReceived, AddressOf stateManager.HandleInput
-        AddHandler session.Disconnected, Sub() _logger.LogInformation("[ConfigServer] Session {RemoteEndPoint} disconnected.", e.RemoteEndPoint)
+        AddHandler session.Disconnected, Sub(s, ea) _logger.LogInformation("[ConfigServer] Session {RemoteEndPoint} disconnected.", e.RemoteEndPoint)
         session.StartNegotiation()
     End Sub
 
