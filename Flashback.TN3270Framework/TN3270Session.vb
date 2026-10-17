@@ -718,11 +718,6 @@ Public Class TN3270Session
     End Sub
 
     ''' <summary>
-    ''' Send a Set‑Model screen‑control command (SCS 0x30) to force the
-    ''' client into a specific 3270 model (2 = 80×24, 3 = 80×27, 4 = 132×27).
-    ''' </summary>
-    ''' <param name="model">Terminal model to request (Model2 = 80×24, Model3 = 80×27, Model4 = 132×27).</param>
-    ''' <summary>
     ''' Switch the terminal's active screen geometry to the specified 3270 model.
     ''' </summary>
     ''' <remarks>
