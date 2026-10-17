@@ -1,5 +1,6 @@
 Imports System.Net
 Imports System.Net.Sockets
+Imports System.Threading
 Imports System.Threading.Tasks
 Imports TN3270Framework.Events
 
@@ -11,7 +12,7 @@ Namespace Server
     Public Class TN3270Listener
         Private ReadOnly _listener As TcpListener
         Private ReadOnly _port As Integer
-        Private _isRunning As Boolean
+        Private _cts As CancellationTokenSource
 
         Public Event ConnectionReceived As EventHandler(Of TN3270ConnectionEventArgs)
 
@@ -23,7 +24,7 @@ Namespace Server
 
         Public ReadOnly Property IsRunning As Boolean
             Get
-                Return _isRunning
+                Return _cts IsNot Nothing AndAlso Not _cts.IsCancellationRequested
             End Get
         End Property
 
@@ -37,15 +38,15 @@ Namespace Server
 
         ''' <summary>Start accepting connections on a background task.</summary>
         Public Sub Start()
-            If _isRunning Then Return
+            If IsRunning Then Return
+            _cts = New CancellationTokenSource()
             _listener.Start()
-            _isRunning = True
-            Task.Run(AddressOf ListenLoop)
+            Task.Run(Function() ListenLoop(_cts.Token))
         End Sub
 
         ''' <summary>Stop accepting new connections and close the listener socket.</summary>
         Public Sub StopListening()
-            _isRunning = False
+            If _cts IsNot Nothing Then _cts.Cancel()
             Try
                 _listener.Stop()
             Catch
@@ -53,27 +54,29 @@ Namespace Server
             End Try
         End Sub
 
-        Private Async Sub ListenLoop()
-            While _isRunning
+        Private Async Function ListenLoop(token As CancellationToken) As Task
+            While Not token.IsCancellationRequested
                 Try
-                    Dim client = Await _listener.AcceptTcpClientAsync().ConfigureAwait(False)
+                    Dim client = Await _listener.AcceptTcpClientAsync(token).ConfigureAwait(False)
                     Dim session = New TN3270Session(client)
                     Dim args As New TN3270ConnectionEventArgs(session, client.Client.RemoteEndPoint)
                     RaiseEvent ConnectionReceived(Me, args)
+                Catch ex As OperationCanceledException
+                    Exit While
                 Catch ex As ObjectDisposedException
                     ' Listener was stopped
                     Exit While
                 Catch ex As SocketException
-                    If _isRunning Then
+                    If Not token.IsCancellationRequested Then
                         ' Transient accept error; continue
                     End If
                 Catch ex As Exception
-                    If _isRunning Then
+                    If Not token.IsCancellationRequested Then
                         ' Unexpected; continue accepting
                     End If
                 End Try
             End While
-        End Sub
+        End Function
     End Class
 End Namespace
 

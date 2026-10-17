@@ -8,13 +8,17 @@ Namespace Protocol
         Private Sub New()
         End Sub
 
+        Shared Sub New()
+            ' Register once at class initialisation — RegisterProvider is idempotent
+            ' but acquires a lock internally, so calling it per-request is wasteful.
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
+        End Sub
+
         ''' <summary>
         ''' Resolve a friendly name or IBM code-page identifier to a .NET Encoding.
         ''' Falls back to IBM037 (US/Canada) when the requested set is unknown.
         ''' </summary>
         Public Shared Function GetEncoding(codePage As String) As Encoding
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
-
             Select Case codePage.ToUpperInvariant()
                 Case "IBM037", "US", "USA", "CANADA"
                     Return Encoding.GetEncoding("IBM037")

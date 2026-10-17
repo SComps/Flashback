@@ -93,8 +93,6 @@ Public Class TN3270Session
         _client = client
         _stream = client.GetStream()
         _cancelToken = New CancellationTokenSource()
-
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
         Ebcdic = Encoding.GetEncoding("IBM037")
     End Sub
 
@@ -130,17 +128,24 @@ Public Class TN3270Session
                     bytesRead = Await _stream.ReadAsync(buffer.AsMemory(0, buffer.Length), _cancelToken.Token).ConfigureAwait(False)
                 Catch ex As OperationCanceledException
                     Exit While
+                Catch ex As IO.IOException
+                    ' Remote closed the connection ungracefully
+                    Exit While
+                Catch ex As Net.Sockets.SocketException
+                    Exit While
                 End Try
 
                 If bytesRead = 0 Then Exit While
 
-                Try
-                    ProcessData(buffer, bytesRead)
-                Catch
-                    Exit While
-                End Try
+                ' Let logic errors propagate — they are bugs, not expected disconnects.
+                ProcessData(buffer, bytesRead)
             End While
-        Catch
+        Catch ex As OperationCanceledException
+            ' Normal shutdown
+        Catch ex As IO.IOException
+            ' Remote closed
+        Catch ex As Net.Sockets.SocketException
+            ' Network fault
         Finally
             Try
                 _client.Close()
@@ -187,9 +192,14 @@ Public Class TN3270Session
             End If
         End While
 
-        Dim actualData(length - 1) As Byte
-        Array.Copy(buffer, actualData, length)
-        RaiseEvent DataReceived(Me, New DataReceivedEventArgs(actualData))
+        ' Only raise DataReceived for post-negotiation 3270 application data,
+        ' not for raw Telnet negotiation bytes. Callers that need raw Telnet
+        ' traffic should subclass and override ProcessData instead.
+        If IsNegotiated Then
+            Dim actualData(length - 1) As Byte
+            Array.Copy(buffer, actualData, length)
+            RaiseEvent DataReceived(Me, New DataReceivedEventArgs(actualData))
+        End If
     End Sub
 
     Private Function ProcessTelnetCommand(buffer() As Byte, index As Integer, length As Integer) As Integer
@@ -319,6 +329,10 @@ Public Class TN3270Session
         Dim i = startIndex
         Dim currentField As TN3270Field = Nothing
 
+        ' Pre-sort once so per-character field lookups are a simple scan rather
+        ' than a full re-sort on every SBA order.
+        Dim sortedFields = _fields.OrderBy(Function(f) f.Address).ToList()
+
         While i < length
             Dim b = buffer(i)
 
@@ -329,9 +343,15 @@ Public Class TN3270Session
 
             If b = Orders.SetBufferAddress AndAlso i + 2 < length Then
                 Dim addr = AddressCodec.Decode(buffer(i + 1), buffer(i + 2))
-                currentField = _fields.
-                    OrderByDescending(Function(f) f.Address).
-                    FirstOrDefault(Function(f) f.Address < addr)
+                ' Walk backwards through sorted list to find the last field whose
+                ' address is strictly before addr (i.e. the field that owns this position).
+                currentField = Nothing
+                For idx = sortedFields.Count - 1 To 0 Step -1
+                    If sortedFields(idx).Address < addr Then
+                        currentField = sortedFields(idx)
+                        Exit For
+                    End If
+                Next
 
                 If currentField IsNot Nothing AndAlso Not seenFields.Contains(currentField) Then
                     currentField.Content = ""
@@ -702,18 +722,47 @@ Public Class TN3270Session
     ''' client into a specific 3270 model (2 = 80×24, 3 = 80×27, 4 = 132×27).
     ''' </summary>
     ''' <param name="model">Terminal model to request (Model2 = 80×24, Model3 = 80×27, Model4 = 132×27).</param>
+    ''' <summary>
+    ''' Switch the terminal's active screen geometry to the specified 3270 model.
+    ''' </summary>
+    ''' <remarks>
+    ''' The 3270 datastream has no "Set Model" structured field. The correct
+    ''' host-side mechanism, used by z/OS itself, is command selection:
+    '''   Erase/Write (0xF5)           = default geometry (Model 2, 80x24)
+    '''   Erase/Write Alternate (0x7E) = alternate geometry as negotiated at
+    '''                                  connect time (Model 3=80x32, Model 4=80x43,
+    '''                                  Model 5=132x27)
+    ''' This method updates the session Rows/Columns then sends a blank EW or EWA
+    ''' to commit the geometry change on the terminal. The caller should follow
+    ''' immediately with a ShowScreen call to paint content into the new geometry.
+    '''
+    ''' Note: the terminal must have negotiated the requested alternate size via
+    ''' TERMINAL-TYPE subnegotiation at connect time.
+    ''' </remarks>
+    ''' <param name="model">Target 3270 model.</param>
     Public Sub SetModel(model As TerminalModel)
-        Dim modelNumber As Byte = CByte(model)
+        ' Update session geometry to match the requested model.
+        Select Case model
+            Case TerminalModel.Model2
+                Rows = 24 : Columns = 80
+            Case TerminalModel.Model3
+                Rows = 32 : Columns = 80
+            Case TerminalModel.Model4
+                Rows = 43 : Columns = 80
+            Case TerminalModel.Model5
+                Rows = 27 : Columns = 132
+        End Select
 
-        ' Structured‑field header for a generic Screen‑Control command
-        '   0x01 – SF identifier
-        '   0x84 – SF type = SCS (Screen Control Set)
-        '   Length = 6 bytes (header 4 + opcode 1 + parameter 1)
-        Dim sfHeader As Byte() = {&H01, &H84, &H00, &H06}
-        Dim payload As Byte() = {&H30, modelNumber}   ' 0x30 = Set‑Model
-        Dim sf As Byte() = sfHeader.Concat(payload).ToArray()
+        ' EW resets to the default 80x24 geometry.
+        ' EWA switches to the alternate geometry the terminal advertised —
+        ' exactly how z/OS changes models mid-session.
+        Dim cmd As Byte = If(Rows = 24 AndAlso Columns = 80,
+                             Commands.EraseWrite,
+                             Commands.EraseWriteAlternate)
 
-        WriteStructuredField(sf)
+        ' A blank write commits the geometry switch before the caller paints the screen.
+        Dim wcc As Byte = WriteControlCharacter.DefaultPreserveMdt.ToByte()
+        SendRaw({cmd, wcc, Telnet.IAC, Telnet.EOR})
     End Sub
 
     Public Sub SetCharacterSet(codePage As String)

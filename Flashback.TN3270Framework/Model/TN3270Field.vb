@@ -18,6 +18,12 @@ Namespace Model
     Public Class TN3270Field
         Private ReadOnly _screen As IScreenGeometry
 
+        ' Cached address — invalidated whenever Row, Col, or screen geometry changes.
+        Private _cachedAddress As Integer = -1
+        Private _cachedRow As Integer = -1
+        Private _cachedCol As Integer = -1
+        Private _cachedColumns As Integer = -1
+
         Public Sub New(screen As IScreenGeometry)
             If screen Is Nothing Then Throw New ArgumentNullException(NameOf(screen))
             _screen = screen
@@ -51,13 +57,20 @@ Namespace Model
         ''' <summary>
         ''' Linear buffer address of the field attribute byte.
         ''' Data occupies Address+1 .. Address+Length.
+        ''' The result is cached and recomputed only when Row, Col, or screen Columns change.
         ''' </summary>
         Public ReadOnly Property Address As Integer
             Get
                 Dim cols = _screen.Columns
-                Dim totalCells = _screen.ScreenSize
-                ' Attribute sits one cell before the requested data origin.
-                Return (((Row - 1) * cols) + (Col - 1) - 1 + totalCells) Mod totalCells
+                If Row <> _cachedRow OrElse Col <> _cachedCol OrElse cols <> _cachedColumns Then
+                    _cachedRow = Row
+                    _cachedCol = Col
+                    _cachedColumns = cols
+                    Dim totalCells = _screen.ScreenSize
+                    ' Attribute sits one cell before the requested data origin.
+                    _cachedAddress = (((Row - 1) * cols) + (Col - 1) - 1 + totalCells) Mod totalCells
+                End If
+                Return _cachedAddress
             End Get
         End Property
 
