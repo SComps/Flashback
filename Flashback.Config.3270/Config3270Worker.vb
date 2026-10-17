@@ -46,6 +46,7 @@ Public Class Config3270Worker
         Dim session = e.Session
         ' Re-load devices before starting session to ensure consistency
         LoadDevices()
+session.SetModel(TerminalModel.Model2)
         Dim stateManager As New SessionStateManager(session, _devList, _configFile, _syspw)
         AddHandler session.NegotiationComplete, AddressOf stateManager.InitSession
         AddHandler session.AidKeyReceived, AddressOf stateManager.HandleInput
