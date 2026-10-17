@@ -93,6 +93,8 @@ Public Class TN3270Session
         _client = client
         _stream = client.GetStream()
         _cancelToken = New CancellationTokenSource()
+
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
         Ebcdic = Encoding.GetEncoding("IBM037")
     End Sub
 
