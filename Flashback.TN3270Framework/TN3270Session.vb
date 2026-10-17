@@ -701,11 +701,9 @@ Public Class TN3270Session
     ''' Send a Set‑Model screen‑control command (SCS 0x30) to force the
     ''' client into a specific 3270 model (2 = 80×24, 3 = 80×27, 4 = 132×27).
     ''' </summary>
-    ''' <param name="modelNumber">Model number (2‑4).</param>
-    Public Sub SetModel(modelNumber As Byte)
-        If modelNumber < 2 OrElse modelNumber > 4 Then
-            Throw New ArgumentOutOfRangeException(NameOf(modelNumber), "Model must be 2, 3, or 4 (80×24, 80×27, 132×27).")
-        End If
+    ''' <param name="model">Terminal model to request (Model2 = 80×24, Model3 = 80×27, Model4 = 132×27).</param>
+    Public Sub SetModel(model As TerminalModel)
+        Dim modelNumber As Byte = CByte(model)
 
         ' Structured‑field header for a generic Screen‑Control command
         '   0x01 – SF identifier
