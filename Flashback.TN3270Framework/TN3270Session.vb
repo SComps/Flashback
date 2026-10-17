@@ -697,6 +697,27 @@ Public Class TN3270Session
         SendRaw(buffer.ToArray())
     End Sub
 
+    ''' <summary>
+    ''' Send a Set‑Model screen‑control command (SCS 0x30) to force the
+    ''' client into a specific 3270 model (2 = 80×24, 3 = 80×27, 4 = 132×27).
+    ''' </summary>
+    ''' <param name="modelNumber">Model number (2‑4).</param>
+    Public Sub SetModel(modelNumber As Byte)
+        If modelNumber < 2 OrElse modelNumber > 4 Then
+            Throw New ArgumentOutOfRangeException(NameOf(modelNumber), "Model must be 2, 3, or 4 (80×24, 80×27, 132×27).")
+        End If
+
+        ' Structured‑field header for a generic Screen‑Control command
+        '   0x01 – SF identifier
+        '   0x84 – SF type = SCS (Screen Control Set)
+        '   Length = 6 bytes (header 4 + opcode 1 + parameter 1)
+        Dim sfHeader As Byte() = {&H01, &H84, &H00, &H06}
+        Dim payload As Byte() = {&H30, modelNumber}   ' 0x30 = Set‑Model
+        Dim sf As Byte() = sfHeader.Concat(payload).ToArray()
+
+        WriteStructuredField(sf)
+    End Sub
+
     Public Sub SetCharacterSet(codePage As String)
         Ebcdic = CharacterSets.GetEncoding(codePage)
     End Sub
