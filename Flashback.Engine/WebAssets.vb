@@ -84,6 +84,11 @@ main {
     background-color: #f4f4f4;
     border-bottom: 1px solid #e0e0e0;
     padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .section-title {
@@ -91,6 +96,66 @@ main {
     font-weight: 600;
     color: #161616;
     margin: 0;
+}
+
+/* Breadcrumb Navigation */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 0;
+    margin: 0 0 16px 0;
+    list-style: none;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-item {
+    display: inline-flex;
+    align-items: center;
+    color: #0f62fe;
+}
+
+.breadcrumb-item a {
+    color: #0f62fe;
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: #0043ce;
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: #525252;
+    font-weight: 500;
+}
+
+.breadcrumb-separator {
+    margin: 0 8px;
+    color: #8d8d8d;
+    user-select: none;
+}
+
+/* Nav Actions in Header */
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-actions .btn {
+    margin-left: 0;
+}
+
+.btn-sm, a.btn-sm, button.btn-sm {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 0.8125rem;
+    gap: 6px;
+}
+
+.btn-sm svg {
+    flex-shrink: 0;
 }
 
 .section-content {
@@ -504,8 +569,12 @@ button.btn {
     .file-actions { text-align: left; margin-top: 8px; white-space: normal; }
     .file-actions .btn, .file-actions form { margin: 4px 6px 4px 0; }
     .log-tail { height: 220px; }
+    .section-header { flex-direction: column; align-items: flex-start; }
+    .nav-actions { width: 100%; justify-content: flex-start; }
 }
 "
 
     Public Shared ReadOnly Property FileIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" width=""20"" height=""20"" viewBox=""0 0 32 32"" fill=""#0f62fe""><path d=""M25.7 9.3l-7-7A.91.91 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a.91.91 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z""/></svg>"
+    Public Shared ReadOnly Property HomeIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" width=""16"" height=""16"" viewBox=""0 0 32 32"" fill=""currentColor""><path d=""M16.612 2.214a1.01 1.01 0 00-1.224 0L2.388 12.214A1 1 0 003 14h1v14a2 2 0 002 2h20a2 2 0 002-2V14h1a1 1 0 00.612-1.786zM26 28H6V13.618l10-8 10 8z""/><path d=""M12 18h8v10h-8z""/></svg>"
+    Public Shared ReadOnly Property UpIconSvg As String = "<svg xmlns=""http://www.w3.org/2000/svg"" width=""16"" height=""16"" viewBox=""0 0 32 32"" fill=""currentColor""><path d=""M16 4L6 14l1.414 1.414L15 7.828V28h2V7.828l7.586 7.586L26 14 16 4z""/></svg>"
 End Class

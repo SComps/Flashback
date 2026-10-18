@@ -413,6 +413,9 @@ Public Class WebWorker
 
         If String.IsNullOrEmpty(printerFilter) Then
             ' Level 1: List Printers (Public)
+            sb.AppendLine("<nav class=""breadcrumb"" aria-label=""Breadcrumb"">")
+            sb.AppendLine("<span class=""breadcrumb-item active"">Printers</span>")
+            sb.AppendLine("</nav>")
             sb.AppendLine("<div class=""section"">")
             sb.AppendLine("<div class=""section-header"">")
             sb.AppendLine("<h2 class=""section-title"">Available Printers</h2>")
@@ -441,15 +444,24 @@ Public Class WebWorker
             
         ElseIf String.IsNullOrEmpty(userFilter) Then
             ' Level 2: List User Folders within Printer (Public)
+            sb.AppendLine("<nav class=""breadcrumb"" aria-label=""Breadcrumb"">")
+            sb.AppendLine("<a href=""."" class=""breadcrumb-item"">Printers</a>")
+            sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+            sb.AppendLine($"<span class=""breadcrumb-item active"">{WebUtility.HtmlEncode(printerFilter)}</span>")
+            sb.AppendLine("</nav>")
+            sb.AppendLine("<div class=""section"">")
+            sb.AppendLine("<div class=""section-header"">")
+            sb.AppendLine($"<h2 class=""section-title"">Users - {WebUtility.HtmlEncode(printerFilter)}</h2>")
+            sb.AppendLine("<div class=""nav-actions"">")
+            sb.AppendLine($"<a href=""."" class=""btn btn-secondary btn-sm"" title=""Return to Printers"">{WebAssets.HomeIconSvg} Home</a>")
+            sb.AppendLine($"<a href=""."" class=""btn btn-secondary btn-sm"" title=""Up to Printers"">{WebAssets.UpIconSvg} Up</a>")
+            sb.AppendLine("</div>")
+            sb.AppendLine("</div>")
+            sb.AppendLine("<div class=""section-content"">")
+            
             If allowedDevices.ContainsKey(printerFilter) Then
                 Dim root = allowedDevices(printerFilter)
                 Dim subDirs = Directory.GetDirectories(root)
-                
-                sb.AppendLine("<div class=""section"">")
-                sb.AppendLine("<div class=""section-header"">")
-                sb.AppendLine($"<h2 class=""section-title"">Users - {WebUtility.HtmlEncode(printerFilter)}</h2>")
-                sb.AppendLine("</div>")
-                sb.AppendLine("<div class=""section-content"">")
                 
                 If subDirs.Any() Then
                     sb.AppendLine("<div class=""file-list"">")
@@ -475,12 +487,35 @@ Public Class WebWorker
                 Else
                     sb.AppendLine("<div class=""empty-state"">No user folders found</div>")
                 End If
-                
-                sb.AppendLine("</div></div>")
+            Else
+                sb.AppendLine($"<div class=""empty-state"">Printer '{WebUtility.HtmlEncode(printerFilter)}' not found or access denied</div>")
             End If
+            
+            sb.AppendLine("</div></div>")
             
         Else
             ' Level 3: List Files for specific sub-user (Conditional Auth)
+            sb.AppendLine("<nav class=""breadcrumb"" aria-label=""Breadcrumb"">")
+            sb.AppendLine("<a href=""."" class=""breadcrumb-item"">Printers</a>")
+            sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+            sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" class=""breadcrumb-item"">{WebUtility.HtmlEncode(printerFilter)}</a>")
+            sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+            sb.AppendLine($"<span class=""breadcrumb-item active"">{WebUtility.HtmlEncode(userFilter)}</span>")
+            sb.AppendLine("</nav>")
+            sb.AppendLine("<div class=""section"">")
+            sb.AppendLine("<div class=""section-header"">")
+            sb.AppendLine($"<h2 class=""section-title"">Documents - {WebUtility.HtmlEncode(userFilter)}</h2>")
+            sb.AppendLine("<div class=""nav-actions"">")
+            sb.AppendLine($"<a href=""."" class=""btn btn-secondary btn-sm"" title=""Return to Printers"">{WebAssets.HomeIconSvg} Home</a>")
+            sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" class=""btn btn-secondary btn-sm"" title=""Up to {WebUtility.HtmlEncode(printerFilter)}"">{WebAssets.UpIconSvg} Up</a>")
+            sb.AppendLine("</div>")
+            sb.AppendLine("</div>")
+            sb.AppendLine("<div class=""section-content"">")
+
+            Dim pollCount As Integer = 0
+            Dim pollNewest As String = ""
+            Dim hasFiles As Boolean = False
+
             If allowedDevices.ContainsKey(printerFilter) Then
                 Dim root = allowedDevices(printerFilter)
                 Dim targetDir = Path.Combine(root, userFilter)
@@ -492,19 +527,11 @@ Public Class WebWorker
                                 .OrderByDescending(Function(f) f.LastWriteTime) _
                                 .ToList()
 
-                    ' Capture baseline values that the client poller will compare against
-                    Dim pollCount As Integer = files.Count
-                    Dim pollNewest As String = If(files.Any(),
-                                                  files(0).LastWriteTime.ToString("o"),
-                                                  "")
-
-                    sb.AppendLine("<div class=""section"">")
-                    sb.AppendLine("<div class=""section-header"">")
-                    sb.AppendLine($"<h2 class=""section-title"">Documents - {WebUtility.HtmlEncode(userFilter)}</h2>")
-                    sb.AppendLine("</div>")
-                    sb.AppendLine("<div class=""section-content"">")
+                    pollCount = files.Count
+                    If files.Any() Then pollNewest = files(0).LastWriteTime.ToString("o")
 
                     If files.Any() Then
+                        hasFiles = True
                         sb.AppendLine("<div class=""file-list"">")
                         For Each fi In files
                             Dim downloadUrl = $"{WebUtility.UrlEncode(printerFilter)}/{WebUtility.UrlEncode(userFilter)}/{WebUtility.UrlEncode(fi.Name)}"
@@ -530,45 +557,47 @@ Public Class WebWorker
                             sb.AppendLine("</div>")
                         Next
                         sb.AppendLine("</div>")
-                    Else
-                        sb.AppendLine("<div class=""empty-state"">No documents found</div>")
                     End If
-
-                    sb.AppendLine("</div></div>")
-
-                    ' ── Polling script — only emitted on the Level 3 (document list) view ─────
-                    ' Encodes printer/subuser directly into the script to avoid query-string
-                    ' round-trips; the server validates them again in ServePoll anyway.
-                    Dim encodedPrinter = WebUtility.HtmlEncode(WebUtility.UrlEncode(printerFilter))
-                    Dim encodedSubuser = WebUtility.HtmlEncode(WebUtility.UrlEncode(userFilter))
-                    ' Escape the newest timestamp for safe JS string literal embedding
-                    Dim safeNewest = pollNewest.Replace("\", "\\").Replace("""", "\""")
-
-                    sb.AppendLine("<script>")
-                    sb.AppendLine("(function () {")
-                    sb.AppendLine("  'use strict';")
-                    sb.AppendLine($"  var lastCount  = {pollCount};")
-                    sb.AppendLine($"  var lastNewest = '{safeNewest}';")
-                    sb.AppendLine($"  var pollUrl    = 'poll?printer={encodedPrinter}&subuser={encodedSubuser}';")
-                    sb.AppendLine("")
-                    sb.AppendLine("  function poll() {")
-                    sb.AppendLine("    fetch(pollUrl, { credentials: 'same-origin' })")
-                    sb.AppendLine("      .then(function (r) { return r.ok ? r.json() : null; })")
-                    sb.AppendLine("      .then(function (data) {")
-                    sb.AppendLine("        if (!data) return;")
-                    sb.AppendLine("        if (data.count !== lastCount || data.newest !== lastNewest) {")
-                    sb.AppendLine("          window.location.reload();")
-                    sb.AppendLine("        }")
-                    sb.AppendLine("      })")
-                    sb.AppendLine("      .catch(function () { /* network error — retry next interval */ });")
-                    sb.AppendLine("  }")
-                    sb.AppendLine("")
-                    sb.AppendLine("  setInterval(poll, 5000);")
-                    sb.AppendLine("})();")
-                    sb.AppendLine("</script>")
-                    ' ─────────────────────────────────────────────────────────────────────────
                 End If
             End If
+
+            If Not hasFiles Then
+                sb.AppendLine("<div class=""empty-state"">No documents found</div>")
+            End If
+
+            sb.AppendLine("</div></div>")
+
+            ' ── Polling script — only emitted on the Level 3 (document list) view ─────
+            ' Encodes printer/subuser directly into the script to avoid query-string
+            ' round-trips; the server validates them again in ServePoll anyway.
+            Dim encodedPrinter = WebUtility.HtmlEncode(WebUtility.UrlEncode(printerFilter))
+            Dim encodedSubuser = WebUtility.HtmlEncode(WebUtility.UrlEncode(userFilter))
+            ' Escape the newest timestamp for safe JS string literal embedding
+            Dim safeNewest = pollNewest.Replace("\", "\\").Replace("""", "\""")
+
+            sb.AppendLine("<script>")
+            sb.AppendLine("(function () {")
+            sb.AppendLine("  'use strict';")
+            sb.AppendLine($"  var lastCount  = {pollCount};")
+            sb.AppendLine($"  var lastNewest = '{safeNewest}';")
+            sb.AppendLine($"  var pollUrl    = 'poll?printer={encodedPrinter}&subuser={encodedSubuser}';")
+            sb.AppendLine("")
+            sb.AppendLine("  function poll() {")
+            sb.AppendLine("    fetch(pollUrl, { credentials: 'same-origin' })")
+            sb.AppendLine("      .then(function (r) { return r.ok ? r.json() : null; })")
+            sb.AppendLine("      .then(function (data) {")
+            sb.AppendLine("        if (!data) return;")
+            sb.AppendLine("        if (data.count !== lastCount || data.newest !== lastNewest) {")
+            sb.AppendLine("          window.location.reload();")
+            sb.AppendLine("        }")
+            sb.AppendLine("      })")
+            sb.AppendLine("      .catch(function () { /* network error — retry next interval */ });")
+            sb.AppendLine("  }")
+            sb.AppendLine("")
+            sb.AppendLine("  setInterval(poll, 5000);")
+            sb.AppendLine("})();")
+            sb.AppendLine("</script>")
+            ' ─────────────────────────────────────────────────────────────────────────
         End If
 
         sb.AppendLine("</main>")
@@ -597,9 +626,22 @@ Public Class WebWorker
         sb.AppendLine("</div></header>")
         
         sb.AppendLine("<main>")
+        sb.AppendLine("<nav class=""breadcrumb"" aria-label=""Breadcrumb"">")
+        sb.AppendLine("<a href=""."" class=""breadcrumb-item"">Printers</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" class=""breadcrumb-item"">{WebUtility.HtmlEncode(printerFilter)}</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""breadcrumb-item"">{WebUtility.HtmlEncode(userFilter)}</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine("<span class=""breadcrumb-item active"">Email</span>")
+        sb.AppendLine("</nav>")
         sb.AppendLine("<div class=""section"">")
         sb.AppendLine("<div class=""section-header"">")
         sb.AppendLine("<h2 class=""section-title"">Send Document via Email</h2>")
+        sb.AppendLine("<div class=""nav-actions"">")
+        sb.AppendLine($"<a href=""."" class=""btn btn-secondary btn-sm"" title=""Return to Printers"">{WebAssets.HomeIconSvg} Home</a>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-secondary btn-sm"" title=""Up to {WebUtility.HtmlEncode(userFilter)}"">{WebAssets.UpIconSvg} Up</a>")
+        sb.AppendLine("</div>")
         sb.AppendLine("</div>")
         sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
         sb.AppendLine($"<p style=""margin-bottom: 24px; color: #525252;"">File: <strong>{WebUtility.HtmlEncode(fileName)}</strong></p>")
@@ -829,9 +871,22 @@ Public Class WebWorker
         sb.AppendLine("</div></header>")
         
         sb.AppendLine("<main>")
+        sb.AppendLine("<nav class=""breadcrumb"" aria-label=""Breadcrumb"">")
+        sb.AppendLine("<a href=""."" class=""breadcrumb-item"">Printers</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}"" class=""breadcrumb-item"">{WebUtility.HtmlEncode(printerFilter)}</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""breadcrumb-item"">{WebUtility.HtmlEncode(userFilter)}</a>")
+        sb.AppendLine("<span class=""breadcrumb-separator"">/</span>")
+        sb.AppendLine("<span class=""breadcrumb-item active"">Email Sent</span>")
+        sb.AppendLine("</nav>")
         sb.AppendLine("<div class=""section"">")
         sb.AppendLine("<div class=""section-header"">")
         sb.AppendLine("<h2 class=""section-title"">Success</h2>")
+        sb.AppendLine("<div class=""nav-actions"">")
+        sb.AppendLine($"<a href=""."" class=""btn btn-secondary btn-sm"" title=""Return to Printers"">{WebAssets.HomeIconSvg} Home</a>")
+        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(userFilter)}"" class=""btn btn-secondary btn-sm"" title=""Up to {WebUtility.HtmlEncode(userFilter)}"">{WebAssets.UpIconSvg} Up</a>")
+        sb.AppendLine("</div>")
         sb.AppendLine("</div>")
         sb.AppendLine("<div class=""section-content"" style=""padding: 24px;"">")
         sb.AppendLine($"<p style=""color: #24a148; font-size: 1rem; margin-bottom: 16px; font-weight: 600;"">✓ Email sent successfully</p>")
