@@ -39,7 +39,6 @@ Flashback is a robust, high-performance suite that bridges legacy mainframe and 
 - **Web-based PDF Viewer** - Browser-based viewing of generated PDFs (optional)
 
 ### 🔐 Enterprise Features
-- **Licensing System** - Free tier (2 printers) No, I'm not charging for licenses; it was an experiment.
 - **Multi-Platform** - Windows (x64) and Linux (x64/ARM64) support
 - **Background Services** - Windows Service and Linux systemd integration
 - **Comprehensive Logging** - Detailed operational history and debugging
@@ -270,22 +269,6 @@ telnet 192.168.1.100 9000 < printfile.txt
 
 ---
 
-## 📊 Licensing
-
-Flashback operates in two tiers:
-
-| Tier | Capability | Use Case |
-|------|------------|----------|
-| **FREE** | Up to 2 concurrent printers | Personal, educational, non-commercial |
-
-To get a license, just ask.  This has been a toy I wanted to play with, not a policy.
-To activate a license:
-1. Obtain your `flashback.lic` file
-2. Place it in the Flashback application directory
-3. Restart the Flashback.Engine service
-
----
-
 ## 🔒 Security Best Practices
 
 ### Network Security
@@ -295,7 +278,7 @@ To activate a license:
 
 ### Authentication
 - **3270 Password**: Always set a system password (`SYSPW`) for the 3270 configuration server
-- **File Permissions**: Restrict access to `devices.dat` and `flashback.lic` files
+- **File Permissions**: Restrict access to configuration and `devices.dat` files
 - **Email Credentials**: Use app-specific passwords, not account passwords
 
 ### Monitoring

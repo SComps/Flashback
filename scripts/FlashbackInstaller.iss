@@ -61,7 +61,7 @@ Name: "installservices\installtray"; Description: "Launch Flashback Tray at Wind
 ; ============================================================================
 [Files]
 ; All files from root of publish directory
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,printers.log,devices.dat,flashback.lic"
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,printers.log,devices.dat"
 
 ; ============================================================================
 ; Icons (Start Menu Shortcuts)

@@ -101,14 +101,7 @@ Public Class Worker
                 Return
             End If
 
-            Dim lic = LicenseManager.GetLicenseInfo()
-            _logger.LogInformation("License status: {LicensedTo}. Licensing check mechanism is active and not limiting printer count or output.", lic.LicensedTo)
             Dim configNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-            Dim loadedCount As Integer
-
-            SyncLock _devList
-                loadedCount = _devList.Count
-            End SyncLock
 
             For Each line In lines
                 If String.IsNullOrWhiteSpace(line) Then Continue For
@@ -199,7 +192,6 @@ Public Class Worker
                         d = CreateDevice(p)
                         If d IsNot Nothing Then
                             _devList.Add(d)
-                            loadedCount = _devList.Count
                             shouldConnect = True
                         End If
                     End If

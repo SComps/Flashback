@@ -104,7 +104,6 @@ Module Program
         Console.WriteLine($"Flashback Spooler v{version}")
         Console.WriteLine("Part of the Flashback Print Server Suite")
         Console.WriteLine()
-        Console.WriteLine("Copyright (c) 2024-2026")
-        Console.WriteLine("Licensed under the terms of the Flashback license")
+        Console.WriteLine("Released under the MIT License")
     End Sub
 End Module

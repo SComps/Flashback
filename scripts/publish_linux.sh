@@ -1,6 +1,5 @@
 #!/bin/bash
 # Flashback Suite - Linux Publish Script (Native AOT / Multi-Arch)
-# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 set -e
 
 # Detect Architecture
@@ -37,8 +36,8 @@ else
 fi
 mkdir -p "$PUBLISH_DIR"
 
-echo "Cleaning up old binaries (preserving config and licenses)..."
-find "$PUBLISH_DIR" -maxdepth 1 -type f ! -name "*.dat" ! -name "*.lic" -delete
+echo "Cleaning up old binaries (preserving config)..."
+find "$PUBLISH_DIR" -maxdepth 1 -type f ! -name "*.dat" -delete
 
 echo "Publishing Flashback Suite for $ARCH ($RID)..."
 echo "(Note: UI components like WPF, WinUI, and Tray are Windows-only and excluded)"

@@ -1,5 +1,4 @@
 # Flashback Suite - Windows Publish Script (Single File / Self-Contained)
-# NOTE: Flashback.LicenseGenerator is EXCLUDED from this script to prevent shipping to end users.
 # NOTE: VB.NET does not support Native AOT on Windows; PublishSingleFile is used instead,
 #       which bundles the runtime into a single .exe — equivalent output size to AOT on Linux.
 param(
@@ -33,11 +32,11 @@ foreach ($svc in $Services) {
 Stop-Process -Name "Flashback.Tray" -Force -ErrorAction SilentlyContinue
 Stop-Process -Name "Flashback.Spooler" -Force -ErrorAction SilentlyContinue
 
-# Selective cleanup: Preserve .dat and .lic files, but purge all binaries/debug symbols
+# Selective cleanup: Preserve .dat files, but purge all binaries/debug symbols
 if (Test-Path $PublishDir) {
-    Write-Host "Cleaning publish directory (preserving config and licenses)..." -ForegroundColor Gray
+    Write-Host "Cleaning publish directory (preserving configuration)..." -ForegroundColor Gray
     Start-Sleep -Seconds 1
-    Get-ChildItem -Path $PublishDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -notin @('.dat', '.lic') } | Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -Path $PublishDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -ne '.dat' } | Remove-Item -Force -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory -Force $PublishDir | Out-Null
 

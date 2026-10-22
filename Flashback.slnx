@@ -17,8 +17,7 @@
     <File Path="Working Documents/ENGINE_RECONNECTION_ISSUE_ANALYSIS.md" />
     <File Path="Working Documents/ERROR_SCREEN_IMPLEMENTATION_PLAN.md" />
     <File Path="Working Documents/Flashback.Config.3270_ANALYSIS.md" />
-    <File Path="Working Documents/LICENSE_GENERATOR_CONSOLE_IMPLEMENTATION_SUMMARY.md" />
-    <File Path="Working Documents/LICENSE_GENERATOR_CONSOLE_PLAN.md" />
+
     <File Path="Working Documents/PRINTSPOOLER_DESIGN.md" />
     <File Path="Working Documents/PRINTSPOOLER_IMPLEMENTATION_PLAN.md" />
     <File Path="Working Documents/SAVE_FIX_IMPLEMENTATION_SUMMARY.md" />
@@ -28,7 +27,7 @@
   <Folder Name="/Scripts/">
     <File Path="scripts/FlashbackInstaller.iss" />
     <File Path="scripts/flashback_setup.iss" />
-    <File Path="scripts/publish_license_generator.sh" />
+
     <File Path="scripts/publish_linux.sh" />
     <File Path="scripts/publish_windows.ps1" />
     <File Path="scripts/publish_winui.ps1" />
@@ -48,8 +47,7 @@
   <Project Path="Flashback.Config.WPF/Flashback.Config.WPF.vbproj" />
   <Project Path="Flashback.Core/Flashback.Core.vbproj" />
   <Project Path="Flashback.Engine/Flashback.Engine.vbproj" />
-  <Project Path="Flashback.LicenseGenerator/Flashback.LicenseGenerator.vbproj" />
-  <Project Path="Flashback.LicenseGenerator.Console/Flashback.LicenseGenerator.Console.vbproj" />
+
   <Project Path="Flashback.Spooler/Flashback.Spooler.vbproj" />
   <Project Path="Flashback.TestTool/Flashback.TestTool.vbproj" />
   <Project Path="Flashback.Tray/Flashback.Tray.vbproj" />

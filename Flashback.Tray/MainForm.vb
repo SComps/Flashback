@@ -53,8 +53,7 @@ Public Class MainForm
         trayMenu.Items.Add(_deviceMenu)
         trayMenu.Items.Add("-")
 
-        trayMenu.Items.Add("License: FREE NON-COMMERCIAL", Nothing, AddressOf DoNothing).Enabled = False
-        trayMenu.Items.Add("-")
+
         
         Dim configMenu = New ToolStripMenuItem("Configure Devices")
         configMenu.DropDownItems.Add("Console Tool", Nothing, AddressOf OpenConsoleTool)
@@ -114,8 +113,6 @@ Public Class MainForm
         UpdateServiceStatus(Config3270ServiceName, config3270Controller, 4, 5, 6)
         UpdateServiceStatus(SpoolerServiceName, spoolerController, 8, 9, 10)
         UpdateDeviceMenu()
-        UpdateLicenseStatus()
-        
         Try
             Dim engineStatus = If(engineController IsNot Nothing, engineController.Status.ToString(), "Unknown")
             Dim configStatus = If(config3270Controller IsNot Nothing, config3270Controller.Status.ToString(), "Unknown")
@@ -126,19 +123,6 @@ Public Class MainForm
         End Try
     End Sub
 
-    Private Sub UpdateLicenseStatus()
-        Try
-            Dim l = LicenseManager.GetLicenseInfo()
-            If l.IsLicensed Then
-                trayMenu.Items(14).Text = $"License: {l.LicensedTo} ({l.MaxPrinters} Prn)"
-                trayMenu.Items(14).ForeColor = Drawing.Color.Navy
-            Else
-                trayMenu.Items(14).Text = "License: FREE NON-COMMERCIAL"
-                trayMenu.Items(14).ForeColor = Drawing.Color.DarkGray
-            End If
-        Catch
-        End Try
-    End Sub
 
     Private Sub UpdateDeviceMenu()
         _deviceMenu.DropDownItems.Clear()

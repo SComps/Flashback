@@ -92,5 +92,5 @@ Filename: "{sys}\sc.exe"; Parameters: "delete FlashbackConfig3270";    Flags: ru
 Filename: "{sys}\taskkill.exe"; Parameters: "/f /im Flashback.Tray.exe"; Flags: runhidden waituntilterminated; RunOnceId: "KillTray"
 
 [UninstallDelete]
-; Clean up logs on uninstall but preserve config and license
+; Clean up logs on uninstall but preserve config
 Type: files; Name: "{app}\printers.log"
