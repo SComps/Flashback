@@ -201,7 +201,6 @@ Public Class Devs
 
             Else
                 ' Client mode - connect to remote system
-                Log($"[{DevName}] Creating socket for connection attempt.", ConsoleColor.Cyan)
                 socket = New Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
 
                 Try
@@ -209,12 +208,10 @@ Public Class Devs
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 120)
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10)
                     socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3)
-                    Log($"[{DevName}] TCP keep-alive configured successfully.", ConsoleColor.Gray)
                 Catch ex As Exception
                     Log($"[{DevName}] Warning: Could not configure TCP keep-alive: {ex.Message}", ConsoleColor.DarkYellow)
                 End Try
 
-                Log($"[{DevName}] Attempting to connect to {remoteHost}:{remotePort} (5s timeout)...", ConsoleColor.Yellow)
                 Using cts As New CancellationTokenSource(TimeSpan.FromSeconds(5))
                     Try
                         Await socket.ConnectAsync(remoteHost, remotePort, cts.Token)
@@ -556,9 +553,9 @@ Public Class Devs
                     End While
                 End If
 
-                Dim profile = OsProfileFactory.GetProfile(OS)
+                Dim profile = OsProfileFactory.GetProfile(If(ConnType = 3, OSType.OS_GENERIC, OS))
                 If profile Is Nothing Then
-                    Log($"[{DevName}] ERROR: Could not resolve OS Profile for {OS}", ConsoleColor.Red)
+                    Log($"[{DevName}] ERROR: Could not resolve OS Profile for {If(ConnType = 3, OSType.OS_GENERIC, OS)}", ConsoleColor.Red)
                     Return
                 End If
 

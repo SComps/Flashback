@@ -466,7 +466,7 @@ Public Class GenericProfile
         Dim info As New JobInformation() With {
             .JobName = "GENERIC",
             .JobID = Now.ToString("HHmmss"),
-            .User = "OUTPUT"
+            .User = If(Not String.IsNullOrWhiteSpace(devName), devName, "OUTPUT")
         }
         info.ApplyFallbacks(devName)
         Return info

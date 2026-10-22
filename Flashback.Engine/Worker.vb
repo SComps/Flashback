@@ -366,7 +366,7 @@ Public Class Worker
     ''' </summary>
     Private Function CreateDevice(p As String()) As Devs
         Try
-            _logger.LogInformation("Creating device object for {Dev}.", p(0))
+            _logger.LogDebug("Creating device object for {Dev}.", p(0))
             Dim d As New Devs()
             d.DevName = p(0)
             d.DevDescription = p(1)
@@ -397,12 +397,17 @@ Public Class Worker
             If p.Length >= 23 Then d.EmailSubject = p(22)
             If p.Length >= 24 Then d.EmailBody = p(23)
 
-            AddHandler d.LogMessage, Sub(msg, col) _logger.LogInformation("{Dev}: {Msg}", d.DevName, msg)
+            AddHandler d.LogMessage,
+                Sub(msg, col)
+                    Dim prefix = $"[{d.DevName}] "
+                    Dim cleanMsg = If(msg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase), msg.Substring(prefix.Length), msg)
+                    _logger.LogInformation("{Dev}: {Msg}", d.DevName, cleanMsg)
+                End Sub
             AddHandler d.JobNumberChanged, Sub(s) SaveDevices()
             AddHandler d.Disconnected, AddressOf OnDeviceDisconnected
             d.Logger = _logger
 
-            _logger.LogInformation("Device object created: {Dev}", d.DevName)
+            _logger.LogDebug("Device object created: {Dev}", d.DevName)
             Return d
         Catch ex As Exception
             _logger.LogError("ERROR creating device {Dev}: {Error}", p(0), ex.Message)
