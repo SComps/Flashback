@@ -75,7 +75,7 @@ Public Class Worker
     '''   Disabled  → disconnect and remove if currently active; skip recreation.
     '''   Enabled + present + critical settings unchanged → update non-critical props in place.
     '''   Enabled + present + critical settings changed   → disconnect; recreate next pass.
-    '''   Enabled + absent  → create fresh object and connect (subject to license cap).
+    '''   Enabled + absent  → create fresh object and connect (no license cap limiting output).
     '''   Stale (deleted from config entirely) → disconnect and remove.
     '''
     ''' Called on startup, every 15 seconds (reconnect retry), and on config file changes.
@@ -102,6 +102,7 @@ Public Class Worker
             End If
 
             Dim lic = LicenseManager.GetLicenseInfo()
+            _logger.LogInformation("License status: {LicensedTo}. Licensing check mechanism is active and not limiting printer count or output.", lic.LicensedTo)
             Dim configNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
             Dim loadedCount As Integer
 
@@ -185,7 +186,7 @@ Public Class Worker
                     Continue For
                 End If
 
-                ' ── Enabled but not active: create and connect (subject to license cap) ───
+                ' ── Enabled but not active: create and connect (no license cap limiting output) ───
 
 
                 Dim d As Devs = Nothing
@@ -505,9 +506,10 @@ Public Class Worker
                 Return
             End Try
 
+            Dim cmdSeparator() As String = {"||"}
             For Each line In lines
                 If String.IsNullOrWhiteSpace(line) Then Continue For
-                Dim parts = line.Split("||")
+                Dim parts = line.Split(cmdSeparator, StringSplitOptions.TrimEntries)
                 If parts.Length < 2 Then Continue For
 
                 Dim cmd = parts(0).ToUpper()

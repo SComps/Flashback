@@ -177,6 +177,7 @@ Public Class WebWorker
 
                 If isAdmin Then
                     If Not IsAdminAuthorized(context) Then
+                        _logger.LogWarning("Admin access unauthorized for URL: {Url}", url)
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
                         context.Response.Close()
@@ -185,6 +186,7 @@ Public Class WebWorker
                     ServeAdminPanel(context)
                 ElseIf isAdminStatus Then
                     If Not IsAdminAuthorized(context) Then
+                        _logger.LogWarning("Admin status unauthorized for URL: {Url}", url)
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
                         context.Response.Close()
@@ -193,6 +195,7 @@ Public Class WebWorker
                     ServeAdminStatus(context)
                 ElseIf isAdminLog Then
                     If Not IsAdminAuthorized(context) Then
+                        _logger.LogWarning("Admin log unauthorized for URL: {Url}", url)
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
                         context.Response.Close()
@@ -201,6 +204,7 @@ Public Class WebWorker
                     ServeAdminLog(context)
                 ElseIf isAdminAction Then
                     If Not IsAdminAuthorized(context) Then
+                        _logger.LogWarning("Admin action unauthorized for URL: {Url}", url)
                         context.Response.StatusCode = 401
                         context.Response.Headers.Add("WWW-Authenticate", "Basic realm=""Flashback Administration""")
                         context.Response.Close()
@@ -253,6 +257,7 @@ Public Class WebWorker
                         context.Response.Close()
                     End If
                 Else
+                    _logger.LogWarning("Request rejected - no matching route found for URL: {Url}", url)
                     context.Response.StatusCode = 404
                     context.Response.Close()
                 End If
@@ -295,7 +300,11 @@ Public Class WebWorker
                 context.Response.AddHeader("Content-Disposition", $"inline; filename=""{Path.GetFileName(filePath)}""")
                 context.Response.OutputStream.Write(buffer, 0, buffer.Length)
             Else
-                _logger.LogWarning("Download rejected - path not allowed or not found: {Path}", filePath)
+                If Not isAllowed Then
+                    _logger.LogWarning("Download rejected - path '{Path}' is outside allowed printer output directories.", filePath)
+                Else
+                    _logger.LogWarning("Download rejected - file does not exist: {Path}", filePath)
+                End If
                 context.Response.StatusCode = 404
             End If
         Catch ex As Exception
@@ -306,25 +315,72 @@ Public Class WebWorker
     End Sub
 
     Private Function GetAllowedDevices(user As UserInfo) As Dictionary(Of String, String)
-        Dim devices As New Dictionary(Of String, String)
+        Dim devices As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+        Dim baseDir As String = AppDomain.CurrentDomain.BaseDirectory
+        Dim configFile = Path.Combine(baseDir, "devices.dat")
         
-        ' Load devices to find output directories
-        Dim configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "devices.dat")
-        If File.Exists(configFile) Then
-            For Each line In File.ReadAllLines(configFile)
-                Dim p = line.Split("||")
-                If p.Length >= 10 Then
-                    Dim devName = p(0)
-                    Dim outDir = p(9)
-                    If Not String.IsNullOrEmpty(outDir) AndAlso Directory.Exists(outDir) Then
-                        ' Filter by HomeFolder if set and user is logged in
-                        If user Is Nothing OrElse String.IsNullOrEmpty(user.HomeFolder) OrElse outDir.Contains(user.HomeFolder, StringComparison.OrdinalIgnoreCase) Then
-                            If Not devices.ContainsKey(devName) Then devices.Add(devName, outDir)
-                        End If
-                    End If
-                End If
-            Next
+        If Not File.Exists(configFile) Then
+            _logger.LogWarning("Cannot load printers: configuration file '{ConfigFile}' does not exist.", configFile)
+            Return devices
         End If
+
+        Dim separator() As String = {"||"}
+        Dim lines = File.ReadAllLines(configFile)
+
+        For lineNum As Integer = 0 To lines.Length - 1
+            Dim line = lines(lineNum)
+            If String.IsNullOrWhiteSpace(line) Then Continue For
+
+            Dim p = line.Split(separator, StringSplitOptions.None)
+            If p.Length < 10 Then
+                _logger.LogWarning("Line {LineNum} in '{ConfigFile}' excluded: insufficient fields ({Length} < 10): '{Line}'", lineNum + 1, configFile, p.Length, line)
+                Continue For
+            End If
+
+            Dim devName = p(0).Trim()
+            If String.IsNullOrWhiteSpace(devName) Then
+                _logger.LogWarning("Line {LineNum} in '{ConfigFile}' excluded: printer name is blank.", lineNum + 1, configFile)
+                Continue For
+            End If
+
+            Dim rawOutDir = p(9).Trim()
+            If String.IsNullOrWhiteSpace(rawOutDir) Then
+                _logger.LogWarning("Printer '{Printer}' on line {LineNum} excluded: output directory is empty or not specified.", devName, lineNum + 1)
+                Continue For
+            End If
+
+            ' Normalize directory path relative to application BaseDirectory
+            Dim outDir = PrinterConfigValidator.NormalizeDirectory(rawOutDir, baseDir)
+
+            ' Ensure the output directory exists so printers can be accessed immediately
+            If Not Directory.Exists(outDir) Then
+                Try
+                    Directory.CreateDirectory(outDir)
+                    _logger.LogInformation("Output directory '{Dir}' for printer '{Printer}' did not exist; created directory successfully.", outDir, devName)
+                Catch ex As Exception
+                    _logger.LogWarning("Printer '{Printer}' excluded: output directory '{Dir}' does not exist and could not be created ({Error}).", devName, outDir, ex.Message)
+                    Continue For
+                End Try
+            End If
+
+            If Not Directory.Exists(outDir) Then
+                _logger.LogWarning("Printer '{Printer}' excluded: output directory '{Dir}' does not exist.", devName, outDir)
+                Continue For
+            End If
+
+            ' Filter by HomeFolder if set and user is logged in
+            If user IsNot Nothing AndAlso Not String.IsNullOrEmpty(user.HomeFolder) AndAlso Not outDir.Contains(user.HomeFolder, StringComparison.OrdinalIgnoreCase) Then
+                _logger.LogInformation("Printer '{Printer}' excluded for user '{User}': output directory '{Dir}' does not match home folder restriction '{HomeFolder}'.", devName, user.Username, outDir, user.HomeFolder)
+                Continue For
+            End If
+
+            If devices.ContainsKey(devName) Then
+                _logger.LogWarning("Printer '{Printer}' on line {LineNum} excluded: duplicate printer name already registered with output directory '{ExistingDir}'.", devName, lineNum + 1, devices(devName))
+                Continue For
+            End If
+
+            devices.Add(devName, outDir)
+        Next
         
         Return devices
     End Function
@@ -347,6 +403,7 @@ Public Class WebWorker
 
             Dim allowedDevices = GetAllowedDevices(user)
             If Not allowedDevices.ContainsKey(printerFilter) Then
+                _logger.LogWarning("ServePoll: Printer '{Printer}' not found or excluded from allowed devices for user '{User}'.", printerFilter, If(user IsNot Nothing, user.Username, "Guest"))
                 context.Response.StatusCode = 404
                 context.Response.Close()
                 Return
@@ -365,6 +422,8 @@ Public Class WebWorker
                             .ToList()
                 count = files.Count
                 If files.Any() Then newest = files(0).LastWriteTime.ToString("o")
+            Else
+                _logger.LogWarning("ServePoll: Target directory '{Dir}' does not exist for printer '{Printer}' and user '{User}'.", targetDir, printerFilter, userFilter)
             End If
 
             ' Minimal hand-built JSON — no serialiser dependency needed
@@ -437,6 +496,7 @@ Public Class WebWorker
                 Next
                 sb.AppendLine("</div>")
             Else
+                _logger.LogInformation("Dashboard: No printers configured or available to display.")
                 sb.AppendLine("<div class=""empty-state"">No printers configured</div>")
             End If
             
@@ -461,33 +521,40 @@ Public Class WebWorker
             
             If allowedDevices.ContainsKey(printerFilter) Then
                 Dim root = allowedDevices(printerFilter)
-                Dim subDirs = Directory.GetDirectories(root)
-                
-                If subDirs.Any() Then
-                    sb.AppendLine("<div class=""file-list"">")
-                    For Each subDir In subDirs
-                        Dim dirName = Path.GetFileName(subDir)
-                        Dim domainDirName = $"{printerFilter}\{dirName}"
-                        Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainDirName, StringComparison.OrdinalIgnoreCase))
-                        
-                        sb.AppendLine("<div class=""file-card"">")
-                        sb.AppendLine("<div class=""file-info"">")
-                        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-name"">{WebUtility.HtmlEncode(dirName)}</a>")
-                        sb.AppendLine($"<span class=""file-meta"">{If(isProtected, "Protected", "Public")} folder</span>")
+                If Directory.Exists(root) Then
+                    Dim subDirs = Directory.GetDirectories(root)
+                    
+                    If subDirs.Any() Then
+                        sb.AppendLine("<div class=""file-list"">")
+                        For Each subDir In subDirs
+                            Dim dirName = Path.GetFileName(subDir)
+                            Dim domainDirName = $"{printerFilter}\{dirName}"
+                            Dim isProtected = UserManager.GetUsers().Any(Function(u) u.Username.Equals(dirName, StringComparison.OrdinalIgnoreCase) OrElse u.Username.Equals(domainDirName, StringComparison.OrdinalIgnoreCase))
+                            
+                            sb.AppendLine("<div class=""file-card"">")
+                            sb.AppendLine("<div class=""file-info"">")
+                            sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""file-name"">{WebUtility.HtmlEncode(dirName)}</a>")
+                            sb.AppendLine($"<span class=""file-meta"">{If(isProtected, "Protected", "Public")} folder</span>")
+                            sb.AppendLine("</div>")
+                            sb.AppendLine("<div class=""file-actions"">")
+                            If isProtected Then
+                                sb.AppendLine("<span class=""badge-locked"">Protected</span>")
+                            End If
+                            sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""btn btn-primary"">View Files</a>")
+                            sb.AppendLine("</div>")
+                            sb.AppendLine("</div>")
+                        Next
                         sb.AppendLine("</div>")
-                        sb.AppendLine("<div class=""file-actions"">")
-                        If isProtected Then
-                            sb.AppendLine("<span class=""badge-locked"">Protected</span>")
-                        End If
-                        sb.AppendLine($"<a href=""?printer={WebUtility.UrlEncode(printerFilter)}&subuser={WebUtility.UrlEncode(dirName)}"" class=""btn btn-primary"">View Files</a>")
-                        sb.AppendLine("</div>")
-                        sb.AppendLine("</div>")
-                    Next
-                    sb.AppendLine("</div>")
+                    Else
+                        _logger.LogInformation("Dashboard: Output directory '{Dir}' for printer '{Printer}' exists but contains no user folders.", root, printerFilter)
+                        sb.AppendLine("<div class=""empty-state"">No user folders found</div>")
+                    End If
                 Else
-                    sb.AppendLine("<div class=""empty-state"">No user folders found</div>")
+                    _logger.LogWarning("Dashboard: Output directory '{Dir}' for printer '{Printer}' does not exist on disk.", root, printerFilter)
+                    sb.AppendLine("<div class=""empty-state"">Output directory does not exist</div>")
                 End If
             Else
+                _logger.LogWarning("Dashboard: Printer '{Printer}' requested for user '{User}', but printer was not found or excluded from allowed devices.", printerFilter, If(user IsNot Nothing, user.Username, "Guest"))
                 sb.AppendLine($"<div class=""empty-state"">Printer '{WebUtility.HtmlEncode(printerFilter)}' not found or access denied</div>")
             End If
             
@@ -557,8 +624,14 @@ Public Class WebWorker
                             sb.AppendLine("</div>")
                         Next
                         sb.AppendLine("</div>")
+                    Else
+                        _logger.LogInformation("Dashboard: Document directory '{Dir}' exists but contains no PDF files for printer '{Printer}' and user '{User}'.", targetDir, printerFilter, userFilter)
                     End If
+                Else
+                    _logger.LogWarning("Dashboard: Document directory '{Dir}' does not exist for printer '{Printer}' and user '{User}'.", targetDir, printerFilter, userFilter)
                 End If
+            Else
+                _logger.LogWarning("Dashboard: Documents requested for printer '{Printer}' and user '{User}', but printer was not found or excluded from allowed devices.", printerFilter, userFilter)
             End If
 
             If Not hasFiles Then
@@ -690,6 +763,7 @@ Public Class WebWorker
             Dim message = formData("message")
 
             If String.IsNullOrWhiteSpace(recipientEmail) Then
+                _logger.LogWarning("Email rejected - recipient email address is required.")
                 ServeErrorPage(context, "Email address is required")
                 Return
             End If
@@ -697,6 +771,7 @@ Public Class WebWorker
             ' Find the file
             Dim allowedDevices = GetAllowedDevices(Nothing)
             If Not allowedDevices.ContainsKey(printerFilter) Then
+                _logger.LogWarning("Email rejected - printer '{Printer}' not found or excluded from allowed devices.", printerFilter)
                 ServeErrorPage(context, "Printer not found")
                 Return
             End If
@@ -705,6 +780,7 @@ Public Class WebWorker
             Dim filePath = Path.Combine(root, userFilter, fileName)
 
             If Not File.Exists(filePath) Then
+                _logger.LogWarning("Email rejected - file not found at '{Path}'.", filePath)
                 ServeErrorPage(context, "File not found")
                 Return
             End If
@@ -714,8 +790,10 @@ Public Class WebWorker
             Dim device As Devs = Nothing
 
             If File.Exists(configFile) Then
+                Dim separator() As String = {"||"}
                 For Each line In File.ReadAllLines(configFile)
-                    Dim p = line.Split("||")
+                    If String.IsNullOrWhiteSpace(line) Then Continue For
+                    Dim p = line.Split(separator, StringSplitOptions.None)
                     If p.Length >= 10 AndAlso p(0).Equals(printerFilter, StringComparison.OrdinalIgnoreCase) Then
                         device = New Devs With {
                             .DevName = p(0),
@@ -733,6 +811,7 @@ Public Class WebWorker
             End If
 
             If device Is Nothing OrElse String.IsNullOrEmpty(device.SmtpServer) Then
+                _logger.LogWarning("Email rejected - printer '{Printer}' has no SMTP server configured.", printerFilter)
                 ServeErrorPage(context, "Email is not configured for this printer. Please contact your administrator.")
                 Return
             End If
@@ -755,8 +834,10 @@ Public Class WebWorker
             Dim success = Await emailService.SendPdfEmailAsync(emailConfig, filePath, fileName, device.DevName, userFilter, 0)
 
             If success Then
+                _logger.LogInformation("Email sent successfully to '{Recipient}' for file '{File}'.", recipientEmail, fileName)
                 ServeSuccessPage(context, recipientEmail, printerFilter, userFilter)
             Else
+                _logger.LogError("Failed to send email to '{Recipient}' for file '{File}'.", recipientEmail, fileName)
                 ServeErrorPage(context, "Failed to send email. Please check the logs for details.")
             End If
 
@@ -905,6 +986,7 @@ Public Class WebWorker
     End Sub
 
     Private Sub ServeErrorPage(context As HttpListenerContext, errorMessage As String)
+        _logger.LogWarning("Web service served error page ({Error}) for request {Url}", errorMessage, context.Request.Url)
         Dim sb As New StringBuilder()
         sb.AppendLine("<!DOCTYPE html><html lang=""en""><head>")
         sb.AppendLine("<meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">")

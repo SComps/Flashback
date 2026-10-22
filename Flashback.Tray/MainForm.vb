@@ -150,9 +150,10 @@ Public Class MainForm
 
         Try
             Dim lines = File.ReadAllLines(_fullConfigPath)
+            Dim separator() As String = {"||"}
             For Each line In lines
                 If String.IsNullOrWhiteSpace(line) Then Continue For
-                Dim parts = line.Split("||")
+                Dim parts = line.Split(separator, StringSplitOptions.None)
                 If parts.Length > 0 Then
                     Dim dName = parts(0)
                     Dim isEnabled = If(parts.Length > 12, parts(12) = "True", True)
@@ -195,9 +196,10 @@ Public Class MainForm
             Dim lines = File.ReadAllLines(_fullConfigPath).ToList()
             Dim updated = False
 
+            Dim separator() As String = {"||"}
             For i = 0 To lines.Count - 1
                 If String.IsNullOrWhiteSpace(lines(i)) Then Continue For
-                Dim parts = lines(i).Split("||")
+                Dim parts = lines(i).Split(separator, StringSplitOptions.None)
                 
                 If parts.Length > 0 AndAlso parts(0) = devName Then
                     ' Update the enabled flag (index 12)

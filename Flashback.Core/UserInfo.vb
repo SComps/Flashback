@@ -10,7 +10,8 @@ Public Class UserInfo
 
     Public Shared Function FromConfigLine(line As String) As UserInfo
         If String.IsNullOrWhiteSpace(line) Then Return Nothing
-        Dim p = line.Split("||")
+        Dim separator() As String = {"||"}
+        Dim p = line.Split(separator, StringSplitOptions.None)
         If p.Length < 3 Then Return Nothing
         
         Return New UserInfo With {
