@@ -186,7 +186,7 @@ Public Class Worker
                 End If
 
                 ' ── Enabled but not active: create and connect (subject to license cap) ───
-                If lic.MaxPrinters > 0 AndAlso loadedCount >= lic.MaxPrinters Then Continue For
+
 
                 Dim d As Devs = Nothing
                 Dim shouldConnect As Boolean = False

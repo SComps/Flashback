@@ -4,7 +4,7 @@ Imports System.Text
 
 Public Class LicenseInfo
     Public Property LicensedTo As String = "FREE NON-COMMERCIAL USE"
-    Public Property MaxPrinters As Integer = 2 ' 0 = Unlimited
+    Public Property MaxPrinters As Integer = 0 ' 0 = Unlimited
     Public Property IsLicensed As Boolean = False
     Public Property [Error] As String = ""
 End Class
