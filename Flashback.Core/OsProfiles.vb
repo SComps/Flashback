@@ -466,7 +466,7 @@ Public Class GenericProfile
         Dim info As New JobInformation() With {
             .JobName = "GENERIC",
             .JobID = Now.ToString("HHmmss"),
-            .User = devName
+            .User = "OUTPUT"
         }
         info.ApplyFallbacks(devName)
         Return info
